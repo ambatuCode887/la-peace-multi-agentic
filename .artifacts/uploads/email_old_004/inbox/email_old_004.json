@@ -1,0 +1,10 @@
+{
+  "email_id": "email_old_004",
+  "from": "docs@example.com",
+  "subject": "Help",
+  "body": "Please compare these SL and BL draft",
+  "attachments": [
+    "attachments/email_004_BL.txt",
+    "attachments/email_004_SI.txt"
+  ]
+}

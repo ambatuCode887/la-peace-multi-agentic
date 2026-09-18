@@ -1,0 +1,10 @@
+{
+  "email_id": "email_new_001",
+  "from": "docs@example.com",
+  "subject": "TO CONFIRM DOCS",
+  "body": "Please compare the SI and draft BL.",
+  "attachments": [
+    "attachments/email_004_SI.txt",
+    "attachments/email_004_BL.txt"
+  ]
+}

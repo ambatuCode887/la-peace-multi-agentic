@@ -1,0 +1,9 @@
+{
+  "email_id": "email_new_004",
+  "from": "docs@example.com",
+  "subject": "to",
+  "body": "help me compare",
+  "attachments": [
+    "attachments/email_004_SI.txt"
+  ]
+}
