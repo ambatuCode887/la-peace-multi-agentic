@@ -136,3 +136,6 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
     assert response.status_code == 200
     assert 'id="process-inbox"' in response.text
     assert 'option value="UNPROCESSED"' in response.text
+    assert 'option value="MISMATCH"' in response.text
+    assert "SI blueprint" in response.text
+    assert "ai-summary-grid" in response.text
