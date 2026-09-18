@@ -5,7 +5,7 @@ from typing import Any
 
 from .attachments import AttachmentReadError, read_attachment_text
 from .dataset import DatasetAdapter
-from .verification import COMPARE_FIELDS, classify_email, compare_shipments, extract_shipment_fields, write_submission
+from .verification import COMPARE_FIELDS, classify_email, classify_email_details, compare_shipments, extract_shipment_fields, write_submission
 
 
 def run_shipping_verification(
@@ -48,13 +48,21 @@ def inspect_shipping_email(
     result: dict[str, Any] = {
         "email_id": email_id,
         "category": category,
+        "sender": email.sender,
+        "classification": classify_email_details(email),
         "subject": email.subject,
         "attachments": list(email.attachments),
     }
     if category != "BL_COMPARISON":
-        result["message"] = "This email is not a document-comparison request."
+        result.update({
+            "status": "OK",
+            "review_reason": None,
+            "has_defect": False,
+            "defect_fields": [],
+            "message": "This email is not a document-comparison request.",
+        })
         return result
-    if len(email.attachments) != 2:
+    if len(email.attachments) < 2:
         result.update({"status": "NEEDS_REVIEW", "review_reason": "missing_attachment"})
         return result
 
@@ -94,6 +102,11 @@ def inspect_shipping_email(
         if field in comparison["defect_fields"]
     }
     result.update(comparison)
+    result["ignored_attachments"] = [
+        item["reference"]
+        for item in documents
+        if item["document"].document_type not in {"SI", "BL"}
+    ]
     result["has_defect"] = comparison["status"] == "MISMATCH"
     result["differences"] = differences
     return result

@@ -28,6 +28,8 @@ class ExtractedShipment:
     fields: dict[str, str | int | None]
     missing_fields: tuple[str, ...]
     document_type: str
+    confidence: dict[str, str]
+    evidence: dict[str, str]
 
 
 def classify_email(email: DatasetEmail | Mapping[str, Any]) -> str:
@@ -61,16 +63,50 @@ def classify_email(email: DatasetEmail | Mapping[str, Any]) -> str:
     return "GENERAL"
 
 
+def classify_email_details(email: DatasetEmail | Mapping[str, Any]) -> dict[str, str]:
+    """Return the rule classification with an operator-facing confidence rationale."""
+    category = classify_email(email)
+    subject = _email_value(email, "subject").lower()
+    body = _email_value(email, "body").lower()
+    combined = f"{subject}\n{body}"
+    high_signal = category == "SPAM" or any(
+        signal in combined for signal in ("draft bl", "to confirm docs", "request si", "invoice", "billing")
+    )
+    return {
+        "category": category,
+        "confidence": "high" if high_signal else "medium",
+        "rationale": "Matched a high-signal subject/body pattern" if high_signal else "No high-signal pattern; routed to general handling",
+    }
+
+
 def extract_shipment_fields(text: str) -> ExtractedShipment:
     """Extract the seven comparison fields from a plain-text SI or BL."""
     document_type = _document_type(text)
     values: dict[str, str | int | None] = {}
+    confidence: dict[str, str] = {}
+    evidence: dict[str, str] = {}
     for field, pattern in _FIELD_PATTERNS.items():
         match = pattern.search(text)
+        next_line = not match
         value = match.group(1) if match else _next_line_value(text, field)
         values[field] = _parse_field(field, value)
+        if values[field] is None:
+            confidence[field] = "low"
+            evidence[field] = "No usable value found"
+        elif match:
+            confidence[field] = "high"
+            evidence[field] = f"Matched label in text: {match.group(0).strip()}"
+        elif next_line:
+            confidence[field] = "medium"
+            evidence[field] = "Value found on the line following the field label"
     missing = tuple(field for field in COMPARE_FIELDS if values[field] is None)
-    return ExtractedShipment(fields=values, missing_fields=missing, document_type=document_type)
+    return ExtractedShipment(
+        fields=values,
+        missing_fields=missing,
+        document_type=document_type,
+        confidence=confidence,
+        evidence=evidence,
+    )
 
 
 def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str, Any]:
@@ -98,6 +134,7 @@ def build_submission(adapter: DatasetAdapter) -> dict[str, dict[str, Any]]:
         category = classify_email(email)
         result: dict[str, Any] = {
             "category": category,
+            "classification": classify_email_details(email),
             "status": "OK",
             "review_reason": None,
             "has_defect": False,
@@ -119,7 +156,7 @@ def write_submission(adapter: DatasetAdapter, output_path: str | Path) -> dict[s
 
 
 def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, Any]:
-    if len(email.attachments) != 2:
+    if len(email.attachments) < 2:
         return _review_result(
             email,
             "missing_attachment",
@@ -160,6 +197,12 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
         )
     comparison = compare_shipments(si, bl)
     comparison["has_defect"] = comparison["status"] == "MISMATCH"
+    comparison["documents"] = _document_evidence(email, documents)
+    comparison["ignored_attachments"] = [
+        reference
+        for reference, document in zip(email.attachments, documents)
+        if document.document_type not in {"SI", "BL"}
+    ]
     return comparison
 
 
@@ -184,6 +227,8 @@ def _document_evidence(
             "document_type": document.document_type,
             "fields": document.fields,
             "missing_fields": list(document.missing_fields),
+            "confidence": document.confidence,
+            "evidence": document.evidence,
         }
         for index, document in enumerate(documents)
     ]

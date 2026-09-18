@@ -55,6 +55,10 @@ Start the upload API:
 
 Open `http://localhost:8090` for the upload dashboard. It displays verification status, side-by-side SI/BL fields, differences, review reasons, and a correction action.
 
+The dashboard's **Process inbox** action processes every email from `SHIPPING_DATA_ROOT` (default: `http://localhost:8080`), stores each result in the case queue, and keeps source failures visible as `UNPROCESSED`. The same operation is available through `POST /inbox/process`; pass `{"data_root":"C:\\path\\to\\data_v2"}` for a static dataset. Add `{"include_ai":true}` when bulk AI explanations are desired.
+
+When `GOOGLE_API_KEY` is configured, each uploaded case also receives a Gemini explanation and the dashboard chat can answer questions through `POST /chat/{email_id}`. Gemini explains and assists; the deterministic verifier remains the final authority for status and defect fields.
+
 Upload an email and its SI/BL attachments:
 
 ```powershell
