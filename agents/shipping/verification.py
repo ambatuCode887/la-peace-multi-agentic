@@ -79,9 +79,9 @@ def classify_email_details(email: DatasetEmail | Mapping[str, Any]) -> dict[str,
     }
 
 
-def extract_shipment_fields(text: str) -> ExtractedShipment:
+def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
     """Extract the seven comparison fields from a plain-text SI or BL."""
-    document_type = _document_type(text)
+    document_type = _document_type(text, filename)
     values: dict[str, str | int | None] = {}
     confidence: dict[str, str] = {}
     evidence: dict[str, str] = {}
@@ -168,7 +168,10 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
         for reference in email.attachments:
             failed_reference = reference
             documents.append(
-                extract_shipment_fields(read_attachment_text(adapter, reference))
+                extract_shipment_fields(
+                    read_attachment_text(adapter, reference),
+                    filename=reference,
+                )
             )
     except AttachmentReadError as error:
         return _review_result(
@@ -247,12 +250,18 @@ def _email_attachments(email: DatasetEmail | Mapping[str, Any]) -> tuple[str, ..
     return tuple(attachments) if isinstance(attachments, (list, tuple)) else ()
 
 
-def _document_type(text: str) -> str:
-    upper = text.upper()
-    if "SHIPPING INSTRUCTION" in upper or "BL INSTRUCTION" in upper or "BILL OF LADING INSTRUCTION" in upper:
+def _document_type(text: str, filename: str = "") -> str:
+    norm_text = re.sub(r"\s+", " ", text.upper())
+
+    if (
+        re.search(r"\bSHIPPING\s*INSTRUC\s*T", norm_text)
+        or re.search(r"\bBL\s*INSTRUC\s*T", norm_text)
+        or re.search(r"\bBILL\s*OF\s*LAD\s*ING\s*INSTRUC\s*T", norm_text)
+    ):
         return "SI"
-    if "BILL OF LADING" in upper:
+    if re.search(r"\bBILL\s*OF\s*LAD\s*ING\b", norm_text):
         return "BL"
+
     return "OTHER"
 
 
@@ -268,7 +277,9 @@ def _parse_field(field: str, value: str | None) -> str | int | None:
             match = re.search(r"\b(\d+)\b", cleaned)
         return int(match.group(1)) if match else None
     if field == "gross_weight_kg":
-        match = re.search(r"([\d][\d, ]*(?:\.\d+)?)", cleaned)
+        # Handle OCR comma misread as dot or European thousands separator (e.g. 237.750 KG)
+        cleaned_weight = re.sub(r"(\d+)\.(\d{3})(?=\D|$)", r"\1\2", cleaned)
+        match = re.search(r"([\d][\d, ]*(?:\.\d+)?)", cleaned_weight)
         if not match:
             return None
         return int(float(match.group(1).replace(",", "").replace(" ", "")))
@@ -292,25 +303,28 @@ def _next_line_value(text: str, field: str) -> str | None:
         for following in lines[index + 1:]:
             value = following.strip()
             if value:
+                if any(p.search(value) for p in _FIELD_PATTERNS.values()):
+                    return None
                 return value
     return None
 
 
 _FIELD_PATTERNS = {
-    "shipper": re.compile(r"(?im)^\s*shipper(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "consignee": re.compile(r"(?im)^\s*(?:consignee|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]+of[ \t]+loading|load[ \t]+port|pol)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]+of[ \t]+discharge|discharge[ \t]+port|pod)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containers?)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:)[ \t]*([^|\r\n]+)"),
-    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?gross[ \t]*(?:weight|wt)[^|:\n]*(?:\||:)[ \t]*([^|\r\n]+)"),
+    "shipper": re.compile(r"(?im)^\s*shipper(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "consignee": re.compile(r"(?im)^\s*(?:consignee|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
+    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?gro?ss?[ \t]*(?:weight|wt)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
 }
 
 _STANDALONE_LABEL_PATTERNS = {
     "shipper": re.compile(r"(?i)^shipper(?:\s*/\s*exporter)?(?:\s*\([^)]*\))*$"),
     "consignee": re.compile(r"(?i)^(?:consignee|to\s+the\s+order\s+of)(?:\s*\([^)]*\))*$"),
     "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
-    "port_of_loading": re.compile(r"(?i)^(?:port\s+of\s+loading|load\s+port|pol)(?:\s*\([^)]*\))*$"),
-    "port_of_discharge": re.compile(r"(?i)^(?:port\s+of\s+discharge|discharge\s+port|pod)(?:\s*\([^)]*\))*$"),
-    "gross_weight_kg": re.compile(r"(?i)^(?:total\s+)?gross\s*(?:weight|wt)(?:\s*\([^)]*\))*$"),
+    "port_of_loading": re.compile(r"(?i)^(?:port\s*of\s*(?:loading|lcading)|load\s+port|pol)(?:\s*\([^)]*\))*$"),
+    "port_of_discharge": re.compile(r"(?i)^(?:port\s*of\s*discharge|discharge\s+port|pod)(?:\s*\([^)]*\))*$"),
+    "container_count": re.compile(r"(?i)^(?:total\s+containers?|no\.?\s+of\s+containers?(?:\s+or\s+packages)?|container\s+count|containe\s*rs?|containers?)(?:\s*\([^)]*\))*$"),
+    "gross_weight_kg": re.compile(r"(?i)^(?:total\s+)?gro?ss?\s*(?:weight|wt)(?:\s*\([^)]*\))*$"),
 }

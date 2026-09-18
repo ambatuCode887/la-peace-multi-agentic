@@ -39,11 +39,52 @@ def _read_pdf(adapter: DatasetAdapter, reference: str) -> str:
     from pypdf import PdfReader
 
     source = str(adapter.resolve_attachment(reference)) if not adapter.is_http else BytesIO(adapter.read_bytes(reference))
-    reader = PdfReader(source)
-    text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    if text.strip():
-        return text
-    return _ocr_pdf_images(reader, reference)
+    try:
+        reader = PdfReader(source)
+        text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        if text.strip():
+            return text
+    except Exception:
+        pass
+    return _ocr_pdf_document(adapter, reference)
+
+
+def _ocr_pdf_document(adapter: DatasetAdapter, reference: str) -> str:
+    """OCR a PDF using RapidOCR with pypdfium2 rasterization, falling back to pytesseract."""
+    try:
+        import pypdfium2 as pdfium
+        from rapidocr_onnxruntime import RapidOCR
+
+        engine = RapidOCR()
+        data = adapter.read_bytes(reference) if adapter.is_http else adapter.resolve_attachment(reference).read_bytes()
+        pdf = pdfium.PdfDocument(data)
+        blocks: list[str] = []
+        for page in pdf:
+            arr = page.render(scale=200 / 72).to_numpy()
+            result, _ = engine(arr)
+            if result:
+                page_text = "\n".join(line[1] for line in result if line[1].strip())
+                if page_text:
+                    blocks.append(page_text)
+        text = "\n".join(blocks).strip()
+        if text:
+            return text
+    except Exception as error:
+        if "Data format error" in str(error) or "format error" in str(error).lower():
+            raise AttachmentReadError(f"Corrupted PDF attachment: {reference}") from error
+
+    # Secondary fallback: pytesseract if available
+    try:
+        from io import BytesIO
+        from pypdf import PdfReader
+
+        source = str(adapter.resolve_attachment(reference)) if not adapter.is_http else BytesIO(adapter.read_bytes(reference))
+        reader = PdfReader(source)
+        return _ocr_pdf_images(reader, reference)
+    except AttachmentReadError:
+        raise
+    except Exception as error:
+        raise AttachmentReadError(f"OCR failed for attachment: {reference}: {error}") from error
 
 
 def _ocr_pdf_images(reader: object, reference: str) -> str:

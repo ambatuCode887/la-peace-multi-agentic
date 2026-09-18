@@ -69,7 +69,10 @@ def inspect_shipping_email(
     documents = []
     try:
         for reference in email.attachments:
-            document = extract_shipment_fields(read_attachment_text(adapter, reference))
+            document = extract_shipment_fields(
+                read_attachment_text(adapter, reference),
+                filename=reference,
+            )
             documents.append({"reference": reference, "document": document})
     except AttachmentReadError as error:
         result.update({
@@ -81,16 +84,64 @@ def inspect_shipping_email(
 
     si_item = next((item for item in documents if item["document"].document_type == "SI"), None)
     bl_item = next((item for item in documents if item["document"].document_type == "BL"), None)
+
+    # Heuristic fallback if 2 documents are present
+    if len(documents) >= 2:
+        if si_item is None and bl_item is not None:
+            candidate = next((item for item in documents if item != bl_item), None)
+            if candidate:
+                si_item = candidate
+        elif bl_item is None and si_item is not None:
+            candidate = next((item for item in documents if item != si_item), None)
+            if candidate:
+                bl_item = candidate
+        elif si_item is None and bl_item is None:
+            si_item = documents[0]
+            bl_item = documents[1]
+
+    # Always attach extracted documents if candidates exist
+    if si_item and bl_item:
+        si = si_item["document"]
+        bl = bl_item["document"]
+        result["documents"] = {
+            "si": {
+                "attachment": si_item["reference"],
+                "fields": si.fields,
+                "missing_fields": list(si.missing_fields),
+                "confidence": si.confidence,
+                "evidence": si.evidence,
+            },
+            "bl": {
+                "attachment": bl_item["reference"],
+                "fields": bl.fields,
+                "missing_fields": list(bl.missing_fields),
+                "confidence": bl.confidence,
+                "evidence": bl.evidence,
+            },
+        }
+    elif documents:
+        result["documents"] = {
+            f"doc_{idx+1}": {
+                "attachment": item["reference"],
+                "fields": item["document"].fields,
+                "missing_fields": list(item["document"].missing_fields),
+                "confidence": item["document"].confidence,
+                "evidence": item["document"].evidence,
+            }
+            for idx, item in enumerate(documents)
+        }
+
     if si_item is None or bl_item is None:
         result.update({"status": "NEEDS_REVIEW", "review_reason": "wrong_doc_type"})
         return result
 
     si = si_item["document"]
     bl = bl_item["document"]
-    result["documents"] = {
-        "si": {"attachment": si_item["reference"], "fields": si.fields, "missing_fields": list(si.missing_fields)},
-        "bl": {"attachment": bl_item["reference"], "fields": bl.fields, "missing_fields": list(bl.missing_fields)},
-    }
+
+    if si.document_type != "SI" or bl.document_type != "BL":
+        result.update({"status": "NEEDS_REVIEW", "review_reason": "wrong_doc_type"})
+        return result
+
     if si.missing_fields or bl.missing_fields:
         result.update({"status": "NEEDS_REVIEW", "review_reason": "missing_value"})
         return result

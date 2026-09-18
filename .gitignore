@@ -4,9 +4,10 @@ __pycache__/
 .env
 .adk/
 .qdrant/
-.artifacts/uploads/
+.artifacts/
 .pytest_cache/
 .ruff_cache/
 dist/
 build/
 *.egg-info/
+.problem_statement_AverisXMonash/

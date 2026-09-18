@@ -18,14 +18,26 @@ def _ask_gemini(instruction: str, context: dict[str, Any]) -> str:
         from google import genai
 
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=env("GOOGLE_MODEL", "gemini-3.5-flash"),
-            contents=f"{instruction}\n\nCASE CONTEXT:\n{json.dumps(context, ensure_ascii=True)}",
-        )
-        text = getattr(response, "text", None)
-        if not text:
-            raise AIUnavailable("Gemini returned no text")
-        return text
+        preferred = env("GOOGLE_MODEL", "gemini-3.1-flash-lite")
+        candidates = [preferred, "gemini-3.1-flash-lite", "gemini-3-flash-preview"]
+        seen = set()
+        last_err = None
+        for model in candidates:
+            if model in seen:
+                continue
+            seen.add(model)
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=f"{instruction}\n\nCASE CONTEXT:\n{json.dumps(context, ensure_ascii=True)}",
+                )
+                text = getattr(response, "text", None)
+                if text:
+                    return text
+            except Exception as error:
+                last_err = error
+                continue
+        raise AIUnavailable(f"Gemini request failed: {last_err}")
     except AIUnavailable:
         raise
     except Exception as error:
