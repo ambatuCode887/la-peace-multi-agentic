@@ -4,51 +4,10 @@
   "subject": "Help",
   "attachments": [
     "attachments/email_004_BL.txt",
-    "attachments/email_004_SI.txt"
+    "attachments/email_004_SI.txt",
+    "attachments/email_013_BL.txt",
+    "attachments/email_013_SI.txt"
   ],
-  "documents": {
-    "si": {
-      "attachment": "attachments/email_004_SI.txt",
-      "fields": {
-        "shipper": "APRIL FAR EAST (M) SDN BHD",
-        "consignee": "EAST BRIGHT FZ-LLC",
-        "notify_party": "EAST BRIGHT FZ-LLC",
-        "port_of_loading": "NANTONG, CHINA (CNNTG)",
-        "port_of_discharge": "KARACHI, PAKISTAN (PKKHI)",
-        "container_count": 6,
-        "gross_weight_kg": 131058
-      },
-      "missing_fields": []
-    },
-    "bl": {
-      "attachment": "attachments/email_004_BL.txt",
-      "fields": {
-        "shipper": "APRIL FAR EAST (M) SDN BHD",
-        "consignee": "UAB NOVAKOPA",
-        "notify_party": "UAB NOVAKOPA",
-        "port_of_loading": "NANTONG, CHINA (CNNTG)",
-        "port_of_discharge": "KARACHI, PAKISTAN (PKKHI)",
-        "container_count": 6,
-        "gross_weight_kg": 131058
-      },
-      "missing_fields": []
-    }
-  },
-  "status": "MISMATCH",
-  "review_reason": null,
-  "defect_fields": [
-    "consignee",
-    "notify_party"
-  ],
-  "has_defect": true,
-  "differences": {
-    "consignee": {
-      "si": "EAST BRIGHT FZ-LLC",
-      "bl": "UAB NOVAKOPA"
-    },
-    "notify_party": {
-      "si": "EAST BRIGHT FZ-LLC",
-      "bl": "UAB NOVAKOPA"
-    }
-  }
+  "status": "NEEDS_REVIEW",
+  "review_reason": "missing_attachment"
 }

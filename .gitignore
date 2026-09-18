@@ -4,6 +4,7 @@ __pycache__/
 .env
 .adk/
 .qdrant/
+.artifacts/uploads/
 .pytest_cache/
 .ruff_cache/
 dist/
