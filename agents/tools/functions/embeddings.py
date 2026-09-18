@@ -4,6 +4,8 @@ import hashlib
 import math
 from typing import Sequence
 
+import httpx
+
 from agents.config import env, env_int
 
 
@@ -25,13 +27,42 @@ def _hash_embedding(text: str, dimension: int) -> list[float]:
 def embed_texts(texts: Sequence[str]) -> list[list[float]]:
     """Embed texts for Qdrant.
 
-    Set `EMBEDDING_PROVIDER=fake` for offline smoke tests. The default uses
-    Google GenAI embeddings and requires `GOOGLE_API_KEY`.
+    Supported providers:
+    - `fake`: deterministic offline embeddings
+    - `ollama`: uses the local Ollama embedding endpoint
+    - `google`: uses Google GenAI embeddings and requires `GOOGLE_API_KEY`
     """
     dimension = env_int("EMBEDDING_DIM", 768)
     provider = (env("EMBEDDING_PROVIDER", "google") or "google").lower()
     if provider == "fake":
         return [_hash_embedding(text, dimension) for text in texts]
+
+    if provider == "ollama":
+        model = env("EMBEDDING_MODEL", "nomic-embed-text")
+        base_url = (env("OLLAMA_BASE_URL", "http://localhost:11434") or "http://localhost:11434").rstrip("/")
+        try:
+            response = httpx.post(
+                f"{base_url}/api/embed",
+                json={"model": model, "input": list(texts)},
+                timeout=60,
+            )
+        except httpx.HTTPError as error:
+            raise RuntimeError(
+                f"Ollama embedding request failed for model '{model}'. "
+                "Check that Ollama is running and the embedding model is available."
+            ) from error
+
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"Ollama embedding request failed for model '{model}' with status {response.status_code}: "
+                f"{response.text}"
+            )
+
+        data = response.json()
+        embeddings = data.get("embeddings")
+        if not embeddings:
+            raise RuntimeError("Ollama embedding response did not include embeddings.")
+        return [list(map(float, embedding)) for embedding in embeddings]
 
     from google import genai
 

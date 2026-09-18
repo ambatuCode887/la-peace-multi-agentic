@@ -1,5 +1,86 @@
 ﻿# Multi-Agentic RAG FYP
 
+## Shipping verification project scope
+
+The target workflow is an inbox-to-discrepancy-report system. The prepared dataset contains JSON inbox records and the SI/BL attachments referenced by those records. The expected workflow is:
+
+1. classify every email as a document-comparison request, new SI request, invoice query, general message, or spam;
+2. for comparison requests, read the SI and BL attachments;
+3. extract and compare shipper, consignee, notify party, port of loading, port of discharge, container count, and gross weight in kilograms;
+4. report mismatches side by side, or `No mismatch detected.` when all seven fields match; and
+5. escalate missing, unreadable, incomplete, or uncertain cases for human review.
+
+See [TODO.md](TODO.md) for the implementation checklist.
+
+### Cloud provider decision
+
+The current repository choice is **Google**: Google ADK orchestrates the agents, and Google Gemini is the default LLM and embedding provider. The code also supports Ollama for local model execution. The problem statement does not mandate a cloud provider, so confirm whether the project requirement is specifically **Google Cloud Vertex AI** or the **Google Gemini API/AI Studio**. Qdrant and Confluence are separate services and are not the AI cloud provider.
+
+### Prepared dataset
+
+The challenge data is expected as a static bundle or through the local Docker server. The bundle contains `inbox/`, `attachments/`, `sample_submission.json`, and `loader.py`. The local server is expected at `http://localhost:8080`; results can be checked through `POST /submit` or `inbox.submit(...)`. The dataset should be treated as the source for the verification pipeline, while the existing RAG knowledge files remain useful for the separate retrieval demonstration.
+
+### Run the shipping verifier
+
+Using the supplied static dataset:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m agents.shipping.baseline `
+	C:\\Users\\User\\Downloads\\sdoc-hackathon-docker\\data_v2 `
+	.artifacts\\final-submission.json
+```
+
+The adapter also supports the Docker server at `http://localhost:8080`:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -c "from agents.shipping.tool import run_shipping_verification; print(run_shipping_verification('http://localhost:8080', '.artifacts/http-submission.json'))"
+```
+
+In ADK Web, you can simply ask: `Run shipping document verification on the challenge dataset and generate the submission JSON.` The tool defaults to `http://localhost:8080`.
+
+Submit a generated result to the local evaluator:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8080/submit -Method Post `
+	-ContentType 'application/json' -InFile .artifacts\\final-submission.json
+```
+
+### Accept new shipping uploads
+
+Start the upload API:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m uvicorn agents.shipping.api:app --reload --port 8090
+```
+
+Open `http://localhost:8090` for the upload dashboard. It displays verification status, side-by-side SI/BL fields, differences, review reasons, and a correction action.
+
+Upload an email and its SI/BL attachments:
+
+```powershell
+curl.exe -X POST http://localhost:8090/verify `
+	-F "email_id=email_new_001" `
+	-F "sender=docs@example.com" `
+	-F "subject=TO CONFIRM DOCS" `
+	-F "body=Please compare the SI and draft BL." `
+	-F "attachments=@C:\\path\\email_new_001_SI.txt" `
+	-F "attachments=@C:\\path\\email_new_001_BL.txt"
+```
+
+The response contains the generated report and saved report path. Reviewers can persist a correction with `POST /reviews/{email_id}` using a JSON body containing `category`, `status`, `review_reason`, `has_defect`, and `defect_fields`.
+
+The verifier supports TXT, PDF, DOCX, and XLSX attachments. Image-only PDFs use OCR through Tesseract; if OCR fails, the case is escalated for review.
+
+```mermaid
+flowchart LR
+		A[Inbox JSON or HTTP API] --> B[Classifier]
+		B -->|BL comparison| C[Attachment reader]
+		C --> D[Field extraction and normalization]
+		D --> E[Deterministic SI vs BL comparison]
+		E --> F[Submission or review evidence]
+		B -->|Other categories| F
+```
+
 This project is a Google ADK multi-agent retrieval system that:
 
 - ingests local documents into Qdrant

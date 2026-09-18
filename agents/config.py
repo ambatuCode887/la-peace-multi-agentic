@@ -49,6 +49,21 @@ def env_int(name: str, default: int) -> int:
     return int(value)
 
 
+def build_agent_model():
+    provider = (env("LLM_PROVIDER", "google") or "google").lower()
+    if provider == "google":
+        return env("GOOGLE_MODEL", "gemini-3.5-flash")
+    if provider == "ollama":
+        from google.adk.models.lite_llm import LiteLlm
+
+        model_name = env("OLLAMA_MODEL", "llama3.1")
+        api_base = env("OLLAMA_BASE_URL", "http://localhost:11434")
+        return LiteLlm(model=f"ollama_chat/{model_name}", api_base=api_base)
+    raise RuntimeError(
+        f"Unsupported LLM_PROVIDER '{provider}'. Use 'google' or 'ollama'."
+    )
+
+
 def csv_env(name: str) -> list[str]:
     value = env(name, "")
     return [item.strip() for item in value.split(",") if item.strip()]

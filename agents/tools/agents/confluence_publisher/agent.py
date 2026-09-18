@@ -3,6 +3,7 @@ from google.adk.agents.llm_agent import Agent
 from pathlib import Path
 import os
 
+from agents.config import build_agent_model
 from agents.tools.functions.publish.prepare import prepare_confluence_page
 from agents.tools.functions.publish.result import publish_confluence_page
 
@@ -21,7 +22,7 @@ def confluence_publisher_agent() -> Agent:
     """Creates an agent for preparing and publishing Confluence pages."""
     _validate_configuration()
     return Agent(
-        model="gemini-3.5-flash",
+        model=build_agent_model(),
         name="confluence_publisher_agent",
         description="Prepares and publishes Confluence pages.",
         instruction=_PROMPT.read_text(encoding="utf-8"),
