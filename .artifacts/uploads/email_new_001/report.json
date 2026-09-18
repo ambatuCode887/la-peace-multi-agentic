@@ -1,6 +1,12 @@
 {
   "email_id": "email_new_001",
   "category": "BL_COMPARISON",
+  "sender": "docs@example.com",
+  "classification": {
+    "category": "BL_COMPARISON",
+    "confidence": "high",
+    "rationale": "Matched a high-signal subject/body pattern"
+  },
   "subject": "TO CONFIRM DOCS",
   "attachments": [
     "attachments/email_004_SI.txt",
@@ -40,6 +46,7 @@
     "consignee",
     "notify_party"
   ],
+  "ignored_attachments": [],
   "has_defect": true,
   "differences": {
     "consignee": {
@@ -50,5 +57,9 @@
       "si": "EAST BRIGHT FZ-LLC",
       "bl": "UAB NOVAKOPA"
     }
+  },
+  "ai_analysis": {
+    "available": false,
+    "reason": "Gemini request failed: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
   }
 }
