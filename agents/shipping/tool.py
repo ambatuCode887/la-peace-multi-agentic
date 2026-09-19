@@ -83,6 +83,7 @@ def inspect_shipping_email(
                 content.text,
                 filename=reference,
                 source_spans=content.spans,
+                alternate_readings=content.reader_texts,
             )
             documents.append({"reference": reference, "document": document})
     except AttachmentReadError as error:
@@ -122,6 +123,8 @@ def inspect_shipping_email(
                 "confidence": si.confidence,
                 "evidence": si.evidence,
                 "evidence_details": si.evidence_details,
+                "reader_fields": si.reader_fields,
+                "reader_agreement": si.reader_agreement,
             },
             "bl": {
                 "attachment": bl_item["reference"],
@@ -130,6 +133,8 @@ def inspect_shipping_email(
                 "confidence": bl.confidence,
                 "evidence": bl.evidence,
                 "evidence_details": bl.evidence_details,
+                "reader_fields": bl.reader_fields,
+                "reader_agreement": bl.reader_agreement,
             },
         }
     elif documents:

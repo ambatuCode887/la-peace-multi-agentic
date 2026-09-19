@@ -96,6 +96,16 @@ The dashboard's **Process inbox** action processes every email from `SHIPPING_DA
 
 When `GOOGLE_API_KEY` is configured, each uploaded case also receives a Gemini explanation and the dashboard chat can answer questions through `POST /chat/{email_id}`. Gemini explains and assists; the deterministic verifier remains the final authority for status and defect fields.
 
+For image-only PDFs, RapidOCR remains the default reader. An optional local Ollama vision fallback can be enabled for difficult scans:
+
+```powershell
+ollama pull qwen2.5vl:3b
+$env:VISION_OCR_ENABLED="true"
+$env:VISION_OCR_MODEL="qwen2.5vl:3b"
+```
+
+Restart the API after setting these variables. The vision model is used only when a PDF has no usable text layer; if Ollama is unavailable, the existing OCR result is retained.
+
 Upload an email and its SI/BL attachments:
 
 ```powershell

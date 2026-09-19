@@ -40,6 +40,8 @@ class ExtractedShipment:
     evidence_details: dict[str, dict[str, Any]]
     raw_values: dict[str, str | None]
     source_labels: dict[str, str | None]
+    reader_fields: dict[str, dict[str, str | int | None]]
+    reader_agreement: dict[str, str]
 
 
 def classify_email(email: DatasetEmail | Mapping[str, Any]) -> str:
@@ -93,6 +95,7 @@ def extract_shipment_fields(
     text: str,
     filename: str = "",
     source_spans: tuple[dict[str, Any], ...] = (),
+    alternate_readings: Mapping[str, str] | None = None,
 ) -> ExtractedShipment:
     """Extract the seven comparison fields from a plain-text SI or BL."""
     document_type = _document_type(text, filename)
@@ -142,6 +145,21 @@ def extract_shipment_fields(
             evidence_details[field] = _evidence_detail(
                 filename, value_start, value_start + len(value or ""), source_spans, value, "next_line"
             )
+    reader_fields: dict[str, dict[str, str | int | None]] = {}
+    reader_agreement: dict[str, str] = {}
+    for reader, alternate_text in (alternate_readings or {}).items():
+        alternate = extract_shipment_fields(alternate_text, filename=filename)
+        reader_fields[reader] = alternate.fields
+        for field in COMPARE_FIELDS:
+            if values[field] is None or alternate.fields[field] is None:
+                reader_agreement[field] = "unavailable"
+                confidence[field] = "low"
+            elif values_match(field, values[field], alternate.fields[field]):
+                reader_agreement.setdefault(field, "agree")
+            else:
+                reader_agreement[field] = "disagree"
+                confidence[field] = "low"
+
     missing = tuple(field for field in COMPARE_FIELDS if values[field] is None)
     return ExtractedShipment(
         fields=values,
@@ -152,6 +170,8 @@ def extract_shipment_fields(
         evidence_details=evidence_details,
         raw_values=raw_values,
         source_labels=source_labels,
+        reader_fields=reader_fields,
+        reader_agreement=reader_agreement,
     )
 
 
@@ -199,10 +219,17 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
         field for field in COMPARE_FIELDS
         if not values_match(field, si.fields[field], bl.fields[field])
     ]
+    uncertain_fields = sorted({
+        field
+        for document in (si, bl)
+        for field, agreement in document.reader_agreement.items()
+        if agreement == "disagree"
+    })
     return {
-        "status": "MISMATCH" if defects else "OK",
-        "review_reason": None,
+        "status": "NEEDS_REVIEW" if uncertain_fields else ("MISMATCH" if defects else "OK"),
+        "review_reason": "low_confidence" if uncertain_fields else None,
         "defect_fields": defects,
+        "uncertain_fields": uncertain_fields,
         "normalized_equivalences": normalized_equivalences,
         "ignored_differences": ignored_differences,
     }
@@ -253,6 +280,7 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
                     (content := read_attachment_content(adapter, reference)).text,
                     filename=reference,
                     source_spans=content.spans,
+                    alternate_readings=content.reader_texts,
                 )
             )
     except AttachmentReadError as error:
@@ -315,6 +343,8 @@ def _document_evidence(
             "confidence": document.confidence,
             "evidence": document.evidence,
             "evidence_details": document.evidence_details,
+            "reader_fields": document.reader_fields,
+            "reader_agreement": document.reader_agreement,
         }
         for index, document in enumerate(documents)
     ]
