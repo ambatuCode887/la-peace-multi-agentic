@@ -60,6 +60,7 @@ def inspect_shipping_email(
         "sender": email.sender,
         "classification": classification,
         "subject": email.subject,
+        "body": email.body,
         "attachments": list(email.attachments),
     }
     if category != "BL_COMPARISON":

@@ -210,3 +210,100 @@ def test_uploaded_si_and_bl_are_compared_even_with_an_unrelated_subject(tmp_path
     assert report["defect_fields"] == ["gross_weight_kg"]
     assert report["differences"]["gross_weight_kg"] == {"si": 40000, "bl": 41000}
     assert "available" in report["verifier"]
+
+
+def test_case_detail_includes_the_email_body_for_new_and_older_reports(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    si = (
+        b"BILL OF LADING INSTRUCTION\nShipper: ACME LTD\nConsignee: BETA CO\nNotify Party: BETA CO\n"
+        b"Port of Loading: SHANGHAI, CHINA\nPOD: ROTTERDAM, NETHERLANDS\n"
+        b"Total Containers: 2 x 40'HC\nGross Wt (kgs): 40,000 KG\n"
+    )
+    bl = si.replace(b"BILL OF LADING INSTRUCTION", b"BILL OF LADING (DRAFT)")
+    client = TestClient(create_app(tmp_path))
+
+    posted = client.post(
+        "/verify",
+        data={
+            "email_id": "with_body",
+            "sender": "docs@example.com",
+            "subject": "TO CONFIRM DOCS",
+            "body": "Please compare the SI and draft BL.\nThanks, Sam",
+        },
+        files=[
+            ("attachments", ("si.txt", si, "text/plain")),
+            ("attachments", ("bl.txt", bl, "text/plain")),
+        ],
+    ).json()["report"]
+    assert posted["body"] == "Please compare the SI and draft BL.\nThanks, Sam"
+    assert client.get("/cases/with_body").json()["report"]["body"].endswith("Thanks, Sam")
+
+    # A report saved before the body was stored still shows it, read from the saved email.
+    report_path = tmp_path / "with_body" / "report.json"
+    older = json.loads(report_path.read_text(encoding="utf-8"))
+    for key in ("body", "sender", "subject"):
+        older.pop(key)
+    report_path.write_text(json.dumps(older), encoding="utf-8")
+
+    restored = client.get("/cases/with_body").json()["report"]
+    assert restored["body"].startswith("Please compare the SI and draft BL.")
+    assert restored["sender"] == "docs@example.com"
+    assert restored["subject"] == "TO CONFIRM DOCS"
+
+
+def test_only_form_created_cases_can_be_deleted(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    txt = (
+        b"BILL OF LADING INSTRUCTION\nShipper: ACME LTD\nConsignee: BETA CO\nNotify Party: BETA CO\n"
+        b"Port of Loading: SHANGHAI, CHINA\nPOD: ROTTERDAM, NETHERLANDS\n"
+        b"Total Containers: 2 x 40'HC\nGross Wt (kgs): 40,000 KG\n"
+    )
+    client = TestClient(create_app(tmp_path))
+    client.post(
+        "/verify",
+        data={"email_id": "my_test", "subject": "x"},
+        files=[("attachments", ("si.txt", txt, "text/plain")), ("attachments", ("bl.txt", txt, "text/plain"))],
+    )
+
+    # A case saved from the inbox (Docker) looks like this on disk.
+    inbox_case = tmp_path / "email_004"
+    (inbox_case / "inbox").mkdir(parents=True)
+    (inbox_case / "inbox" / "email_004.json").write_text(json.dumps({"email_id": "email_004"}), encoding="utf-8")
+    (inbox_case / "report.json").write_text(json.dumps({"email_id": "email_004", "source": "inbox"}), encoding="utf-8")
+
+    listed = {case["email_id"]: case["deletable"] for case in client.get("/cases").json()["cases"]}
+    assert listed == {"my_test": True, "email_004": False}
+
+    assert client.delete("/cases/email_004").status_code == 403
+    assert inbox_case.is_dir()
+    assert client.delete("/cases/nope").status_code == 404
+    assert client.delete("/cases/..%2Fescape").status_code in {404, 405, 422}
+
+    assert client.delete("/cases/my_test").json() == {"ok": True, "email_id": "my_test"}
+    assert not (tmp_path / "my_test").exists()
+    assert [case["email_id"] for case in client.get("/cases").json()["cases"]] == ["email_004"]
+
+
+def test_delete_copes_with_read_only_files_and_repeat_requests(tmp_path, monkeypatch) -> None:
+    import os
+    import stat
+
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    txt = (
+        b"BILL OF LADING INSTRUCTION\nShipper: ACME LTD\nConsignee: BETA CO\nNotify Party: BETA CO\n"
+        b"Port of Loading: SHANGHAI, CHINA\nPOD: ROTTERDAM, NETHERLANDS\n"
+        b"Total Containers: 2 x 40'HC\nGross Wt (kgs): 40,000 KG\n"
+    )
+    client = TestClient(create_app(tmp_path))
+    client.post(
+        "/verify",
+        data={"email_id": "locked_case", "subject": "x"},
+        files=[("attachments", ("si.txt", txt, "text/plain")), ("attachments", ("bl.txt", txt, "text/plain"))],
+    )
+    # Windows refuses to delete read-only files; the delete must still succeed.
+    os.chmod(tmp_path / "locked_case" / "attachments" / "si.txt", stat.S_IREAD)
+
+    assert client.delete("/cases/locked_case").status_code == 200
+    assert not (tmp_path / "locked_case").exists()
+    # A repeated request (double click) finds nothing and reports it cleanly.
+    assert client.delete("/cases/locked_case").status_code == 404
