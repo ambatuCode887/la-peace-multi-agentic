@@ -20,6 +20,13 @@ COMPARE_FIELDS = (
     "container_count",
     "gross_weight_kg",
 )
+PARTY_FIELDS = ("shipper", "consignee", "notify_party")
+_MAX_PARTY_LINES = 5
+_BLOCK_STOP = re.compile(
+    r"(?i)^(?:vessel|voyage|container|description|hs[ \t]*code|b/?l\b|booking|freight"
+    r"|oc[ \t]*no|marks|place[ \t]+of|final[ \t]+dest|packages|no\.?[ \t]+of|total"
+    r"|gross|net[ \t]+weight|measurement|carrier|date)"
+)
 REVIEW_REASONS = ("wrong_doc_type", "missing_attachment", "unreadable", "missing_value")
 
 
@@ -86,10 +93,20 @@ def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
     confidence: dict[str, str] = {}
     evidence: dict[str, str] = {}
     for field, pattern in _FIELD_PATTERNS.items():
-        match = pattern.search(text)
+        # A table header such as "CONTAINER NO." can match before the real value
+        # line, so take the first match that actually parses to a value.
+        match = next(
+            (
+                candidate for candidate in pattern.finditer(text)
+                if _parse_field(field, candidate.group(1)) is not None
+            ),
+            None,
+        )
         next_line = not match
         value = match.group(1) if match else _next_line_value(text, field)
         values[field] = _parse_field(field, value)
+        if field in PARTY_FIELDS and isinstance(values[field], str):
+            values[field] = _party_block(text, field, values[field])
         if values[field] is None:
             confidence[field] = "low"
             evidence[field] = "No usable value found"
@@ -118,7 +135,7 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
 
     defects = [
         field for field in COMPARE_FIELDS
-        if _normalized_value(si.fields[field]) != _normalized_value(bl.fields[field])
+        if not values_match(field, si.fields[field], bl.fields[field])
     ]
     return {
         "status": "MISMATCH" if defects else "OK",
@@ -292,6 +309,50 @@ def _normalized_value(value: str | int | None) -> str | int | None:
     return re.sub(r"[^A-Z0-9]", "", value.upper())
 
 
+def values_match(field: str, si_value: str | int | None, bl_value: str | int | None) -> bool:
+    """Compare one field. Parties are matched on the company name (first line) only."""
+    if field in PARTY_FIELDS:
+        si_value, bl_value = (
+            value.splitlines()[0] if isinstance(value, str) and value else value
+            for value in (si_value, bl_value)
+        )
+    return _normalized_value(si_value) == _normalized_value(bl_value)
+
+
+def _party_block(text: str, field: str, first_line: str) -> str:
+    """Extend a party's first line with the address lines that follow it."""
+    lines = text.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        same_line = _FIELD_PATTERNS[field].match(line)
+        if same_line and same_line.group(1).strip() == first_line:
+            start = index
+            break
+        if _STANDALONE_LABEL_PATTERNS[field].match(line.strip()):
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            if following < len(lines) and lines[following].strip() == first_line:
+                start = following
+                break
+    if start is None:
+        return first_line
+
+    block = [first_line]
+    for line in lines[start + 1:]:
+        value = line.strip()
+        if not value or len(block) > _MAX_PARTY_LINES or _is_section_label(value):
+            break
+        block.append(value)
+    return "\n".join(block)
+
+
+def _is_section_label(line: str) -> bool:
+    return bool(_BLOCK_STOP.match(line)) or any(
+        pattern.match(line) for pattern in _FIELD_PATTERNS.values()
+    ) or any(pattern.match(line) for pattern in _STANDALONE_LABEL_PATTERNS.values())
+
+
 def _next_line_value(text: str, field: str) -> str | None:
     label_pattern = _STANDALONE_LABEL_PATTERNS.get(field)
     if label_pattern is None:
@@ -312,7 +373,7 @@ def _next_line_value(text: str, field: str) -> str | None:
 _FIELD_PATTERNS = {
     "shipper": re.compile(r"(?im)^\s*shipper(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "consignee": re.compile(r"(?im)^\s*(?:consignee|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
@@ -322,7 +383,7 @@ _FIELD_PATTERNS = {
 _STANDALONE_LABEL_PATTERNS = {
     "shipper": re.compile(r"(?i)^shipper(?:\s*/\s*exporter)?(?:\s*\([^)]*\))*$"),
     "consignee": re.compile(r"(?i)^(?:consignee|to\s+the\s+order\s+of)(?:\s*\([^)]*\))*$"),
-    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
+    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify(?:\s+party)?)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
     "port_of_loading": re.compile(r"(?i)^(?:port\s*of\s*(?:loading|lcading)|load\s+port|pol)(?:\s*\([^)]*\))*$"),
     "port_of_discharge": re.compile(r"(?i)^(?:port\s*of\s*discharge|discharge\s+port|pod)(?:\s*\([^)]*\))*$"),
     "container_count": re.compile(r"(?i)^(?:total\s+containers?|no\.?\s+of\s+containers?(?:\s+or\s+packages)?|container\s+count|containe\s*rs?|containers?)(?:\s*\([^)]*\))*$"),

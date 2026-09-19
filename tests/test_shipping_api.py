@@ -139,3 +139,28 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
     assert 'option value="MISMATCH"' in response.text
     assert "SI blueprint" in response.text
     assert "ai-summary-grid" in response.text
+
+def test_uploaded_si_and_bl_are_compared_even_with_an_unrelated_subject(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    si = (
+        b"BILL OF LADING INSTRUCTION\nShipper: ACME LTD\nConsignee: BETA CO\nNotify Party: BETA CO\n"
+        b"Port of Loading: SHANGHAI, CHINA\nPOD: ROTTERDAM, NETHERLANDS\n"
+        b"Total Containers: 2 x 40'HC\nGross Wt (kgs): 40,000 KG\n"
+    )
+    bl = si.replace(b"BILL OF LADING INSTRUCTION", b"BILL OF LADING (DRAFT)").replace(b"40,000", b"41,000")
+    client = TestClient(create_app(tmp_path))
+
+    response = client.post(
+        "/verify",
+        data={"email_id": "my_upload", "subject": "my files", "body": "here are my two files"},
+        files=[
+            ("attachments", ("si.txt", si, "text/plain")),
+            ("attachments", ("bl.txt", bl, "text/plain")),
+        ],
+    )
+
+    report = response.json()["report"]
+    assert report["category"] == "BL_COMPARISON"
+    assert report["status"] == "MISMATCH"
+    assert report["defect_fields"] == ["gross_weight_kg"]
+    assert report["differences"]["gross_weight_kg"] == {"si": 40000, "bl": 41000}
