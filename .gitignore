@@ -11,3 +11,6 @@ dist/
 build/
 *.egg-info/
 .problem_statement_AverisXMonash/
+/vscode/
+.vs/
+.vscode/
