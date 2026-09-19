@@ -45,11 +45,20 @@ def inspect_shipping_email(
     adapter = DatasetAdapter(data_root)
     email = adapter.get(email_id)
     category = classify_email(email)
+    classification = classify_email_details(email)
+    
+    if category != "BL_COMPARISON" and email.raw.get("source") == "upload" and len(email.attachments) >= 2:
+        category = "BL_COMPARISON"
+        classification = {
+            "category": category,
+            "confidence": "high",
+            "rationale": "Two attachments were uploaded for verification, so they are compared.",
+        }
     result: dict[str, Any] = {
         "email_id": email_id,
         "category": category,
         "sender": email.sender,
-        "classification": classify_email_details(email),
+        "classification": classification,
         "subject": email.subject,
         "attachments": list(email.attachments),
     }

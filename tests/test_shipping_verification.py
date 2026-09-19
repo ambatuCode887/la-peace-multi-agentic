@@ -172,3 +172,80 @@ def test_review_result_contains_structured_evidence(tmp_path) -> None:
     assert result["review_reason"] == "wrong_doc_type"
     assert result["review_context"]["email_id"] == "email_501"
     assert result["review_context"]["documents"][1]["document_type"] == "OTHER"
+
+PDF_STYLE_SI = """BILL OF LADING INSTRUCTION
+Shipper/Exporter
+APRIL FINE PAPER TRADING (MIDDLE EAST) FZE
+#813, 4 EA, DUBAI AIRPORT FREE ZONE
+P.O. BOX: 293775, DUBAI, UNITED ARAB EMIRATES
+CONSIGNEE
+TOPKOPY MIDDLE EAST FZE
+P.O. BOX 17436
+JEBEL ALI FREE ZONE, DUBAI, UAE
+NOTIFY PARTY
+TOPKOPY MIDDLE EAST FZE
+P.O. BOX 17436
+JEBEL ALI FREE ZONE, DUBAI, UAE
+Port of Loading (POL)
+PORT KLANG (WESTPORT), MALAYSIA
+POD
+HOCHIMINH CITY, VIETNAM
+Vessel
+SOLID 16 V.044NW2
+No. of Containers: 2 x 40'HC
+TOTAL Gross Wt (kgs): 40,326 KG
+"""
+
+
+def test_party_fields_keep_the_full_name_and_address_block() -> None:
+    si = extract_shipment_fields(PDF_STYLE_SI)
+
+    assert si.fields["shipper"] == (
+        "APRIL FINE PAPER TRADING (MIDDLE EAST) FZE\n"
+        "#813, 4 EA, DUBAI AIRPORT FREE ZONE\n"
+        "P.O. BOX: 293775, DUBAI, UNITED ARAB EMIRATES"
+    )
+    # The block must stop at the next label instead of swallowing the ports.
+    assert si.fields["consignee"].splitlines()[-1] == "JEBEL ALI FREE ZONE, DUBAI, UAE"
+    assert si.fields["port_of_loading"] == "PORT KLANG (WESTPORT), MALAYSIA"
+
+
+def test_standalone_notify_party_label_is_not_read_as_the_value() -> None:
+    si = extract_shipment_fields(PDF_STYLE_SI)
+
+    assert si.fields["notify_party"].splitlines()[0] == "TOPKOPY MIDDLE EAST FZE"
+
+
+def test_parties_are_compared_on_company_name_not_address_layout() -> None:
+    si = extract_shipment_fields(PDF_STYLE_SI)
+    bl = extract_shipment_fields(
+        PDF_STYLE_SI.replace("BILL OF LADING INSTRUCTION", "BILL OF LADING (DRAFT)")
+        .replace("P.O. BOX 17436\nJEBEL ALI FREE ZONE, DUBAI, UAE\nNOTIFY", "PO BOX 17436, JEBEL ALI\nNOTIFY")
+    )
+
+    assert compare_shipments(si, bl)["defect_fields"] == []
+
+    other_notify = extract_shipment_fields(
+        PDF_STYLE_SI.replace("BILL OF LADING INSTRUCTION", "BILL OF LADING (DRAFT)")
+        .replace("NOTIFY PARTY\nTOPKOPY MIDDLE EAST FZE", "NOTIFY PARTY\nSOMEONE ELSE LLC")
+    )
+    assert compare_shipments(si, other_notify)["defect_fields"] == ["notify_party"]
+
+
+def test_table_headers_do_not_hide_the_real_container_and_weight_lines() -> None:
+    si = extract_shipment_fields(
+        """BILL OF LADING INSTRUCTION
+CONTAINER NO.
+DESCRIPTION
+GROSS WEIGHT (KG)
+CHRR1588144
+40'HC COATED IVORY BOARD
+20,163
+No. of Containers: 2 x 40'HC
+TOTAL Gross Wt (kgs): 40,326 KG
+"""
+    )
+
+    assert si.fields["container_count"] == 2
+    assert si.fields["gross_weight_kg"] == 40326
+    assert not si.missing_fields or "container_count" not in si.missing_fields
