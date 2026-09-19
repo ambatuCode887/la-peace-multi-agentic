@@ -20,6 +20,13 @@ COMPARE_FIELDS = (
     "container_count",
     "gross_weight_kg",
 )
+PARTY_FIELDS = ("shipper", "consignee", "notify_party")
+_MAX_PARTY_LINES = 5
+_BLOCK_STOP = re.compile(
+    r"(?i)^(?:vessel|voyage|container|description|hs[ \t]*code|b/?l\b|booking|freight"
+    r"|oc[ \t]*no|marks|place[ \t]+of|final[ \t]+dest|packages|no\.?[ \t]+of|total"
+    r"|gross|net[ \t]+weight|measurement|carrier|date)"
+)
 REVIEW_REASONS = ("wrong_doc_type", "missing_attachment", "unreadable", "missing_value")
 
 
@@ -58,7 +65,7 @@ def classify_email(email: DatasetEmail | Mapping[str, Any]) -> str:
         "to confirm docs", "request bl draft", "draft bl", "confirm docs",
     )) or re.search(r"\b525007\d+\b", subject):
         return "BL_COMPARISON"
-    if _email_attachments(email) and ("draft bl" in body or "compare" in body):
+    if _has_document_comparison_signal(email, body):
         return "BL_COMPARISON"
     return "GENERAL"
 
@@ -71,11 +78,11 @@ def classify_email_details(email: DatasetEmail | Mapping[str, Any]) -> dict[str,
     combined = f"{subject}\n{body}"
     high_signal = category == "SPAM" or any(
         signal in combined for signal in ("draft bl", "to confirm docs", "request si", "invoice", "billing")
-    )
+    ) or _has_document_comparison_signal(email, body)
     return {
         "category": category,
         "confidence": "high" if high_signal else "medium",
-        "rationale": "Matched a high-signal subject/body pattern" if high_signal else "No high-signal pattern; routed to general handling",
+        "rationale": "Matched a high-signal subject/body or SI/BL attachment pattern" if high_signal else "No high-signal pattern; routed to general handling",
     }
 
 
@@ -86,10 +93,26 @@ def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
     confidence: dict[str, str] = {}
     evidence: dict[str, str] = {}
     for field, pattern in _FIELD_PATTERNS.items():
-        match = pattern.search(text)
+        # A table header such as "CONTAINER NO." can match before the real value
+        # line, so take the first match that actually parses to a value.
+        match = next(
+            (
+                candidate for candidate in pattern.finditer(text)
+                if _parse_field(field, candidate.group(1)) is not None
+            ),
+            None,
+        )
         next_line = not match
         value = match.group(1) if match else _next_line_value(text, field)
+        if field == "notify_party" and value and re.fullmatch(
+            r"(?i)party\s*/?\s*intermediate\s+consignee|party", value.strip()
+        ):
+            match = None
+            next_line = True
+            value = _next_line_value(text, field)
         values[field] = _parse_field(field, value)
+        if field in PARTY_FIELDS and isinstance(values[field], str):
+            values[field] = _party_block(text, field, values[field])
         if values[field] is None:
             confidence[field] = "low"
             evidence[field] = "No usable value found"
@@ -116,14 +139,22 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
     if si.missing_fields or bl.missing_fields:
         return {"status": "NEEDS_REVIEW", "review_reason": "missing_value", "defect_fields": []}
 
+    normalized_equivalences = [
+        field
+        for field in COMPARE_FIELDS
+        if si.fields[field] != bl.fields[field]
+        and _normalized_field_value(field, si.fields[field])
+        == _normalized_field_value(field, bl.fields[field])
+    ]
     defects = [
         field for field in COMPARE_FIELDS
-        if _normalized_value(si.fields[field]) != _normalized_value(bl.fields[field])
+        if not values_match(field, si.fields[field], bl.fields[field])
     ]
     return {
         "status": "MISMATCH" if defects else "OK",
         "review_reason": None,
         "defect_fields": defects,
+        "normalized_equivalences": normalized_equivalences,
     }
 
 
@@ -250,6 +281,18 @@ def _email_attachments(email: DatasetEmail | Mapping[str, Any]) -> tuple[str, ..
     return tuple(attachments) if isinstance(attachments, (list, tuple)) else ()
 
 
+def _has_document_comparison_signal(
+    email: DatasetEmail | Mapping[str, Any], body: str = ""
+) -> bool:
+    body_has_both_documents = bool(
+        re.search(r"\bsi\b", body) and re.search(r"\bbl\b", body)
+    )
+    attachment_names = [Path(reference).stem.lower() for reference in _email_attachments(email)]
+    named_si = any(re.search(r"(?:^|[_\-\s])si(?:$|[_\-\s])", name) for name in attachment_names)
+    named_bl = any(re.search(r"(?:^|[_\-\s])bl(?:$|[_\-\s])", name) for name in attachment_names)
+    return bool(_email_attachments(email)) and (body_has_both_documents or (named_si and named_bl))
+
+
 def _document_type(text: str, filename: str = "") -> str:
     norm_text = re.sub(r"\s+", " ", text.upper())
 
@@ -292,6 +335,57 @@ def _normalized_value(value: str | int | None) -> str | int | None:
     return re.sub(r"[^A-Z0-9]", "", value.upper())
 
 
+def _normalized_field_value(field: str, value: str | int | None) -> str | int | None:
+    """Normalize comparison values while keeping the raw OCR value for evidence."""
+    if field in {"shipper", "consignee", "notify_party"} and isinstance(value, str):
+        value = re.sub(r"\bSDN\s+SHD\b", "SDN BHD", value, flags=re.IGNORECASE)
+    return _normalized_value(value)
+
+
+def values_match(field: str, si_value: str | int | None, bl_value: str | int | None) -> bool:
+    """Compare one field. Parties are matched on the company name (first line) only."""
+    if field in PARTY_FIELDS:
+        si_value, bl_value = (
+            value.splitlines()[0] if isinstance(value, str) and value else value
+            for value in (si_value, bl_value)
+        )
+    return _normalized_field_value(field, si_value) == _normalized_field_value(field, bl_value)
+
+
+def _party_block(text: str, field: str, first_line: str) -> str:
+    """Extend a party's first line with the address lines that follow it."""
+    lines = text.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        same_line = _FIELD_PATTERNS[field].match(line)
+        if same_line and same_line.group(1).strip() == first_line:
+            start = index
+            break
+        if _STANDALONE_LABEL_PATTERNS[field].match(line.strip()):
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            if following < len(lines) and lines[following].strip() == first_line:
+                start = following
+                break
+    if start is None:
+        return first_line
+
+    block = [first_line]
+    for line in lines[start + 1:]:
+        value = line.strip()
+        if not value or len(block) > _MAX_PARTY_LINES or _is_section_label(value):
+            break
+        block.append(value)
+    return "\n".join(block)
+
+
+def _is_section_label(line: str) -> bool:
+    return bool(_BLOCK_STOP.match(line)) or any(
+        pattern.match(line) for pattern in _FIELD_PATTERNS.values()
+    ) or any(pattern.match(line) for pattern in _STANDALONE_LABEL_PATTERNS.values())
+
+
 def _next_line_value(text: str, field: str) -> str | None:
     label_pattern = _STANDALONE_LABEL_PATTERNS.get(field)
     if label_pattern is None:
@@ -303,7 +397,11 @@ def _next_line_value(text: str, field: str) -> str | None:
         for following in lines[index + 1:]:
             value = following.strip()
             if value:
-                if any(p.search(value) for p in _FIELD_PATTERNS.values()):
+                if any(
+                    p.search(value)
+                    for name, p in _FIELD_PATTERNS.items()
+                    if name != field
+                ):
                     return None
                 return value
     return None
@@ -312,17 +410,17 @@ def _next_line_value(text: str, field: str) -> str | None:
 _FIELD_PATTERNS = {
     "shipper": re.compile(r"(?im)^\s*shipper(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "consignee": re.compile(r"(?im)^\s*(?:consignee|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
+    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
     "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
-    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?gro?ss?[ \t]*(?:weight|wt)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
+    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?g(?:ross|iross)[ \t]*(?:weight|wt)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
 }
 
 _STANDALONE_LABEL_PATTERNS = {
     "shipper": re.compile(r"(?i)^shipper(?:\s*/\s*exporter)?(?:\s*\([^)]*\))*$"),
     "consignee": re.compile(r"(?i)^(?:consignee|to\s+the\s+order\s+of)(?:\s*\([^)]*\))*$"),
-    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
+    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify(?:\s+party)?)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
     "port_of_loading": re.compile(r"(?i)^(?:port\s*of\s*(?:loading|lcading)|load\s+port|pol)(?:\s*\([^)]*\))*$"),
     "port_of_discharge": re.compile(r"(?i)^(?:port\s*of\s*discharge|discharge\s+port|pod)(?:\s*\([^)]*\))*$"),
     "container_count": re.compile(r"(?i)^(?:total\s+containers?|no\.?\s+of\s+containers?(?:\s+or\s+packages)?|container\s+count|containe\s*rs?|containers?)(?:\s*\([^)]*\))*$"),

@@ -73,3 +73,54 @@ Do not start with Google ADK, Qdrant, Confluence, OCR, or a multi-agent graph. F
 ## Recommended architecture
 
 Use agents for classification, extraction, evidence explanation, and human-review summaries. Use deterministic Python for field normalization, SI/BL comparison, output validation, and submission generation. RAG/Qdrant should support evidence retrieval where useful, but should not replace the comparison rules.
+
+## improvement/standout
+
+These improvements are prioritized to make the demo distinctive beyond a standard ETL pipeline and generic chatbot.
+
+### Priority 1: Prove normalization and false-alarm avoidance
+
+- [ ] Add explicit unit conversion for weights, including kilograms, tonnes/metric tons, and common unit labels.
+- [ ] Record and display differences that were intentionally ignored, such as equivalent labels, formatting, punctuation, case, port aliases, and converted units.
+- [ ] Show a concise `Differences ignored` section in each comparison report.
+- [ ] Add tests for `22,000 KG` versus `22 MT`, equivalent labels such as `Load Port` versus `Port of Loading`, and punctuation/case variations.
+
+### Priority 2: Turn chatbot answers into workflow actions
+
+- [ ] Add a chatbot action to draft a correction email to the shipper.
+- [ ] Include the email recipient, subject, mismatched fields, SI values, BL values, and requested correction in the draft.
+- [ ] Add a chatbot action to accept a difference as a false alarm through the existing review workflow.
+- [ ] Add a chatbot action to request a targeted re-read of one field, such as BL gross weight or container count.
+- [ ] Confirm actions before changing a report or sending/persisting an email draft.
+
+### Priority 3: Make evidence inspectable
+
+- [ ] Store source evidence for each extracted field with attachment, page number, source text, and coordinates when available.
+- [ ] Add PDF page extraction with PyMuPDF text coordinates for field-level evidence.
+- [ ] Let a reviewer click a field to open the SI and BL source evidence side by side.
+- [ ] Highlight the SI blueprint evidence and the corresponding BL value in the evidence viewer.
+- [ ] Keep plain-text evidence as a fallback for TXT, DOCX, XLSX, and documents without usable coordinates.
+
+### Priority 4: Cross-check difficult documents
+
+- [ ] Add an independent vision-based reader for scanned or low-confidence documents.
+- [ ] Compare OCR and vision readings field by field.
+- [ ] Mark a field high-confidence only when independent readers agree.
+- [ ] Escalate disagreements with both readings visible to the reviewer.
+- [ ] Add tests for scanned, rotated, low-quality, and partially unreadable documents.
+
+### Priority 5: Learn from reviewer corrections
+
+- [ ] Store accepted corrections and false alarms in a reusable correction history.
+- [ ] Extract reusable mappings from corrections, such as field-label aliases and unit conventions.
+- [ ] Apply approved mappings in later verification runs without overriding deterministic safeguards.
+- [ ] Show which prior correction or learned mapping influenced an extraction.
+- [ ] Add tests proving a saved correction improves a later matching case.
+
+### Priority 6: Demonstrate adversarial reliability
+
+- [ ] Create a small adversarial fixture set with misleading subjects, missing attachments, wrong document types, rotated scans, unit differences, blank fields, and extra attachments.
+- [ ] Run the adversarial fixture set as part of the test suite.
+- [ ] Produce a demo scoreboard showing automatic matches, real mismatches, human-review escalations, and false mismatch decisions.
+- [ ] Record the original failure, the fix, and the resulting test outcome for each hard case.
+- [ ] Add a short README/demo walkthrough showing the hardest cases end to end.

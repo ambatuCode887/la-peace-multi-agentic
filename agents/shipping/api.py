@@ -13,7 +13,7 @@ from .tool import inspect_shipping_email
 from .ui import dashboard_page
 from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case
 from .dataset import DatasetAdapter, DatasetEmail
-from .verification import COMPARE_FIELDS
+from .verification import COMPARE_FIELDS, values_match
 from agents.config import env
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -248,6 +248,7 @@ def _save_upload(
         "subject": subject,
         "body": body,
         "attachments": references,
+        "source": "upload",
     }
     (inbox_dir / f"{email_id}.json").write_text(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"
@@ -332,7 +333,7 @@ def _apply_review_correction(report: dict[str, Any], correction: dict[str, Any])
         updated["documents"] = documents
     si = documents.get("si", {}).get("fields", {})
     bl = documents.get("bl", {}).get("fields", {})
-    defects = [field for field in COMPARE_FIELDS if si.get(field) != bl.get(field)]
+    defects = [field for field in COMPARE_FIELDS if not values_match(field, si.get(field), bl.get(field))]
     decision = correction.get("decision")
     if decision == "false_alarm":
         updated.update(status="OK", has_defect=False, defect_fields=[], review_reason=None)
