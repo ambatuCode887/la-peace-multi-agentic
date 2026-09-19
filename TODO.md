@@ -104,10 +104,10 @@ These improvements are prioritized to make the demo distinctive beyond a standar
 
 ### Priority 4: Cross-check difficult documents
 
-- [ ] Add an independent vision-based reader for scanned or low-confidence documents.
-- [ ] Compare OCR and vision readings field by field.
-- [ ] Mark a field high-confidence only when independent readers agree.
-- [ ] Escalate disagreements with both readings visible to the reviewer.
+- [x] Add an independent vision-based reader for scanned or low-confidence documents.
+- [x] Compare OCR and vision readings field by field.
+- [x] Mark a field high-confidence only when independent readers agree.
+- [x] Escalate disagreements with both readings visible to the reviewer.
 - [ ] Add tests for scanned, rotated, low-quality, and partially unreadable documents.
 
 ### Priority 5: Demonstrate adversarial reliability
@@ -127,3 +127,7 @@ These improvements are prioritized to make the demo distinctive beyond a standar
 - [ ] Make agent/RAG orchestration optional through configuration.
 - [ ] Ensure the system works when the LLM or vector database is unavailable.
 - [ ] Add integration tests proving agent output cannot override deterministic status.
+
+### how to handle edge case if SI is the missing value?
+
+- make a pop out email draft if SI is missing.

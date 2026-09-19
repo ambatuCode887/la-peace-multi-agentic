@@ -172,6 +172,51 @@ Giross Weight 128,544 KG
     assert result["normalized_equivalences"] == ["shipper"]
 
 
+def test_reader_disagreement_requires_human_review() -> None:
+    si = extract_shipment_fields(
+        """SHIPPING INSTRUCTION
+Shipper: APRIL FAR EAST (M) SDN BHD
+Port of Loading: NHAVA SHEVA INDIA
+Port of Discharge: TUTICORIN, INDIA
+Consignee: BUYER
+Notify Party: BUYER
+Container Count: 6
+Gross Weight: 128544 KG
+""",
+        alternate_readings={
+            "ollama_vision": """SHIPPING INSTRUCTION
+Shipper: APRIL FAR EAST (MI) SDN BHD
+Port of Loading: NAVA SHEVA INDIA
+Port of Discharge: TUTICORIN, INDIA
+Consignee: BUYER
+Notify Party: BUYER
+Container Count: 6
+Gross Weight: 128544 KG
+""",
+        },
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING
+Shipper: APRIL FAR EAST (M) SDN BHD
+Port of Loading: NHAVA SHEVA INDIA
+Port of Discharge: TUTICORIN, INDIA
+Consignee: BUYER
+Notify Party: BUYER
+Container Count: 6
+Gross Weight: 128544 KG
+"""
+    )
+
+    result = compare_shipments(si, bl)
+
+    assert si.reader_fields["ollama_vision"]["shipper"] == "APRIL FAR EAST (MI) SDN BHD"
+    assert si.reader_agreement["shipper"] == "disagree"
+    assert si.confidence["port_of_loading"] == "low"
+    assert result["status"] == "NEEDS_REVIEW"
+    assert result["review_reason"] == "low_confidence"
+    assert result["uncertain_fields"] == ["port_of_loading", "shipper"]
+
+
 def test_extracts_pipe_separated_workbook_rows() -> None:
     document = extract_shipment_fields(
         """BL INSTRUCTION | 3154303911

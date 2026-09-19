@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import base64
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ class AttachmentReadError(RuntimeError):
 class AttachmentContent:
     text: str
     spans: tuple[dict[str, Any], ...]
+    reader_texts: dict[str, str] = field(default_factory=dict)
 
 
 def read_attachment_text(adapter: DatasetAdapter, reference: str) -> str:
@@ -101,7 +104,65 @@ def _read_pdf(adapter: DatasetAdapter, reference: str) -> AttachmentContent:
             return _text_content(text, "pdf_text")
     except Exception:
         pass
-    return _text_content(_ocr_pdf_document(adapter, reference), "ocr")
+    ocr_text = _ocr_pdf_document(adapter, reference)
+    if _vision_ocr_enabled():
+        vision_text = _vision_pdf_document(adapter, reference)
+        if vision_text:
+            content = _text_content(ocr_text, "ocr")
+            return AttachmentContent(
+                text=content.text,
+                spans=content.spans,
+                reader_texts={"rapidocr": ocr_text, "ollama_vision": vision_text},
+            )
+    content = _text_content(ocr_text, "ocr")
+    return AttachmentContent(text=content.text, spans=content.spans, reader_texts={"rapidocr": ocr_text})
+
+
+def _vision_ocr_enabled() -> bool:
+    from agents.config import truthy
+
+    return truthy(os.environ.get("VISION_OCR_ENABLED"))
+
+
+def _vision_pdf_document(adapter: DatasetAdapter, reference: str) -> str:
+    """Read scanned PDF pages with an Ollama vision model when enabled."""
+    import httpx
+
+    try:
+        import fitz
+
+        data = adapter.read_bytes(reference) if adapter.is_http else adapter.resolve_attachment(reference).read_bytes()
+        document = fitz.open(stream=data, filetype="pdf")
+        images = []
+        for page in document:
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            images.append(base64.b64encode(pixmap.tobytes("png")).decode("ascii"))
+        document.close()
+        if not images:
+            return ""
+
+        base_url = (os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434").rstrip("/")
+        model = os.environ.get("VISION_OCR_MODEL") or "qwen2.5vl:3b"
+        prompt = (
+            "Read this shipping document image exactly. Transcribe all visible text "
+            "needed to identify the document type and these fields: shipper, consignee, "
+            "notify party, port of loading, port of discharge, container count, and "
+            "gross weight. Preserve names and numbers exactly. Return plain text only; "
+            "do not guess missing or blurry characters."
+        )
+        response = httpx.post(
+            f"{base_url}/api/chat",
+            json={
+                "model": model,
+                "stream": False,
+                "messages": [{"role": "user", "content": prompt, "images": images}],
+            },
+            timeout=180.0,
+        )
+        response.raise_for_status()
+        return str(response.json().get("message", {}).get("content") or "").strip()
+    except Exception:
+        return ""
 
 
 def _ocr_pdf_document(adapter: DatasetAdapter, reference: str) -> str:
