@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from .tool import inspect_shipping_email
 from .actions import draft_correction_email, preview_false_alarm, preview_targeted_reread
@@ -23,6 +24,13 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
     root = Path(upload_root).expanduser().resolve()
     app = FastAPI(title="Shipping Document Verification API")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard() -> HTMLResponse:
