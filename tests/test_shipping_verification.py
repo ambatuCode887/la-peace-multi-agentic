@@ -7,6 +7,7 @@ from agents.shipping import (
     compare_shipments,
     extract_shipment_fields,
 )
+from agents.shipping.verification import classify_email_details
 
 
 def email(subject: str, body: str = "") -> DatasetEmail:
@@ -21,6 +22,20 @@ def test_classifies_one_example_from_each_category() -> None:
     assert classify_email(email("Congratulations! You have WON a prize")) == "SPAM"
     assert classify_email(email("URGENT: Your email storage is full")) == "SPAM"
     assert classify_email(email("Re: Invoice payment", "Please confirm your bank details")) == "SPAM"
+
+
+def test_generic_subject_with_si_bl_attachments_is_comparison() -> None:
+    uploaded = DatasetEmail(
+        "image_pdf_test",
+        "sender@example.com",
+        "test",
+        "",
+        ("attachments/email_512_SI.pdf", "attachments/email_512_BL.pdf"),
+        {},
+    )
+
+    assert classify_email(uploaded) == "BL_COMPARISON"
+    assert classify_email_details(uploaded)["confidence"] == "high"
 
 
 def test_extracts_and_compares_known_si_bl_values() -> None:
@@ -53,6 +68,37 @@ Gross Weight (KG): 131,058 KG
     assert result["defect_fields"] == ["consignee", "notify_party"]
     assert si.fields["container_count"] == 6
     assert si.fields["gross_weight_kg"] == 131058
+
+
+def test_ocr_corruption_does_not_hide_shipper_mismatch() -> None:
+    si = extract_shipment_fields(
+        """SHIPPING INSTRUCTION
+Shipper: APRIL FAR EAST (M) SDN BHD
+    Consignee: BUYER
+    Notify Party: BUYER
+    Port of Loading: ORIGIN
+    Port of Discharge: DESTINATION
+    Containers: 1 x 40HC
+Gross Weight 128,544 KG
+"""
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING (DRAFT)
+Shipper: APRIL FAR EAST (M) SDN SHD
+    Consignee: BUYER
+    Notify Party: BUYER
+    Port of Loading: ORIGIN
+    Port of Discharge: DESTINATION
+    Containers: 1 x 40HC
+Giross Weight 128,544 KG
+"""
+    )
+
+    result = compare_shipments(si, bl)
+
+    assert result["status"] == "OK"
+    assert result["defect_fields"] == []
+    assert result["normalized_equivalences"] == ["shipper"]
 
 
 def test_extracts_pipe_separated_workbook_rows() -> None:

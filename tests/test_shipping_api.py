@@ -139,3 +139,5 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
     assert 'option value="MISMATCH"' in response.text
     assert "SI blueprint" in response.text
     assert "ai-summary-grid" in response.text
+    assert 'id="new-verification"' in response.text
+    assert "resetVerification" in response.text
