@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import stat
+import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -47,6 +52,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                     "category": report.get("category", "UNKNOWN"),
                     "status": report.get("status", "UNPROCESSED"),
                     "review_reason": report.get("review_reason"),
+                    "deletable": _is_user_upload(report_path.parent, report_path.parent.name),
                     "updated_at": datetime.fromtimestamp(
                         report_path.stat().st_mtime, tz=timezone.utc
                     ).isoformat(),
@@ -58,7 +64,25 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         report_path = root / _safe_id(email_id) / "report.json"
         if not report_path.is_file():
             raise HTTPException(status_code=404, detail="Case report not found")
-        return {"ok": True, "report": _read_json(report_path, {})}
+        report = _read_json(report_path, {})
+        if "body" not in report:
+            # Reports saved before the body was stored: read it from the saved email.
+            record = _read_json(report_path.parent / "inbox" / f"{email_id}.json", {})
+            if "body" in record:
+                report["body"] = record["body"]
+                report.setdefault("sender", record.get("from", ""))
+                report.setdefault("subject", record.get("subject", ""))
+        return {"ok": True, "report": report}
+
+    @app.delete("/cases/{email_id}")
+    async def delete_case(email_id: str) -> dict[str, Any]:
+        case_root = root / _safe_id(email_id)
+        if not case_root.is_dir():
+            raise HTTPException(status_code=404, detail="Case not found")
+        if not _is_user_upload(case_root, email_id):
+            raise HTTPException(status_code=403, detail="Only cases created from the upload form can be deleted")
+        _remove_case(case_root)
+        return {"ok": True, "email_id": email_id}
 
     @app.post("/cases/{email_id}/manager-review")
     async def manager_review(email_id: str) -> dict[str, Any]:
@@ -525,6 +549,38 @@ def _clarification_draft(report: dict[str, Any], correction: dict[str, Any]) -> 
             "Regards,\nShipping Operations"
         ),
     }
+
+
+def _remove_case(case_root: Path) -> None:
+    """Delete a case folder, coping with read-only files and briefly locked files on Windows."""
+    def clear_read_only_and_retry(function: Any, path: str, _error: Any) -> None:
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    handler = {"onexc" if sys.version_info >= (3, 12) else "onerror": clear_read_only_and_retry}
+    for attempt in range(3):
+        try:
+            shutil.rmtree(case_root, **handler)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.3)
+    if case_root.exists():
+        raise HTTPException(
+            status_code=409,
+            detail="Could not delete this case because a file in it is in use. Close any program showing it and try again.",
+        )
+
+
+def _is_user_upload(case_root: Path, email_id: str) -> bool:
+    """True for cases made with the upload form; inbox (Docker) cases are never deletable."""
+    record = _read_json(case_root / "inbox" / f"{email_id}.json", {})
+    if record.get("source") is not None:
+        return record["source"] == "upload"
+    # Uploads saved before the marker existed: not from the inbox and not named like one.
+    report = _read_json(case_root / "report.json", {})
+    return report.get("source") != "inbox" and not re.fullmatch(r"email_\d+", email_id)
 
 
 def _safe_id(value: str) -> str:
