@@ -55,6 +55,43 @@ Start the upload API:
 
 Open `http://localhost:8090` for the upload dashboard. It displays verification status, side-by-side SI/BL fields, differences, review reasons, and a correction action.
 
+After opening a case, use **Run manager review** to invoke the shipping review manager for that saved case. The manager receives the exact case data directory, inspects the deterministic report, optionally retrieves guidance, and displays an advisory route and next action. It does not modify the report or replace the deterministic status. The manager requires the configured LLM provider; RAG guidance additionally requires a running and populated Qdrant instance.
+
+### Test the shipping actions sub-agent
+
+The `shipping_actions_agent` is registered under `root_agent` and provides proposal-only workflow actions. Correction emails use the deterministic template so the dashboard remains reliable and simple. Confirm that it is registered:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from agents.agent import root_agent; print([agent.name for agent in root_agent.sub_agents])"
+```
+
+In the dashboard, open a mismatch, enter any extra request in **Requested correction**, then choose **Draft correction email**. Nothing is sent or saved.
+
+For a direct API test, use the action-preview endpoint. It does not change the report:
+
+```powershell
+Invoke-RestMethod `
+	-Uri http://localhost:8090/cases/email_004/action-preview `
+	-Method Post `
+	-ContentType 'application/json' `
+	-Body '{"action":"draft_correction_email","requested_correction":"Please confirm the correct container count."}'
+```
+
+Other preview requests are:
+
+```json
+{
+  "action": "false_alarm",
+  "note": "Approved carrier alias confirmed by reviewer."
+}
+```
+
+```json
+{ "action": "targeted_reread", "field": "container_count" }
+```
+
+In ADK Web, select `root_agent` and ask: `Delegate to shipping_actions_agent and prepare a correction email preview for this case. Do not persist or send anything.` The final confirmation step still uses the existing human review controls.
+
 The dashboard's **Process inbox** action processes every email from `SHIPPING_DATA_ROOT` (default: `http://localhost:8080`), stores each result in the case queue, and keeps source failures visible as `UNPROCESSED`. The same operation is available through `POST /inbox/process`; pass `{"data_root":"C:\\path\\to\\data_v2"}` for a static dataset. Add `{"include_ai":true}` when bulk AI explanations are desired.
 
 When `GOOGLE_API_KEY` is configured, each uploaded case also receives a Gemini explanation and the dashboard chat can answer questions through `POST /chat/{email_id}`. Gemini explains and assists; the deterministic verifier remains the final authority for status and defect fields.
@@ -186,6 +223,22 @@ This writes a report to `.artifacts/retrieval-report.json`.
 ```
 
 Then open the local URL shown in the terminal (typically `http://127.0.0.1:8000`).
+
+### Test the shipping review manager
+
+The manager sub-agent is defined in `agents/tools/agents/shipping_review/agent.py` and registered in `agents/agent.py` as `root_agent.sub_agents`. First run its wiring test:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_shipping_review_agent.py
+```
+
+For an end-to-end test, start ADK Web, select `root_agent`, and ask it to review one known exception:
+
+```text
+Use shipping_review_manager_agent to review email ID <EMAIL_ID> from data root C:\path\to\data_v2. Inspect the deterministic SI/BL result first, retrieve relevant guidance only if needed, and return route, deterministic_status, defects, retrieved_guidance, and recommended_next_action.
+```
+
+Use an email ID from the challenge dataset or upload dashboard. The manager may retrieve guidance from Qdrant, so start Qdrant and ingest the knowledge files first if you want to test the RAG step. It must report the deterministic verifier result unchanged; it does not persist corrections or send messages.
 
 ## 7. Optional: publish to Confluence
 

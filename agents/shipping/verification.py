@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .attachments import AttachmentReadError, read_attachment_text
+from .attachments import AttachmentReadError, read_attachment_content
 from .dataset import DatasetAdapter, DatasetEmail
 
 
@@ -37,6 +37,9 @@ class ExtractedShipment:
     document_type: str
     confidence: dict[str, str]
     evidence: dict[str, str]
+    evidence_details: dict[str, dict[str, Any]]
+    raw_values: dict[str, str | None]
+    source_labels: dict[str, str | None]
 
 
 def classify_email(email: DatasetEmail | Mapping[str, Any]) -> str:
@@ -86,12 +89,19 @@ def classify_email_details(email: DatasetEmail | Mapping[str, Any]) -> dict[str,
     }
 
 
-def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
+def extract_shipment_fields(
+    text: str,
+    filename: str = "",
+    source_spans: tuple[dict[str, Any], ...] = (),
+) -> ExtractedShipment:
     """Extract the seven comparison fields from a plain-text SI or BL."""
     document_type = _document_type(text, filename)
     values: dict[str, str | int | None] = {}
     confidence: dict[str, str] = {}
     evidence: dict[str, str] = {}
+    evidence_details: dict[str, dict[str, Any]] = {}
+    raw_values: dict[str, str | None] = {}
+    source_labels: dict[str, str | None] = {}
     for field, pattern in _FIELD_PATTERNS.items():
         # A table header such as "CONTAINER NO." can match before the real value
         # line, so take the first match that actually parses to a value.
@@ -104,6 +114,8 @@ def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
         )
         next_line = not match
         value = match.group(1) if match else _next_line_value(text, field)
+        raw_values[field] = value.strip() if value else None
+        source_labels[field] = _source_label(field, match)
         if field == "notify_party" and value and re.fullmatch(
             r"(?i)party\s*/?\s*intermediate\s+consignee|party", value.strip()
         ):
@@ -116,12 +128,20 @@ def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
         if values[field] is None:
             confidence[field] = "low"
             evidence[field] = "No usable value found"
+            evidence_details[field] = _evidence_detail(filename, -1, -1, source_spans, None, "unresolved")
         elif match:
             confidence[field] = "high"
             evidence[field] = f"Matched label in text: {match.group(0).strip()}"
+            evidence_details[field] = _evidence_detail(
+                filename, match.start(), match.end(), source_spans, match.group(0).strip(), "label_match"
+            )
         elif next_line:
             confidence[field] = "medium"
             evidence[field] = "Value found on the line following the field label"
+            value_start = text.find(value) if value else -1
+            evidence_details[field] = _evidence_detail(
+                filename, value_start, value_start + len(value or ""), source_spans, value, "next_line"
+            )
     missing = tuple(field for field in COMPARE_FIELDS if values[field] is None)
     return ExtractedShipment(
         fields=values,
@@ -129,7 +149,35 @@ def extract_shipment_fields(text: str, filename: str = "") -> ExtractedShipment:
         document_type=document_type,
         confidence=confidence,
         evidence=evidence,
+        evidence_details=evidence_details,
+        raw_values=raw_values,
+        source_labels=source_labels,
     )
+
+
+def _evidence_detail(
+    filename: str,
+    start: int,
+    end: int,
+    source_spans: tuple[dict[str, Any], ...],
+    fallback_text: str | None,
+    method: str,
+) -> dict[str, Any]:
+    span = next(
+        (
+            candidate
+            for candidate in source_spans
+            if start >= 0 and candidate["start"] <= end and candidate["end"] >= start
+        ),
+        None,
+    )
+    return {
+        "attachment": filename,
+        "page": span.get("page") if span else None,
+        "source_text": span.get("text", fallback_text) if span else fallback_text,
+        "coordinates": span.get("coordinates") if span else None,
+        "method": span.get("method", method) if span else method,
+    }
 
 
 def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str, Any]:
@@ -146,6 +194,7 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
         and _normalized_field_value(field, si.fields[field])
         == _normalized_field_value(field, bl.fields[field])
     ]
+    ignored_differences = _ignored_differences(si, bl)
     defects = [
         field for field in COMPARE_FIELDS
         if not values_match(field, si.fields[field], bl.fields[field])
@@ -155,6 +204,7 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
         "review_reason": None,
         "defect_fields": defects,
         "normalized_equivalences": normalized_equivalences,
+        "ignored_differences": ignored_differences,
     }
 
 
@@ -200,8 +250,9 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
             failed_reference = reference
             documents.append(
                 extract_shipment_fields(
-                    read_attachment_text(adapter, reference),
+                    (content := read_attachment_content(adapter, reference)).text,
                     filename=reference,
+                    source_spans=content.spans,
                 )
             )
     except AttachmentReadError as error:
@@ -263,6 +314,7 @@ def _document_evidence(
             "missing_fields": list(document.missing_fields),
             "confidence": document.confidence,
             "evidence": document.evidence,
+            "evidence_details": document.evidence_details,
         }
         for index, document in enumerate(documents)
     ]
@@ -325,7 +377,9 @@ def _parse_field(field: str, value: str | None) -> str | int | None:
         match = re.search(r"([\d][\d, ]*(?:\.\d+)?)", cleaned_weight)
         if not match:
             return None
-        return int(float(match.group(1).replace(",", "").replace(" ", "")))
+        amount = float(match.group(1).replace(",", "").replace(" ", ""))
+        unit = _weight_unit(cleaned[match.end():])
+        return int(round(amount * {"kg": 1, "tonne": 1000, "lb": 0.45359237}[unit]))
     return cleaned.splitlines()[0].strip()
 
 
@@ -340,6 +394,49 @@ def _normalized_field_value(field: str, value: str | int | None) -> str | int | 
     if field in {"shipper", "consignee", "notify_party"} and isinstance(value, str):
         value = re.sub(r"\bSDN\s+SHD\b", "SDN BHD", value, flags=re.IGNORECASE)
     return _normalized_value(value)
+
+
+def _weight_unit(value: str) -> str:
+    if re.search(r"(?i)\b(?:mt|metric\s+tons?|tonnes?|tons?|t)\b", value):
+        return "tonne"
+    if re.search(r"(?i)\b(?:lb|lbs|pounds?)\b", value):
+        return "lb"
+    return "kg"
+
+
+def _source_label(field: str, match: re.Match[str] | None) -> str | None:
+    if not match:
+        return None
+    label = match.group(0)
+    value = match.group(1)
+    if value:
+        label = label[: -len(value)]
+    return re.sub(r"[|:.,\s]+$", "", label).strip()
+
+
+def _ignored_differences(si: ExtractedShipment, bl: ExtractedShipment) -> list[dict[str, Any]]:
+    ignored: list[dict[str, Any]] = []
+    for field in COMPARE_FIELDS:
+        si_label = _normalized_value(si.source_labels.get(field))
+        bl_label = _normalized_value(bl.source_labels.get(field))
+        if si_label and bl_label and si_label != bl_label:
+            ignored.append({"field": field, "reason": "equivalent_label"})
+
+        if field == "gross_weight_kg":
+            si_unit = _weight_unit(si.raw_values.get(field) or "")
+            bl_unit = _weight_unit(bl.raw_values.get(field) or "")
+            if si_unit != bl_unit:
+                ignored.append({
+                    "field": field,
+                    "reason": "unit_conversion",
+                    "si_normalized_kg": si.fields[field],
+                    "bl_normalized_kg": bl.fields[field],
+                })
+        elif si.raw_values.get(field) != bl.raw_values.get(field) and values_match(
+            field, si.fields[field], bl.fields[field]
+        ):
+            ignored.append({"field": field, "reason": "formatting_case_or_punctuation"})
+    return ignored
 
 
 def values_match(field: str, si_value: str | int | None, bl_value: str | int | None) -> bool:

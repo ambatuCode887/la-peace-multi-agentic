@@ -70,6 +70,77 @@ Gross Weight (KG): 131,058 KG
     assert si.fields["gross_weight_kg"] == 131058
 
 
+def test_dummy_si_bl_reports_only_container_mismatch() -> None:
+    si = extract_shipment_fields(
+        """SHIPPING INSTRUCTION
+Shipper: ACME
+Consignee: BUYER
+Notify Party: BUYER
+Port of Loading: SINGAPORE
+Port of Discharge: KOBE
+Container Count: 3
+Gross Weight (KG): 22000
+"""
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING
+Shipper: ACME
+Consignee: BUYER
+Notify Party: BUYER
+Port of Loading: SINGAPORE
+Port of Discharge: KOBE
+Container Count: 4
+Gross Weight (KG): 22000
+"""
+    )
+
+    result = compare_shipments(si, bl)
+
+    assert result["status"] == "MISMATCH"
+    assert result["defect_fields"] == ["container_count"]
+    assert result["ignored_differences"] == []
+
+
+def test_normalizes_weight_units_labels_case_and_punctuation() -> None:
+    si = extract_shipment_fields(
+        """SHIPPING INSTRUCTION
+Shipper: ACME, LTD.
+Consignee: BUYER
+Notify Party: BUYER
+Load Port: SINGAPORE
+Port of Discharge: KOBE
+Container Count: 3
+Gross Weight: 22,000 KG
+"""
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING
+Shipper: acme ltd
+Consignee: BUYER
+Notify Party: BUYER
+Port of Loading: SINGAPORE
+Port of Discharge: KOBE
+Container Count: 3
+Gross Weight: 22 MT
+"""
+    )
+
+    result = compare_shipments(si, bl)
+
+    assert result["status"] == "OK"
+    assert result["defect_fields"] == []
+    assert result["ignored_differences"] == [
+        {"field": "shipper", "reason": "formatting_case_or_punctuation"},
+        {"field": "port_of_loading", "reason": "equivalent_label"},
+        {
+            "field": "gross_weight_kg",
+            "reason": "unit_conversion",
+            "si_normalized_kg": 22000,
+            "bl_normalized_kg": 22000,
+        },
+    ]
+
+
 def test_ocr_corruption_does_not_hide_shipper_mismatch() -> None:
     si = extract_shipment_fields(
         """SHIPPING INSTRUCTION

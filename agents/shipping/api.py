@@ -8,13 +8,14 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
-
 from .tool import inspect_shipping_email
+from .actions import draft_correction_email, preview_false_alarm, preview_targeted_reread
 from .ui import dashboard_page
-from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case
+from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case, verify_shipping_discrepancies
 from .dataset import DatasetAdapter, DatasetEmail
 from .verification import COMPARE_FIELDS, values_match
 from agents.config import env
+from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -50,6 +51,56 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         if not report_path.is_file():
             raise HTTPException(status_code=404, detail="Case report not found")
         return {"ok": True, "report": _read_json(report_path, {})}
+
+    @app.post("/cases/{email_id}/manager-review")
+    async def manager_review(email_id: str) -> dict[str, Any]:
+        dataset_root = root / _safe_id(email_id)
+        report_path = dataset_root / "report.json"
+        if not report_path.is_file():
+            raise HTTPException(status_code=404, detail="Uploaded email report not found")
+
+        report = _read_json(report_path, {})
+        try:
+            review = await _run_manager_review(email_id, dataset_root)
+        except Exception as error:
+            review = {
+                "available": False,
+                "route": "human_review",
+                "deterministic_status": report.get("status"),
+                "defects": report.get("defect_fields", []),
+                "retrieved_guidance": [],
+                "recommended_next_action": (
+                    "Review the deterministic report manually; optional manager guidance "
+                    f"was unavailable: {error}"
+                ),
+            }
+        return {
+            "ok": True,
+            "email_id": email_id,
+            "deterministic_status": report.get("status"),
+            "deterministic_defects": report.get("defect_fields", []),
+            "manager_review": review,
+        }
+
+    @app.post("/cases/{email_id}/action-preview")
+    async def action_preview(email_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        report_path = root / _safe_id(email_id) / "report.json"
+        if not report_path.is_file():
+            raise HTTPException(status_code=404, detail="Uploaded email report not found")
+        report = _read_json(report_path, {})
+        action = payload.get("action")
+        try:
+            if action == "draft_correction_email":
+                preview = draft_correction_email(report, str(payload.get("requested_correction", "")))
+            elif action == "false_alarm":
+                preview = preview_false_alarm(report, str(payload.get("note", "")))
+            elif action == "targeted_reread":
+                preview = preview_targeted_reread(report, str(payload.get("field", "")))
+            else:
+                raise ValueError("action must be draft_correction_email, false_alarm, or targeted_reread")
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {"ok": True, "email_id": email_id, "preview": preview}
 
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:
@@ -128,6 +179,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         if not inbox_path.is_file():
             raise HTTPException(status_code=404, detail="Uploaded email not found")
         report = inspect_shipping_email(email_id, str(dataset_root))
+        _add_verifier_result(report)
         try:
             report["ai_analysis"] = analyze_shipping_case(report)
         except AIUnavailable as error:
@@ -147,6 +199,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
     ) -> dict[str, Any]:
         dataset_root = _save_upload(root, email_id, sender, subject, body, attachments)
         report = inspect_shipping_email(email_id, str(dataset_root))
+        _add_verifier_result(report)
         try:
             report["ai_analysis"] = analyze_shipping_case(report)
         except AIUnavailable as error:
@@ -219,6 +272,16 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
     return app
 
 
+def _add_verifier_result(report: dict[str, Any]) -> None:
+    """Attach advisory verifier output to mismatches without mutating their verdict."""
+    if report.get("status") != "MISMATCH" or not report.get("defect_fields"):
+        return
+    try:
+        report["verifier"] = verify_shipping_discrepancies(report)
+    except AIUnavailable as error:
+        report["verifier"] = {"available": False, "reason": str(error)}
+
+
 def _save_upload(
     root: Path,
     email_id: str,
@@ -256,6 +319,99 @@ def _save_upload(
     return dataset_root
 
 
+async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, Any]:
+    """Add RAG guidance to the saved deterministic report without recomputing it."""
+    report = _read_json(dataset_root / "report.json", {})
+    status = report.get("status", "NEEDS_REVIEW")
+    defects = list(report.get("defect_fields", []))
+    route = "automatic_match" if status == "OK" else "human_review"
+    if status == "NEEDS_REVIEW" and report.get("review_reason") in {
+        "missing_attachment",
+        "unreadable",
+        "wrong_doc_type",
+    }:
+        route = "clarification_needed"
+
+    query = (
+        "shipping document verification guidance for "
+        f"status {status}, fields {', '.join(defects) or 'none'}, "
+        f"review reason {report.get('review_reason') or 'none'}"
+    )
+    retrieval = retrieve_knowledge(query, limit=10)
+    guidance_terms = {
+        "container_count": {"container", "containers", "package", "quantity"},
+        "notify_party": {"notify party", "notify-party", "notify"},
+        "shipper": {"shipper", "exporter", "legal entity"},
+        "consignee": {"consignee", "receiver", "importer"},
+        "port_of_loading": {"port mismatch", "port of loading", "loading port", "locode"},
+        "port_of_discharge": {"port mismatch", "port of discharge", "discharge port", "locode"},
+        "gross_weight_kg": {"gross weight", "gross wt", "kilograms", "kg", "mt", "lb"},
+    }
+    relevant_terms = {
+        term
+        for field in defects
+        for term in guidance_terms.get(field, {field.replace("_", " ")})
+    }
+    specific_terms = {
+        "container_count": {"container count mismatch", "different container quantities", "correct count"},
+        "notify_party": {"notify-party mismatch", "full notify-party", "different company or address"},
+        "shipper": {"shipper mismatch", "full legal entity name"},
+        "consignee": {"consignee mismatch", "full legal entity name"},
+        "port_of_loading": {"port mismatch", "port aliases", "different port"},
+        "port_of_discharge": {"port mismatch", "port aliases", "different port"},
+        "gross_weight_kg": {"gross-weight mismatch", "normalize both gross weights", "normalized values"},
+    }
+    preferred_terms = {
+        term
+        for field in defects
+        for term in specific_terms.get(field, set())
+    }
+    candidates = []
+    for item in retrieval.get("results", []):
+        raw_text = item.get("text", "")
+        if relevant_terms and not any(term in raw_text.lower() for term in relevant_terms):
+            continue
+        text = re.sub(r"#{1,6}\s*", "", raw_text)
+        text = re.sub(r"\s+", " ", text).strip()
+        score = sum(raw_text.lower().count(term) for term in preferred_terms)
+        if text:
+            candidates.append((score, text))
+    best_score = max((score for score, _ in candidates), default=0)
+    if best_score >= 2:
+        candidates = [item for item in candidates if item[0] == best_score]
+    field_guidance = {
+        "container_count": "Compare the number of containers and package descriptions on the SI and BL. Different container quantities are a real mismatch; confirm the correct count against the source documents before release.",
+        "notify_party": "Compare the full notify-party name and address on the SI and BL. Formatting differences may be equivalent, but a different company or address requires confirmation before release.",
+        "shipper": "Compare the complete shipper legal name, address, and country. Check OCR, abbreviations, trading names, and legal suffixes before confirming whether the entity mismatch is genuine.",
+        "consignee": "Compare the complete consignee legal name, address, and country. Check OCR, abbreviations, trading names, and legal suffixes before confirming whether the entity mismatch is genuine.",
+        "port_of_loading": "Compare the port name and UN/LOCODE on both documents. A different loading port requires human review before release.",
+        "port_of_discharge": "Compare the port name and UN/LOCODE on both documents. A different discharge port requires human review before release.",
+        "gross_weight_kg": "Normalize both gross weights to kilograms and verify the units and evidence lines. A difference remaining after conversion is a real mismatch.",
+    }
+    guidance = [field_guidance[field] for field in defects if field in field_guidance]
+    if not guidance:
+        for _, text in sorted(candidates, key=lambda item: item[0], reverse=True):
+            excerpt = text[:420].rstrip() + ("..." if len(text) > 420 else "")
+            if excerpt not in guidance:
+                guidance.append(excerpt)
+            if len(guidance) == 2:
+                break
+    if status == "OK":
+        action = "No further action is required unless a reviewer identifies new evidence."
+    elif defects:
+        action = f"Confirm the {', '.join(defects)} value(s) against the source documents before release."
+    else:
+        action = "Request the missing or unreadable document/value, then re-run verification."
+    return {
+        "available": True,
+        "route": route,
+        "deterministic_status": status,
+        "defects": defects,
+        "retrieved_guidance": guidance,
+        "recommended_next_action": action,
+    }
+
+
 def _process_inbox_case(
     root: Path,
     adapter: DatasetAdapter,
@@ -291,6 +447,7 @@ def _process_inbox_case(
 
     report = inspect_shipping_email(email.email_id, str(case_root))
     report["source"] = "inbox"
+    _add_verifier_result(report)
     if include_ai:
         try:
             report["ai_analysis"] = analyze_shipping_case(report)

@@ -37,6 +37,42 @@ def test_create_app_returns_fastapi_application(tmp_path) -> None:
     application = create_app(tmp_path)
     assert any(route.path == "/verify" for route in application.routes)
     assert any(route.path == "/reviews/{email_id}" for route in application.routes)
+    assert any(route.path == "/cases/{email_id}/manager-review" for route in application.routes)
+
+
+def test_manager_review_returns_advisory_result_without_changing_report(tmp_path, monkeypatch) -> None:
+    root = _save_upload(
+        tmp_path,
+        "email_manager_001",
+        "docs@example.com",
+        "Subject",
+        "Body",
+        [FakeUpload("si.txt", b"SI"), FakeUpload("bl.txt", b"BL")],
+    )
+    report = {
+        "email_id": "email_manager_001",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "defect_fields": ["gross_weight_kg"],
+    }
+    report_path = root / "report.json"
+    report_path.write_text(json.dumps(report), encoding="utf-8")
+
+    async def fake_manager_review(email_id, dataset_root):
+        assert email_id == "email_manager_001"
+        assert dataset_root == root
+        return {"text": "route: human_review"}
+
+    monkeypatch.setattr("agents.shipping.api._run_manager_review", fake_manager_review)
+    response = TestClient(create_app(tmp_path)).post(
+        "/cases/email_manager_001/manager-review"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deterministic_status"] == "MISMATCH"
+    assert response.json()["deterministic_defects"] == ["gross_weight_kg"]
+    assert response.json()["manager_review"]["text"] == "route: human_review"
+    assert json.loads(report_path.read_text(encoding="utf-8")) == report
 
 
 def test_case_queue_and_review_correction(tmp_path) -> None:
@@ -139,8 +175,14 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
     assert 'option value="MISMATCH"' in response.text
     assert "SI blueprint" in response.text
     assert "ai-summary-grid" in response.text
+    assert "Verification evidence" in response.text
+    assert "Differences ignored" in response.text
+    assert "field-difference" in response.text
+    assert "comparison-card.reference .field" not in response.text
     assert 'id="new-verification"' in response.text
     assert "resetVerification" in response.text
+    assert 'id="manager-review"' in response.text
+    assert "/manager-review" in response.text
 
 
 def test_uploaded_si_and_bl_are_compared_even_with_an_unrelated_subject(tmp_path, monkeypatch) -> None:
@@ -167,3 +209,4 @@ def test_uploaded_si_and_bl_are_compared_even_with_an_unrelated_subject(tmp_path
     assert report["status"] == "MISMATCH"
     assert report["defect_fields"] == ["gross_weight_kg"]
     assert report["differences"]["gross_weight_kg"] == {"si": 40000, "bl": 41000}
+    assert "available" in report["verifier"]

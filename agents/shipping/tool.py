@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .attachments import AttachmentReadError, read_attachment_text
+from .attachments import AttachmentReadError, read_attachment_content
 from .dataset import DatasetAdapter
 from .verification import COMPARE_FIELDS, classify_email, classify_email_details, compare_shipments, extract_shipment_fields, write_submission
 
@@ -78,9 +78,11 @@ def inspect_shipping_email(
     documents = []
     try:
         for reference in email.attachments:
+            content = read_attachment_content(adapter, reference)
             document = extract_shipment_fields(
-                read_attachment_text(adapter, reference),
+                content.text,
                 filename=reference,
+                source_spans=content.spans,
             )
             documents.append({"reference": reference, "document": document})
     except AttachmentReadError as error:
@@ -119,6 +121,7 @@ def inspect_shipping_email(
                 "missing_fields": list(si.missing_fields),
                 "confidence": si.confidence,
                 "evidence": si.evidence,
+                "evidence_details": si.evidence_details,
             },
             "bl": {
                 "attachment": bl_item["reference"],
@@ -126,6 +129,7 @@ def inspect_shipping_email(
                 "missing_fields": list(bl.missing_fields),
                 "confidence": bl.confidence,
                 "evidence": bl.evidence,
+                "evidence_details": bl.evidence_details,
             },
         }
     elif documents:
@@ -136,6 +140,7 @@ def inspect_shipping_email(
                 "missing_fields": list(item["document"].missing_fields),
                 "confidence": item["document"].confidence,
                 "evidence": item["document"].evidence,
+                "evidence_details": item["document"].evidence_details,
             }
             for idx, item in enumerate(documents)
         }
