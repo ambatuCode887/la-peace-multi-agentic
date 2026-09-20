@@ -401,6 +401,31 @@ def _add_ambiguity_analysis(report: dict[str, Any]) -> bool:
 
     si = documents.get("si", {})
     bl = documents.get("bl", {})
+    si_attachment = str(si.get("attachment") or "").lower()
+    bl_attachment = str(bl.get("attachment") or "").lower()
+    if not (si_attachment.endswith(".pdf") and bl_attachment.endswith(".pdf")):
+        updated_telemetry = dict(telemetry)
+        updated_telemetry["sent_to_llm"] = 0
+        updated_telemetry["llm_latency_ms"] = 0.0
+        updated_telemetry["llm_calls"] = 0
+        updated_telemetry["estimated_cost_usd"] = 0.0
+        updated_telemetry["field_resolutions"] = {
+            **updated_telemetry.get("field_resolutions", {}),
+            **{
+                field: {"source": "human", "reason": "text_ambiguity_requires_human"}
+                for field in ambiguous_fields
+            },
+        }
+        updated_telemetry["scalability_summary"] = (
+            "10,000 emails/day = $0.00/day targeted vs "
+            "$15.00/day full-document (100% savings; text ambiguity held for human review)"
+        )
+        report["routing_telemetry"] = updated_telemetry
+        report["status"] = "NEEDS_REVIEW"
+        report["review_reason"] = "ambiguous_field"
+        report["ocr_distortion_analysis"] = []
+        return True
+
     analyses: list[dict[str, Any]] = []
     total_llm_latency = 0.0
     attempted_calls = 0

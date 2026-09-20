@@ -9,7 +9,7 @@ export interface FieldComparison {
   match: boolean;
   varianceNote?: string;
   status: 'match' | 'mismatch' | 'review';
-  resolutionSource?: 'rule' | 'llm';
+  resolutionSource?: 'rule' | 'llm' | 'human';
   resolutionReason?: string;
   distortionNote?: string;
   siEvidence?: EvidenceDetail;
@@ -31,7 +31,7 @@ export interface RoutingTelemetry {
   fullDocumentCostUsd: number;
   scalabilitySummary?: string;
   ambiguousFields: string[];
-  fieldResolutions: Record<string, { source: 'rule' | 'llm'; reason: string }>;
+  fieldResolutions: Record<string, { source: 'rule' | 'llm' | 'human'; reason: string }>;
 }
 
 export interface OcrDistortionAnalysis {
