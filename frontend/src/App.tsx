@@ -9,7 +9,6 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
-import { OperationsPanel } from "./components/operations/OperationsPanel";
 import { ReviewPanel } from "./components/review/ReviewPanel";
 import {
   api,
@@ -149,22 +148,6 @@ export function App() {
     handleReport(report);
   };
 
-  const handleProcessInbox = async () => {
-    await api.processInbox();
-    await refreshCases();
-  };
-
-  const handleRetry = async (emailId: string) => {
-    const report = await api.retryCase(emailId);
-    handleReport(report);
-    await refreshCases();
-  };
-
-  const handleDelete = async (emailId: string) => {
-    await api.deleteCase(emailId);
-    await refreshCases();
-  };
-
   const handleCategoryFilterChange = (cat: EmailCategory | "ALL") => {
     setCategoryFilter(cat);
     setStatusFilter("ALL");
@@ -283,15 +266,6 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
-            <OperationsPanel
-              backendConnected={backendConnected}
-              currentCase={currentCase}
-              onVerified={handleReport}
-              onProcessInbox={handleProcessInbox}
-              onRefresh={refreshCases}
-              onRetry={handleRetry}
-              onDelete={handleDelete}
-            />
             {/* Conditional Discrepancy & Status Alert Banner */}
             {currentCase && (
               <DiscrepancyBanner
