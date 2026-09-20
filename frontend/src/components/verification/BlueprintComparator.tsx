@@ -14,6 +14,7 @@ import {
   Mail,
   Receipt,
   FileCheck,
+  Gauge,
 } from "lucide-react";
 import { api } from "../../services/api";
 
@@ -208,7 +209,130 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     }
   };
 
+  const routingTelemetry = currentCase.routingTelemetry;
+  const ocrAlerts =
+    currentCase.ocrDistortionAnalysis?.filter(
+      (analysis) => analysis.is_ocr_distortion,
+    ) || [];
+
+  const renderRoutingTelemetry = () => {
+    if (!routingTelemetry) return null;
+    return (
+      <section
+        className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-[#1a3d8e]/60 dark:bg-[#06163a]"
+        aria-label="Verification routing telemetry"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <div className="rounded-lg bg-[#eef3fc] p-2 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
+              <Gauge className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Cheap-first verification routing
+              </h3>
+              <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                Rules decide clear fields; only ambiguous fields receive
+                advisory diagnosis.
+              </p>
+            </div>
+          </div>
+          <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
+            <div>
+              Estimated targeted cost:{" "}
+              <strong className="text-slate-800 dark:text-slate-200">
+                ${routingTelemetry.estimatedCostUsd.toFixed(5)}
+              </strong>
+            </div>
+            <div>
+              {routingTelemetry.ruleLatencyMs.toFixed(1)} ms rules ·{" "}
+              {routingTelemetry.llmLatencyMs.toFixed(1)} ms LLM
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+              Rule resolved
+            </div>
+            <div className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
+              {routingTelemetry.resolvedByRules}
+            </div>
+          </div>
+          <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              LLM routed
+            </div>
+            <div className="text-lg font-bold text-amber-900 dark:text-amber-100">
+              {routingTelemetry.sentToLlm}
+            </div>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-[#091f52]/40">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              LLM calls
+            </div>
+            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              {routingTelemetry.llmCalls}
+            </div>
+          </div>
+          <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              Full-doc baseline
+            </div>
+            <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
+              ${routingTelemetry.fullDocumentCostUsd.toFixed(4)}
+            </div>
+          </div>
+        </div>
+        {routingTelemetry.scalabilitySummary && (
+          <p className="mt-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+            {routingTelemetry.scalabilitySummary}
+          </p>
+        )}
+      </section>
+    );
+  };
+
+  const renderOcrAlert = () => {
+    if (ocrAlerts.length === 0) return null;
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <div className="font-bold">OCR distortion suspected</div>
+          <div className="mt-0.5">
+            {ocrAlerts
+              .map(
+                (alert) =>
+                  `${alert.field.replace(/_/g, " ")}: ${alert.explanation}`,
+              )
+              .join(" ")}
+          </div>
+          <div className="mt-1 font-semibold">
+            Human confirmation is required before approval.
+          </div>
+          <button
+            onClick={onManualOverride}
+            className="ml-auto shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-bold text-amber-900 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 dark:hover:bg-amber-950/60"
+          >
+            Open human review
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderFieldDiff = (field: FieldComparison) => {
+    const resolutionBadge =
+      field.resolutionSource === "llm" ? (
+        <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+          LLM ambiguity check
+        </span>
+      ) : (
+        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+          Rule checked
+        </span>
+      );
     let blContent = (
       <div className="flex items-center space-x-2">
         <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -288,7 +412,10 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         {/* Left Side: SI Blueprint */}
         <div className="pr-4">
           <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-0.5">
-            {field.label}
+            <span>{field.label}</span>
+            <span className="ml-2 inline-block normal-case tracking-normal">
+              {resolutionBadge}
+            </span>
           </div>
           <div className="font-mono text-sm text-slate-700 dark:text-slate-300 font-medium">
             {field.siValue}
@@ -539,6 +666,8 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       )}
 
       {renderAIReviewSummary()}
+      {renderRoutingTelemetry()}
+      {renderOcrAlert()}
 
       {/* Shipment Header Details */}
       <div className="bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 p-5 shadow-xs">

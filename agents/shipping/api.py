@@ -17,7 +17,14 @@ from fastapi.responses import FileResponse, HTMLResponse
 from .tool import inspect_shipping_email
 from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
 from .ui import dashboard_page
-from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case, verify_shipping_discrepancies
+from .ai import (
+    AIUnavailable,
+    TARGETED_FIELD_COST_USD,
+    analyze_field_ambiguity,
+    analyze_shipping_case,
+    chat_about_shipping_case,
+    verify_shipping_discrepancies,
+)
 from .dataset import DatasetAdapter, DatasetEmail
 from agents.eval.shipping import (
     append_snapshot,
@@ -82,6 +89,8 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         if report.get("status") == "MISMATCH" and "verifier" not in report:
             # Bulk processing skips the slow AI verifier; run it once, the first time a mismatch is opened.
             _add_verifier_result(report)
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        if _add_ambiguity_analysis(report):
             report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return {"ok": True, "report": report}
 
@@ -263,6 +272,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
             raise HTTPException(status_code=404, detail="Uploaded email not found")
         report = inspect_shipping_email(email_id, str(dataset_root))
         _add_verifier_result(report)
+        _add_ambiguity_analysis(report)
         try:
             report["ai_analysis"] = analyze_shipping_case(report)
         except AIUnavailable as error:
@@ -283,6 +293,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         dataset_root = _save_upload(root, email_id, sender, subject, body, attachments)
         report = inspect_shipping_email(email_id, str(dataset_root))
         _add_verifier_result(report)
+        _add_ambiguity_analysis(report)
         try:
             report["ai_analysis"] = analyze_shipping_case(report)
         except AIUnavailable as error:
@@ -370,6 +381,71 @@ def _add_verifier_result(report: dict[str, Any]) -> None:
         report["verifier"] = verify_shipping_discrepancies(report)
     except AIUnavailable as error:
         report["verifier"] = {"available": False, "reason": str(error)}
+
+
+def _add_ambiguity_analysis(report: dict[str, Any]) -> bool:
+    """Diagnose only routed fields; deterministic status remains authoritative."""
+    telemetry = report.get("routing_telemetry")
+    documents = report.get("documents", {})
+    ambiguous_fields = telemetry.get("ambiguous_fields", []) if isinstance(telemetry, dict) else []
+    if not ambiguous_fields or not isinstance(documents, dict):
+        return False
+    if report.get("ocr_distortion_analysis") is not None:
+        return False
+
+    si = documents.get("si", {})
+    bl = documents.get("bl", {})
+    analyses: list[dict[str, Any]] = []
+    total_llm_latency = 0.0
+    attempted_calls = 0
+    for field in ambiguous_fields:
+        attempted_calls += 1
+        si_details = si.get("evidence_details", {}).get(field, {})
+        bl_details = bl.get("evidence_details", {}).get(field, {})
+        si_snippet = str(si_details.get("source_text") or si.get("evidence", {}).get(field) or "")
+        bl_snippet = str(bl_details.get("source_text") or bl.get("evidence", {}).get(field) or "")
+        try:
+            analysis = analyze_field_ambiguity(
+                field,
+                si.get("fields", {}).get(field),
+                bl.get("fields", {}).get(field),
+                si_snippet,
+                bl_snippet,
+            )
+        except AIUnavailable as error:
+            analyses.append({
+                "field": field,
+                "diagnosis": "UNAVAILABLE",
+                "is_ocr_distortion": False,
+                "explanation": str(error),
+                "suggested_operator_action": "Review the source documents manually.",
+                "confidence": 0.0,
+            })
+            continue
+        total_llm_latency += float(analysis.get("latency_ms", 0.0))
+        analyses.append(analysis)
+
+    report["ocr_distortion_analysis"] = analyses
+    report["status"] = "NEEDS_REVIEW"
+    report["has_defect"] = False
+    if any(item.get("is_ocr_distortion") for item in analyses):
+        report["review_reason"] = "ocr_distortion_suspected"
+    elif report.get("review_reason") not in {"missing_value", "wrong_doc_type", "unreadable"}:
+        report["review_reason"] = "ambiguous_field"
+    updated_telemetry = dict(telemetry)
+    updated_telemetry["llm_latency_ms"] = round(total_llm_latency, 3)
+    updated_telemetry["llm_calls"] = attempted_calls
+    updated_telemetry["estimated_cost_usd"] = round(attempted_calls * TARGETED_FIELD_COST_USD, 5)
+    updated_telemetry["full_document_cost_usd"] = 0.0015
+    daily_targeted_cost = attempted_calls * TARGETED_FIELD_COST_USD * 10000
+    daily_full_document_cost = 0.0015 * 10000
+    savings = round((1 - (daily_targeted_cost / daily_full_document_cost)) * 100, 1)
+    updated_telemetry["scalability_summary"] = (
+        f"10,000 emails/day = ${daily_targeted_cost:.2f}/day targeted vs "
+        f"${daily_full_document_cost:.2f}/day full-document ({savings:.0f}% savings)"
+    )
+    report["routing_telemetry"] = updated_telemetry
+    return True
 
 
 def _save_upload(
