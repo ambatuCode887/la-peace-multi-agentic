@@ -91,24 +91,24 @@ export function App() {
   // Fetch live detail report and manager review when selected case changes
   useEffect(() => {
     if (backendConnected && selectedCaseId) {
-      Promise.all([
-        api.getCaseDetail(selectedCaseId).catch(() => null),
-        api.getManagerReview(selectedCaseId).catch(() => null),
-      ]).then(([report, managerReview]) => {
-        if (report || managerReview) {
+      void api
+        .getCaseDetail(selectedCaseId)
+        .then((report) => {
           setCases((prev) =>
-            prev.map((c) => {
-              if (c.id !== selectedCaseId) return c;
-              if (report) {
-                return mapReportToShippingCase(report, c, managerReview);
-              }
-              if (managerReview) {
-                return { ...c, managerReview };
-              }
-              return c;
-            }),
+            prev.map((c) =>
+              c.id === selectedCaseId ? mapReportToShippingCase(report, c) : c,
+            ),
           );
-        }
+        })
+        .catch(() => undefined);
+
+      void api.getManagerReview(selectedCaseId).then((managerReview) => {
+        if (!managerReview) return;
+        setCases((prev) =>
+          prev.map((c) =>
+            c.id === selectedCaseId ? { ...c, managerReview } : c,
+          ),
+        );
       });
     }
   }, [selectedCaseId, backendConnected, detailVersion]);
