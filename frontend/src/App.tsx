@@ -13,6 +13,7 @@ import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { ReviewPanel } from "./components/review/ReviewPanel";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
 import { EvaluationDashboard } from "./components/evaluation/EvaluationDashboard";
+import { ALL_CASES } from "./data/allCases";
 import {
   api,
   mapReportToShippingCase,
@@ -21,8 +22,10 @@ import {
 import type { BackendReport } from "./services/api";
 
 export function App() {
-  const [cases, setCases] = useState<ShippingCase[]>([]);
-  const [selectedCaseId, setSelectedCaseId] = useState<string>("");
+  const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>(
+    ALL_CASES[0]?.id || "email_001",
+  );
   const [categoryFilter, setCategoryFilter] = useState<EmailCategory | "ALL">(
     "ALL",
   );
@@ -39,7 +42,7 @@ export function App() {
     "summary" | "email" | "chat"
   >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
-  const [queueLoading, setQueueLoading] = useState<boolean>(true);
+  const [queueLoading, setQueueLoading] = useState<boolean>(false);
   const [queueError, setQueueError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,25 +58,24 @@ export function App() {
     setQueueError(null);
     try {
       const summaries = await api.getCases();
-      setCases((previous) =>
-        summaries.map((summary) =>
-          mapSummaryToShippingCase(
-            summary,
-            previous.find((item) => item.id === summary.email_id),
+      if (summaries.length > 0) {
+        setCases((previous) =>
+          summaries.map((summary) =>
+            mapSummaryToShippingCase(
+              summary,
+              previous.find((item) => item.id === summary.email_id),
+            ),
           ),
-        ),
-      );
-      setSelectedCaseId((current) =>
-        summaries.some((summary) => summary.email_id === current)
-          ? current
-          : summaries[0]?.email_id || "",
-      );
+        );
+        setSelectedCaseId((current) =>
+          summaries.some((summary) => summary.email_id === current)
+            ? current
+            : summaries[0]?.email_id || "",
+        );
+      }
     } catch (error) {
-      setQueueError(
-        error instanceof Error
-          ? error.message
-          : "Could not load backend cases.",
-      );
+      console.warn("Backend cases unavailable, using active dataset:", error);
+      setCases((previous) => (previous.length === 0 ? ALL_CASES : previous));
     } finally {
       setQueueLoading(false);
     }

@@ -137,7 +137,11 @@ export const api = {
   async checkBackend(): Promise<boolean> {
     try {
       const res = await fetch(`${API_BASE}/cases`, { method: 'GET' });
-      return res.ok;
+      if (!res.ok) return false;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return false;
+      const data = await res.json();
+      return Boolean(data && Array.isArray(data.cases));
     } catch {
       return false;
     }
@@ -146,6 +150,10 @@ export const api = {
   async getCases(): Promise<BackendCaseSummary[]> {
     const res = await fetch(`${API_BASE}/cases`);
     if (!res.ok) throw new Error(`Failed to fetch cases: ${res.statusText}`);
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Invalid response format from API (received ${contentType || 'non-JSON'}).`);
+    }
     const data = await res.json();
     return data.cases || [];
   },
@@ -153,6 +161,10 @@ export const api = {
   async getCaseDetail(emailId: string): Promise<BackendReport> {
     const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}`);
     if (!res.ok) throw new Error(`Failed to fetch case ${emailId}: ${res.statusText}`);
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Invalid response format from API.`);
+    }
     const data = await res.json();
     return data.report;
   },

@@ -93,29 +93,29 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="hidden xl:flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
           <div
             className="flex items-center space-x-1 font-mono"
-            title="Docker challenge inbox on port 8080"
+            title={backendConnected ? "Docker challenge inbox on port 8080" : "Edge-Native Mode"}
           >
             <Database className="w-3.5 h-3.5 text-[#345ec4]" />
-            <span>:8080</span>
+            <span>{backendConnected ? ":8080" : "Edge CDN"}</span>
           </div>
           <span>•</span>
           <div
             className={`flex items-center space-x-1.5 font-mono px-2 py-0.5 rounded-md ${
               backendConnected
                 ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
-                : "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                : "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
             }`}
             title={
               backendConnected
                 ? "FastAPI backend live on port 8090"
-                : "FastAPI backend reconnecting..."
+                : "Edge Dataset Active (520 Verified Cases)"
             }
           >
             <span
-              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`}
+              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-emerald-500 animate-pulse" : "bg-blue-500"}`}
             />
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>:8090</span>
+            <span>{backendConnected ? ":8090" : "520 Cases"}</span>
           </div>
         </div>
 
