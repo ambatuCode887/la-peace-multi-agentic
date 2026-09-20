@@ -17,3 +17,4 @@ ragas>=0.2.0
 pytest>=8.0.0
 rapidocr-onnxruntime>=1.2.3 
 pypdfium2>=5.13.0
+pymongo[srv]>=3.12.0
