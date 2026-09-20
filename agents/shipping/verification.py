@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Mapping
 
 from .attachments import AttachmentReadError, read_attachment_content
@@ -221,6 +223,7 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
     if si.missing_fields or bl.missing_fields:
         return {"status": "NEEDS_REVIEW", "review_reason": "missing_value", "defect_fields": []}
 
+    rule_started = perf_counter()
     normalized_equivalences = [
         field
         for field in COMPARE_FIELDS
@@ -229,23 +232,54 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
         == _normalized_field_value(field, bl.fields[field])
     ]
     ignored_differences = _ignored_differences(si, bl)
-    defects = [
-        field for field in COMPARE_FIELDS
-        if not values_match(field, si.fields[field], bl.fields[field])
-    ]
-    uncertain_fields = sorted({
+    field_resolutions: dict[str, dict[str, str]] = {}
+    ambiguous_fields: list[str] = []
+    defects: list[str] = []
+    for field in COMPARE_FIELDS:
+        resolution = _detect_field_ambiguity(field, si.fields[field], bl.fields[field])
+        if resolution["status"] == "UNCERTAIN":
+            ambiguous_fields.append(field)
+            field_resolutions[field] = {
+                "source": "llm",
+                "reason": str(resolution["suspected_issue"]),
+            }
+        elif resolution["status"] == "MISMATCH":
+            defects.append(field)
+            field_resolutions[field] = {"source": "rule", "reason": "genuine_mismatch"}
+        else:
+            field_resolutions[field] = {
+                "source": "rule",
+                "reason": str(resolution["reason"]),
+            }
+
+    reader_uncertain_fields = sorted({
         field
         for document in (si, bl)
         for field, agreement in document.reader_agreement.items()
         if agreement == "disagree"
     })
+    for field in reader_uncertain_fields:
+        if field not in ambiguous_fields:
+            ambiguous_fields.append(field)
+            field_resolutions[field] = {"source": "llm", "reason": "reader_disagreement"}
+    uncertain_fields = sorted(set(ambiguous_fields))
+    rule_latency_ms = round((perf_counter() - rule_started) * 1000, 3)
     return {
         "status": "NEEDS_REVIEW" if uncertain_fields else ("MISMATCH" if defects else "OK"),
-        "review_reason": "low_confidence" if uncertain_fields else None,
+        "review_reason": "ambiguous_field" if ambiguous_fields else ("low_confidence" if reader_uncertain_fields else None),
         "defect_fields": defects,
         "uncertain_fields": uncertain_fields,
         "normalized_equivalences": normalized_equivalences,
         "ignored_differences": ignored_differences,
+        "routing_telemetry": {
+            "total_fields": len(COMPARE_FIELDS),
+            "resolved_by_rules": sum(item["source"] == "rule" for item in field_resolutions.values()),
+            "sent_to_llm": sum(item["source"] == "llm" for item in field_resolutions.values()),
+            "rule_latency_ms": rule_latency_ms,
+            "llm_latency_ms": 0.0,
+            "ambiguous_fields": uncertain_fields,
+            "field_resolutions": field_resolutions,
+        },
     }
 
 
@@ -504,9 +538,49 @@ def _normalized_value(value: str | int | None) -> str | int | None:
 
 def _normalized_field_value(field: str, value: str | int | None) -> str | int | None:
     """Normalize comparison values while keeping the raw OCR value for evidence."""
-    if field in {"shipper", "consignee", "notify_party"} and isinstance(value, str):
-        value = re.sub(r"\bSDN\s+SHD\b", "SDN BHD", value, flags=re.IGNORECASE)
     return _normalized_value(value)
+
+
+def _detect_field_ambiguity(
+    field: str,
+    si_value: str | int | None,
+    bl_value: str | int | None,
+) -> dict[str, str]:
+    """Route a field without guessing whether a near-match is legally equivalent."""
+    if values_match(field, si_value, bl_value):
+        reason = "exact_match" if si_value == bl_value else "normalized_match"
+        return {"resolved_by": "rule", "status": "MATCH", "reason": reason}
+
+    if field not in PARTY_FIELDS and field not in {"port_of_loading", "port_of_discharge"}:
+        return {"resolved_by": "rule", "status": "MISMATCH", "reason": "genuine_mismatch"}
+    if not isinstance(si_value, str) or not isinstance(bl_value, str):
+        return {"resolved_by": "rule", "status": "MISMATCH", "reason": "genuine_mismatch"}
+
+    left = str(_normalized_field_value(field, si_value) or "")
+    right = str(_normalized_field_value(field, bl_value) or "")
+    if min(len(left), len(right)) >= 5:
+        ratio = SequenceMatcher(None, left, right).ratio()
+        if ratio >= 0.85 or _edit_distance(left, right) <= 3:
+            return {
+                "resolved_by": "ambiguous",
+                "status": "UNCERTAIN",
+                "suspected_issue": "near_mismatch_or_distortion",
+            }
+    return {"resolved_by": "rule", "status": "MISMATCH", "reason": "genuine_mismatch"}
+
+
+def _edit_distance(left: str, right: str) -> int:
+    previous = list(range(len(right) + 1))
+    for left_index, left_char in enumerate(left, start=1):
+        current = [left_index]
+        for right_index, right_char in enumerate(right, start=1):
+            current.append(min(
+                current[-1] + 1,
+                previous[right_index] + 1,
+                previous[right_index - 1] + (left_char != right_char),
+            ))
+        previous = current
+    return previous[-1]
 
 
 def _weight_unit(value: str) -> str:

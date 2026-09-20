@@ -12,6 +12,7 @@ import { BlueprintComparator } from "./components/verification/BlueprintComparat
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { ReviewPanel } from "./components/review/ReviewPanel";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
+import { EvaluationDashboard } from "./components/evaluation/EvaluationDashboard";
 import {
   api,
   mapReportToShippingCase,
@@ -32,6 +33,7 @@ export function App() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [operationsOpen, setOperationsOpen] = useState<boolean>(false);
+  const [evaluationOpen, setEvaluationOpen] = useState<boolean>(false);
   const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "email" | "chat"
@@ -268,6 +270,11 @@ export function App() {
     setActiveDrawerTab("email");
   };
 
+  const handleSelectCase = (id: string) => {
+    setEvaluationOpen(false);
+    setSelectedCaseId(id);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#f5f8ff] text-[#0d1a3a] dark:bg-[#05163a] dark:text-[#eef3fc] transition-colors">
       {/* Top Header with La Peace SDOC Branding, raw Lapis Lazuli icon & Live Backend Telemetry */}
@@ -279,6 +286,8 @@ export function App() {
         backendConnected={backendConnected}
         operationsOpen={operationsOpen}
         onToggleOperations={() => setOperationsOpen((open) => !open)}
+        evaluationOpen={evaluationOpen}
+        onToggleEvaluation={() => setEvaluationOpen((open) => !open)}
       />
 
       {/* Main 3-Zone Workspace */}
@@ -288,7 +297,7 @@ export function App() {
           allCases={cases}
           cases={filteredCases}
           selectedCaseId={currentCase?.id || ""}
-          onSelectCase={(id) => setSelectedCaseId(id)}
+          onSelectCase={handleSelectCase}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={handleCategoryFilterChange}
           statusFilter={statusFilter}
@@ -298,60 +307,69 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
-            {/* Operations: process inbox, upload a case, retry or delete */}
-            {operationsOpen && (
-              <OperationsPanel
+            {evaluationOpen ? (
+              <EvaluationDashboard
                 backendConnected={backendConnected}
-                currentCase={currentCase}
-                onVerified={handleVerified}
-                onProcessInbox={handleProcessInbox}
-                onRefresh={refreshCases}
-                onRetry={handleRetryCase}
-                onDelete={handleDeleteCase}
+                onExit={() => setEvaluationOpen(false)}
               />
-            )}
+            ) : (
+              <>
+                {/* Operations: process inbox, upload a case, retry or delete */}
+                {operationsOpen && (
+                  <OperationsPanel
+                    backendConnected={backendConnected}
+                    currentCase={currentCase}
+                    onVerified={handleVerified}
+                    onProcessInbox={handleProcessInbox}
+                    onRefresh={refreshCases}
+                    onRetry={handleRetryCase}
+                    onDelete={handleDeleteCase}
+                  />
+                )}
 
-            {/* Conditional Discrepancy & Status Alert Banner */}
-            {currentCase && (
-              <DiscrepancyBanner
-                currentCase={currentCase}
-                onOpenClarification={handleOpenClarification}
-              />
-            )}
+                {/* Conditional Discrepancy & Status Alert Banner */}
+                {currentCase && (
+                  <DiscrepancyBanner
+                    currentCase={currentCase}
+                    onOpenClarification={handleOpenClarification}
+                  />
+                )}
 
-            {/* The email this case came from: sender, subject and message */}
-            {currentCase && <EmailMessage currentCase={currentCase} />}
+                {/* The email this case came from: sender, subject and message */}
+                {currentCase && <EmailMessage currentCase={currentCase} />}
 
-            {/* Side-by-Side Blueprint Diff Comparator */}
-            {queueLoading && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-                Loading live backend queue...
-              </div>
-            )}
-            {queueError && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
-                {queueError}
-              </div>
-            )}
-            {!queueLoading && !currentCase && !queueError && (
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                No backend cases are available yet. Upload a case or process the
-                inbox.
-              </div>
-            )}
-            {currentCase && (
-              <BlueprintComparator
-                currentCase={currentCase}
-                onApprove={handleApproveCase}
-                onDraftClarification={handleOpenClarification}
-                onManualOverride={handleManualOverride}
-              />
-            )}
-            {currentCase && (
-              <ReviewPanel
-                currentCase={currentCase}
-                onSaved={handleReviewSaved}
-              />
+                {/* Side-by-Side Blueprint Diff Comparator */}
+                {queueLoading && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+                    Loading live backend queue...
+                  </div>
+                )}
+                {queueError && (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                    {queueError}
+                  </div>
+                )}
+                {!queueLoading && !currentCase && !queueError && (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+                    No backend cases are available yet. Upload a case or process
+                    the inbox.
+                  </div>
+                )}
+                {currentCase && (
+                  <BlueprintComparator
+                    currentCase={currentCase}
+                    onApprove={handleApproveCase}
+                    onDraftClarification={handleOpenClarification}
+                    onManualOverride={handleManualOverride}
+                  />
+                )}
+                {currentCase && (
+                  <ReviewPanel
+                    currentCase={currentCase}
+                    onSaved={handleReviewSaved}
+                  />
+                )}
+              </>
             )}
           </div>
         </main>

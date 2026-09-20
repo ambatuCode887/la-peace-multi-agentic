@@ -182,9 +182,14 @@ Giross Weight 128,544 KG
 
     result = compare_shipments(si, bl)
 
-    assert result["status"] == "OK"
+    assert result["status"] == "NEEDS_REVIEW"
+    assert result["review_reason"] == "ambiguous_field"
     assert result["defect_fields"] == []
-    assert result["normalized_equivalences"] == ["shipper"]
+    assert result["uncertain_fields"] == ["shipper"]
+    assert result["normalized_equivalences"] == []
+    assert result["routing_telemetry"]["resolved_by_rules"] == 6
+    assert result["routing_telemetry"]["sent_to_llm"] == 1
+    assert result["routing_telemetry"]["ambiguous_fields"] == ["shipper"]
 
 
 def test_reader_disagreement_requires_human_review() -> None:
@@ -228,8 +233,9 @@ Gross Weight: 128544 KG
     assert si.reader_agreement["shipper"] == "disagree"
     assert si.confidence["port_of_loading"] == "low"
     assert result["status"] == "NEEDS_REVIEW"
-    assert result["review_reason"] == "low_confidence"
+    assert result["review_reason"] == "ambiguous_field"
     assert result["uncertain_fields"] == ["port_of_loading", "shipper"]
+    assert result["routing_telemetry"]["sent_to_llm"] == 2
 
 
 def test_extracts_pipe_separated_workbook_rows() -> None:
