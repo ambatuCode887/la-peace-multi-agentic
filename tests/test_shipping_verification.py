@@ -411,3 +411,81 @@ TOTAL Gross Wt (kgs): 40,326 KG
     assert si.fields["container_count"] == 2
     assert si.fields["gross_weight_kg"] == 40326
     assert not si.missing_fields or "container_count" not in si.missing_fields
+
+
+CHASE_SUBJECT = "RE_ TO CONFIRM DOCS _ 5AAT-03056 _ AQABA_JORDAN _ SIN525534192"
+CHASE_BODY = "Dear Hari,\n\nPlease assist to send the draft BL for SIN832764835 for checking asap.\n\nThank you.\n"
+SECURITY_BANNER = (
+    "WARNING: This email originated outside of our organisation. As a security measure, "
+    "please exercise caution with E-Mail content and any links or attachments.\n\n"
+)
+
+
+def chase_email(body: str, attachments: tuple[str, ...] = ()) -> DatasetEmail:
+    return DatasetEmail("email_003", "docs@example.com", CHASE_SUBJECT, body, attachments, {})
+
+
+class ListAdapter:
+    """Just enough of DatasetAdapter for build_submission: it only iterates the emails."""
+
+    def __init__(self, *emails: DatasetEmail) -> None:
+        self.emails = emails
+
+    def __iter__(self):
+        return iter(self.emails)
+
+
+def submission_for(email_record: DatasetEmail) -> dict:
+    from agents.shipping.verification import build_submission
+
+    return build_submission(ListAdapter(email_record))[email_record.email_id]
+
+
+def test_asking_for_the_draft_bl_is_ok_and_not_sent_to_review() -> None:
+    result = submission_for(chase_email(CHASE_BODY))
+
+    assert result["category"] == "DOCUMENT_CHASE"  # its own category, not a comparison request
+    assert result["status"] == "OK" and result["review_reason"] is None
+    assert result["has_defect"] is False and result["defect_fields"] == []
+
+
+def test_the_security_banner_does_not_hide_a_chase() -> None:
+    # The banner itself says "attachments"; it must not make the email look like it had files.
+    assert submission_for(chase_email(SECURITY_BANNER + CHASE_BODY))["status"] == "OK"
+
+
+def test_words_in_the_quoted_earlier_thread_are_ignored() -> None:
+    quoted = CHASE_BODY + "\n________________________________\nFrom: Nirmala\nSent: Wednesday\nPlease find attached the SI and compare.\n"
+    assert submission_for(chase_email(quoted))["status"] == "OK"
+
+
+def test_dropped_or_missing_attachments_still_go_to_review() -> None:
+    dropped = "Please compare the SI and draft BL for 070500263211 and confirm (attachments appear to have been dropped). Thank you."
+    still_missing = "Please compare the SI and draft BL for I756178688 and confirm (the draft BL is still missing). Thank you."
+    for record in (chase_email(dropped), chase_email(still_missing, ("attachments/email_507_SI.txt",))):
+        result = submission_for(record)
+        assert result["category"] == "BL_COMPARISON"  # a real comparison request with files missing
+        assert result["status"] == "NEEDS_REVIEW" and result["review_reason"] == "missing_attachment"
+
+
+def test_unrecognised_wording_with_no_files_still_goes_to_review() -> None:
+    result = submission_for(chase_email("Dear Hari,\n\nAny update on this shipment? Thanks."))
+    assert result["status"] == "NEEDS_REVIEW" and result["review_reason"] == "missing_attachment"
+
+
+def test_a_chase_is_explained_on_the_dashboard(tmp_path) -> None:
+    import json
+    from agents.shipping.tool import inspect_shipping_email
+
+    (tmp_path / "inbox").mkdir()
+    (tmp_path / "attachments").mkdir()
+    (tmp_path / "inbox" / "email_003.json").write_text(json.dumps({
+        "email_id": "email_003", "from": "docs@example.com", "subject": CHASE_SUBJECT,
+        "body": CHASE_BODY, "attachments": [],
+    }), encoding="utf-8")
+
+    report = inspect_shipping_email("email_003", str(tmp_path))
+
+    assert report["category"] == "DOCUMENT_CHASE"
+    assert report["status"] == "OK" and report["review_reason"] is None
+    assert "asking for the draft BL" in report["message"]

@@ -1,5 +1,5 @@
 export type VerificationStatus = 'PASS' | 'MISMATCH' | 'NEEDS_REVIEW' | 'INQUIRY';
-export type EmailCategory = 'BL_COMPARISON' | 'SI_REQUEST' | 'INVOICE_QUERY' | 'SPAM' | 'GENERAL';
+export type EmailCategory = 'BL_COMPARISON' | 'DOCUMENT_CHASE' | 'SI_REQUEST' | 'INVOICE_QUERY' | 'SPAM' | 'GENERAL';
 
 export interface FieldComparison {
   key: string;
@@ -86,8 +86,9 @@ export interface ShippingCase {
   id: string;
   subject: string;
   sender: string;
+  body?: string;
   timestamp: string;
-  category: 'BL_COMPARISON' | 'SI_REQUEST' | 'INVOICE_QUERY' | 'SPAM' | 'GENERAL';
+  category: EmailCategory;
   status: VerificationStatus;
   statusNote?: string;
   vessel: string;

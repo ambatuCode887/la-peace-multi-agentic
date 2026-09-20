@@ -48,6 +48,13 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         bg: string;
       }
     > = {
+      DOCUMENT_CHASE: {
+        title: "Send Draft BL",
+        desc: "The sender is asking for the draft Bill of Lading to be sent. No documents are attached, so there is nothing to compare yet and no review is needed.",
+        icon: Send,
+        color: "text-violet-600 dark:text-violet-400",
+        bg: "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900/60",
+      },
       SI_REQUEST: {
         title: "Shipping Instruction Request",
         desc: "This email contains a forwarder or shipper request for shipping instructions and does not require Bill of Lading verification.",

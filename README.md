@@ -45,6 +45,25 @@ Invoke-RestMethod -Uri http://localhost:8080/submit -Method Post `
 	-ContentType 'application/json' -InFile .artifacts\\final-submission.json
 ```
 
+### How emails are classified
+
+Each email gets one category from keyword rules on the subject, the sender's own message, and the attachments:
+
+| Category | Meaning |
+| --- | --- |
+| `BL_COMPARISON` | A document-check request with documents to compare |
+| `DOCUMENT_CHASE` (shown as "Send Draft BL") | A document-check thread where the sender only asks for the draft BL to be sent |
+| `SI_REQUEST`, `INVOICE_QUERY`, `GENERAL`, `SPAM` | Classified only, never compared |
+
+`DOCUMENT_CHASE` is a sixth category, added on purpose. The brief lists its categories with "including", and a "please send me the draft BL" email has nothing to compare, so it is neither a comparison request nor something a person needs to review (status `OK`). The local scoreboard only knows five categories and counts these 91 emails as misclassified (classification accuracy 100% to 82.5%, final score 1.0 to about 0.98). In exchange, human review drops from 111 cases to the 20 that need it (escalation precision 0.18 to 1.0).
+
+An email is a chase only when all of these hold; otherwise it stays a comparison request and goes to review as before:
+
+- it is already recognised as a document-check email;
+- it has fewer than two attachments;
+- the sender's new text (security banner and quoted earlier thread removed) asks to send, forward or share the draft BL;
+- that text does not mention comparing, attached, enclosed, dropped or missing documents.
+
 ### Accept new shipping uploads
 
 Start the upload API:

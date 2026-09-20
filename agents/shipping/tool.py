@@ -5,7 +5,15 @@ from typing import Any
 
 from .attachments import AttachmentReadError, read_attachment_content
 from .dataset import DatasetAdapter
-from .verification import COMPARE_FIELDS, classify_email, classify_email_details, compare_shipments, extract_shipment_fields, write_submission
+from .verification import (
+    AWAITING_DOCUMENTS_MESSAGE,
+    COMPARE_FIELDS,
+    classify_email,
+    classify_email_details,
+    compare_shipments,
+    extract_shipment_fields,
+    write_submission,
+)
 
 
 def run_shipping_verification(
@@ -69,7 +77,11 @@ def inspect_shipping_email(
             "review_reason": None,
             "has_defect": False,
             "defect_fields": [],
-            "message": "This email is not a document-comparison request.",
+            "message": (
+                AWAITING_DOCUMENTS_MESSAGE
+                if category == "DOCUMENT_CHASE"
+                else "This email is not a document-comparison request."
+            ),
         })
         return result
     if len(email.attachments) < 2:
