@@ -85,7 +85,7 @@ export interface BackendReport {
     full_document_cost_usd?: number;
     scalability_summary?: string;
     ambiguous_fields?: string[];
-    field_resolutions?: Record<string, { source: 'rule' | 'llm'; reason: string }>;
+    field_resolutions?: Record<string, { source: 'rule' | 'llm' | 'human'; reason: string }>;
   };
   ocr_distortion_analysis?: OcrDistortionAnalysis[];
   created_at?: string;

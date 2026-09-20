@@ -210,6 +210,10 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
           LLM ambiguity check
         </span>
+      ) : field.resolutionSource === "human" ? (
+        <span className="rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
+          Human review required
+        </span>
       ) : (
         <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
           Rule checked
