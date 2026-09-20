@@ -335,8 +335,12 @@ export function App() {
                   />
                 )}
 
-                {/* The email this case came from: sender, subject and message */}
-                {currentCase && <EmailMessage currentCase={currentCase} />}
+                {/* The email this case came from: sender, subject and message (for comparison cases) */}
+                {currentCase &&
+                  currentCase.category === "BL_COMPARISON" &&
+                  currentCase.fields.length > 0 && (
+                    <EmailMessage currentCase={currentCase} />
+                  )}
 
                 {/* Side-by-Side Blueprint Diff Comparator */}
                 {queueLoading && (
