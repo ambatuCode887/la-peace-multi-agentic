@@ -11,6 +11,7 @@ import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { ReviewPanel } from "./components/review/ReviewPanel";
+import { OperationsPanel } from "./components/operations/OperationsPanel";
 import {
   api,
   mapReportToShippingCase,
@@ -30,6 +31,8 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [operationsOpen, setOperationsOpen] = useState<boolean>(false);
+  const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "email" | "chat"
   >("summary");
@@ -106,7 +109,7 @@ export function App() {
         }
       });
     }
-  }, [selectedCaseId, backendConnected]);
+  }, [selectedCaseId, backendConnected, detailVersion]);
 
   const isStatusApplicable =
     categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
@@ -143,6 +146,32 @@ export function App() {
         : [mapped, ...previous];
     });
     setSelectedCaseId(report.email_id);
+  };
+
+  // Operations panel actions. Each one reloads the queue and the open case afterwards.
+  const handleProcessInbox = async () => {
+    await api.processInbox();
+    await refreshCases();
+    setDetailVersion((version) => version + 1);
+  };
+
+  const handleRetryCase = async (emailId: string) => {
+    await api.retryCase(emailId);
+    await refreshCases();
+    setDetailVersion((version) => version + 1);
+  };
+
+  const handleDeleteCase = async (emailId: string) => {
+    await api.deleteCase(emailId);
+    await refreshCases();
+  };
+
+  // A newly verified upload is shown straight away, so clear any filter that would hide it.
+  const handleVerified = (report: BackendReport) => {
+    handleReport(report);
+    setCategoryFilter("ALL");
+    setStatusFilter("ALL");
+    setSearchQuery("");
   };
 
   const handleReviewSaved = (report: BackendReport) => {
@@ -248,6 +277,8 @@ export function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         backendConnected={backendConnected}
+        operationsOpen={operationsOpen}
+        onToggleOperations={() => setOperationsOpen((open) => !open)}
       />
 
       {/* Main 3-Zone Workspace */}
@@ -267,6 +298,19 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
+            {/* Operations: process inbox, upload a case, retry or delete */}
+            {operationsOpen && (
+              <OperationsPanel
+                backendConnected={backendConnected}
+                currentCase={currentCase}
+                onVerified={handleVerified}
+                onProcessInbox={handleProcessInbox}
+                onRefresh={refreshCases}
+                onRetry={handleRetryCase}
+                onDelete={handleDeleteCase}
+              />
+            )}
+
             {/* Conditional Discrepancy & Status Alert Banner */}
             {currentCase && (
               <DiscrepancyBanner
