@@ -64,11 +64,6 @@ def build_agent_model():
     )
 
 
-def csv_env(name: str) -> list[str]:
-    value = env(name, "")
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
 def truthy(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 

@@ -19,4 +19,4 @@ Run the local retrieval evaluation:
 .\.venv\Scripts\python -m agents.eval.ragas
 ```
 
-The report is written to `.artifacts/retrieval-report.json`. This baseline measures expected-keyword recall in retrieved context. It is an independent quality signal and does not grant or deny Confluence publication permission. Model-based RAGAS metrics can be added after the dataset and retrieval baseline are stable.
+The report is written to `.artifacts/retrieval-report.json`. This baseline measures expected-keyword recall in retrieved context. Model-based RAGAS metrics can be added after the dataset and retrieval baseline are stable.
