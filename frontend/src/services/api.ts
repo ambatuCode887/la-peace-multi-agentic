@@ -8,7 +8,7 @@ import type {
   ActionPreview,
 } from '../types/shipping';
 
-const API_BASE = '/api';
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
 
 export interface BackendCaseSummary {
   email_id: string;
