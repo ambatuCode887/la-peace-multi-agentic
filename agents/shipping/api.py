@@ -13,9 +13,9 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from .tool import inspect_shipping_email
-from .actions import draft_correction_email, preview_false_alarm, preview_targeted_reread
+from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
 from .ui import dashboard_page
 from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case, verify_shipping_discrepancies
 from .dataset import DatasetAdapter, DatasetEmail
@@ -74,6 +74,17 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                 report.setdefault("subject", record.get("subject", ""))
         return {"ok": True, "report": report}
 
+    @app.get("/cases/{email_id}/attachments/{attachment_path:path}")
+    async def case_attachment(email_id: str, attachment_path: str) -> FileResponse:
+        attachment_root = (root / _safe_id(email_id) / "attachments").resolve()
+        relative_path = Path(attachment_path)
+        if relative_path.parts and relative_path.parts[0] == "attachments":
+            relative_path = Path(*relative_path.parts[1:])
+        candidate = (attachment_root / relative_path).resolve()
+        if attachment_root not in candidate.parents or not candidate.is_file():
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        return FileResponse(candidate)
+
     @app.delete("/cases/{email_id}")
     async def delete_case(email_id: str) -> dict[str, Any]:
         case_root = root / _safe_id(email_id)
@@ -128,8 +139,10 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                 preview = preview_false_alarm(report, str(payload.get("note", "")))
             elif action == "targeted_reread":
                 preview = preview_targeted_reread(report, str(payload.get("field", "")))
+            elif action == "ai_field_correction":
+                preview = preview_ai_field_correction(report, str(payload.get("request", "")))
             else:
-                raise ValueError("action must be draft_correction_email, false_alarm, or targeted_reread")
+                raise ValueError("action must be draft_correction_email, false_alarm, targeted_reread, or ai_field_correction")
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {"ok": True, "email_id": email_id, "preview": preview}
