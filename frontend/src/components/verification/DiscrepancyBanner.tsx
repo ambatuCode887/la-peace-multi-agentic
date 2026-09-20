@@ -1,5 +1,11 @@
-import type { ShippingCase } from '../../types/shipping';
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, ArrowRight } from 'lucide-react';
+import type { ShippingCase } from "../../types/shipping";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  ArrowRight,
+} from "lucide-react";
 
 interface DiscrepancyBannerProps {
   currentCase: ShippingCase;
@@ -10,11 +16,11 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
   currentCase,
   onOpenClarification,
 }) => {
-  if (currentCase.category !== 'BL_COMPARISON') {
+  if (currentCase.category !== "BL_COMPARISON") {
     return null;
   }
 
-  if (currentCase.status === 'MISMATCH') {
+  if (currentCase.status === "MISMATCH") {
     return (
       <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/60 flex items-start justify-between">
         <div className="flex items-start space-x-3">
@@ -23,7 +29,9 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-rose-900 dark:text-rose-200 flex items-center space-x-2">
-              <span>Discrepancy Alert: Variance Exceeds Tolerance Threshold</span>
+              <span>
+                Discrepancy Alert: Variance Exceeds Tolerance Threshold
+              </span>
               <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-rose-200/80 text-rose-900 dark:bg-rose-900 dark:text-rose-300 font-bold">
                 1.12% DELTA
               </span>
@@ -45,7 +53,7 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
     );
   }
 
-  if (currentCase.status === 'NEEDS_REVIEW') {
+  if (currentCase.status === "NEEDS_REVIEW") {
     return (
       <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-900/60 flex items-start justify-between">
         <div className="flex items-start space-x-3">
@@ -69,7 +77,32 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
     );
   }
 
-  if (currentCase.status === 'PASS') {
+  if (currentCase.status === "PASS") {
+    if (currentCase.promptInjectionDetected) {
+      return (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 flex items-start justify-between">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                Security Review Required
+              </h3>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                The documents match deterministically, but instruction-like
+                content was detected. Review the source content before release.
+              </p>
+            </div>
+          </div>
+
+          <span className="ml-4 px-3 py-1 rounded-lg bg-amber-200/70 text-amber-900 dark:bg-amber-900 dark:text-amber-200 text-xs font-medium shrink-0">
+            Hold Auto-Submission
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div className="mb-6 p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-900/60 flex items-start justify-between">
         <div className="flex items-start space-x-3">

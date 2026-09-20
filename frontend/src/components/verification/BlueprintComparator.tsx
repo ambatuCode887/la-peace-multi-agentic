@@ -33,6 +33,32 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   const [rereadMessage, setRereadMessage] = useState<string | null>(null);
   const [isRereading, setIsRereading] = useState<string | null>(null);
   const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(null);
+  const securitySources = Array.from(
+    new Set(
+      currentCase.promptInjectionMatches?.map((match) => match.source) || [],
+    ),
+  );
+
+  const securityWarning = currentCase.promptInjectionDetected && (
+    <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+      <div>
+        <div className="font-bold">
+          Untrusted instruction-like content detected
+        </div>
+        <div className="mt-0.5">
+          Email or document text attempted to influence the review. The
+          deterministic verdict remains authoritative.
+        </div>
+        {currentCase.promptInjectionMatches &&
+          currentCase.promptInjectionMatches.length > 0 && (
+            <div className="mt-1 text-[11px] opacity-80">
+              Source: {securitySources.join(", ")}
+            </div>
+          )}
+      </div>
+    </div>
+  );
 
   if (
     currentCase.category !== "BL_COMPARISON" ||
@@ -97,6 +123,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 
     return (
       <div className="space-y-6">
+        {securityWarning}
         {/* Email Header Card */}
         <div className="p-6 bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs">
           <div className="flex items-start justify-between">
@@ -502,6 +529,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 
   return (
     <div className="flex flex-col space-y-6">
+      {securityWarning}
       {/* Toast Notice for Re-read */}
       {rereadMessage && (
         <div className="p-3 bg-[#eef3fc] dark:bg-[#052464] border border-[#345ec4]/40 text-[#1a3d8e] dark:text-[#8ea9f7] rounded-xl text-xs flex items-center space-x-2 animate-in fade-in">

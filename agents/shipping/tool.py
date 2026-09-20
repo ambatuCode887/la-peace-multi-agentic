@@ -12,6 +12,7 @@ from .verification import (
     classify_email_details,
     compare_shipments,
     extract_shipment_fields,
+    _prompt_injection_metadata,
     write_submission,
 )
 
@@ -71,6 +72,8 @@ def inspect_shipping_email(
         "body": email.body,
         "attachments": list(email.attachments),
     }
+    security_texts: dict[str, str] = {"email": email.body}
+    result.update(_prompt_injection_metadata(security_texts))
     if category != "BL_COMPARISON":
         result.update({
             "status": "OK",
@@ -92,6 +95,7 @@ def inspect_shipping_email(
     try:
         for reference in email.attachments:
             content = read_attachment_content(adapter, reference)
+            security_texts[reference] = content.text
             document = extract_shipment_fields(
                 content.text,
                 filename=reference,
@@ -99,6 +103,7 @@ def inspect_shipping_email(
                 alternate_readings=content.reader_texts,
             )
             documents.append({"reference": reference, "document": document})
+        result.update(_prompt_injection_metadata(security_texts))
     except AttachmentReadError as error:
         result.update({
             "status": "NEEDS_REVIEW",

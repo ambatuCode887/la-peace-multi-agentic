@@ -61,6 +61,8 @@ export interface BackendReport {
   status: 'OK' | 'MISMATCH' | 'NEEDS_REVIEW' | 'UNPROCESSED';
   review_reason: string | null;
   defect_fields: string[];
+  prompt_injection_detected?: boolean;
+  prompt_injection_matches?: Array<{ source: string; text: string }>;
   differences?: Record<string, { si: any; bl: any }>;
   ai_analysis?: {
     text?: string;
@@ -366,6 +368,8 @@ export function mapReportToShippingCase(
     category,
     status,
     statusNote,
+    promptInjectionDetected: report.prompt_injection_detected,
+    promptInjectionMatches: report.prompt_injection_matches,
     vessel: existing?.vessel || String(report.documents?.si?.fields?.vessel || 'N/A'),
     voyageNumber: existing?.voyageNumber || String(report.documents?.si?.fields?.voyage || 'N/A'),
     pol: existing?.pol || String(report.documents?.si?.fields?.port_of_loading || 'N/A'),
