@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from time import perf_counter
 from typing import Any
 
 from agents.config import env
@@ -9,6 +10,10 @@ from agents.config import env
 
 class AIUnavailable(RuntimeError):
     """Raised when the configured AI provider is unavailable."""
+
+
+TARGETED_FIELD_COST_USD = 0.00005
+TARGETED_FIELD_TOKENS = 150
 
 
 _UNTRUSTED_CONTEXT_NOTICE = (
@@ -113,6 +118,63 @@ def analyze_shipping_case(report: dict[str, Any]) -> dict[str, Any]:
     )
     text, provider = _ask(instruction, report)
     return {"text": text, "provider": provider}
+
+
+def analyze_field_ambiguity(
+    field: str,
+    si_value: Any,
+    bl_value: Any,
+    si_snippet: str,
+    bl_snippet: str,
+) -> dict[str, Any]:
+    """Diagnose one ambiguous field without granting the model decision authority."""
+    instruction = (
+        "You are a forensic shipping document inspection agent. Analyze only this "
+        "single ambiguous field from a Shipping Instruction and Draft Bill of Lading. "
+        "Classify the difference as OCR_SCAN_DISTORTION, FORMATTING_OR_ALIAS, or "
+        "GENUINE_MISMATCH. OCR_SCAN_DISTORTION means the source scan may have caused "
+        "a character or layout recognition error. You are advisory only: never approve "
+        "or reject a sensitive trade value, and always recommend human verification. "
+        "Return JSON only with keys diagnosis, is_ocr_distortion, explanation, "
+        "suggested_operator_action, confidence. confidence must be a number from 0 to 1."
+    )
+    context = {
+        "field": field,
+        "si_value": si_value,
+        "bl_value": bl_value,
+        "si_evidence": si_snippet,
+        "bl_evidence": bl_snippet,
+    }
+    started = perf_counter()
+    text, provider = _ask(instruction, context)
+    latency_ms = round((perf_counter() - started) * 1000, 3)
+    response = _parse_verifier_json(text)
+    if response is None:
+        raise AIUnavailable("The ambiguity diagnosis returned invalid JSON")
+
+    diagnosis = response.get("diagnosis")
+    if diagnosis not in {"OCR_SCAN_DISTORTION", "FORMATTING_OR_ALIAS", "GENUINE_MISMATCH"}:
+        raise AIUnavailable("The ambiguity diagnosis returned an invalid diagnosis")
+    is_ocr_distortion = response.get("is_ocr_distortion")
+    explanation = response.get("explanation")
+    action = response.get("suggested_operator_action")
+    confidence = response.get("confidence")
+    if not isinstance(is_ocr_distortion, bool) or not isinstance(explanation, str) or not isinstance(action, str):
+        raise AIUnavailable("The ambiguity diagnosis omitted required fields")
+    if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+        raise AIUnavailable("The ambiguity diagnosis returned invalid confidence")
+    return {
+        "field": field,
+        "diagnosis": diagnosis,
+        "is_ocr_distortion": is_ocr_distortion,
+        "explanation": explanation,
+        "suggested_operator_action": action,
+        "confidence": float(confidence),
+        "provider": provider,
+        "latency_ms": latency_ms,
+        "estimated_cost_usd": TARGETED_FIELD_COST_USD,
+        "estimated_tokens": TARGETED_FIELD_TOKENS,
+    }
 
 
 def verify_shipping_discrepancies(report: dict[str, Any]) -> dict[str, Any]:

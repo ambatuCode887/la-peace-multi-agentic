@@ -8,6 +8,7 @@ import type {
   ActionPreview,
   EvidenceDetail,
   ReaderReading,
+  OcrDistortionAnalysis,
 } from '../types/shipping';
 
 const API_BASE = '/api';
@@ -73,6 +74,20 @@ export interface BackendReport {
   verifier?: VerifierResult;
   review_note?: string;
   manager_review?: ManagerReview;
+  routing_telemetry?: {
+    total_fields?: number;
+    resolved_by_rules?: number;
+    sent_to_llm?: number;
+    rule_latency_ms?: number;
+    llm_latency_ms?: number;
+    llm_calls?: number;
+    estimated_cost_usd?: number;
+    full_document_cost_usd?: number;
+    scalability_summary?: string;
+    ambiguous_fields?: string[];
+    field_resolutions?: Record<string, { source: 'rule' | 'llm'; reason: string }>;
+  };
+  ocr_distortion_analysis?: OcrDistortionAnalysis[];
 }
 
 export interface EvaluationSnapshot {
@@ -315,6 +330,9 @@ export function mapReportToShippingCase(
   if (isBl) {
     const defectSet = new Set(report.defect_fields || []);
     const differences = report.differences || {};
+    const routing = report.routing_telemetry;
+    const fieldResolutions = routing?.field_resolutions || {};
+    const ocrAnalyses = report.ocr_distortion_analysis || [];
 
     const siFields = report.documents?.si?.fields || {};
     const blFields = report.documents?.bl?.fields || {};
@@ -334,6 +352,8 @@ export function mapReportToShippingCase(
             ? String(blFields[key])
             : existing?.fields?.find((f) => f.key === key)?.blValue || 'N/A';
         const isDefect = defectSet.has(key);
+        const resolution = fieldResolutions[key];
+        const ocrAnalysis = ocrAnalyses.find((analysis) => analysis.field === key);
         const alternateReadings = (
           document: typeof siDocument
         ): ReaderReading[] => Object.entries(document?.reader_fields || {})
@@ -356,7 +376,10 @@ export function mapReportToShippingCase(
           blValue: blVal,
           match: !isDefect,
           varianceNote,
-          status: isDefect ? 'mismatch' : 'match',
+          status: isDefect ? 'mismatch' : resolution?.source === 'llm' ? 'review' : 'match',
+          resolutionSource: resolution?.source,
+          resolutionReason: resolution?.reason,
+          distortionNote: ocrAnalysis?.is_ocr_distortion ? ocrAnalysis.explanation : undefined,
           siEvidence: siDocument?.evidence_details?.[key],
           blEvidence: blDocument?.evidence_details?.[key],
           siAlternateReadings: alternateReadings(siDocument),
@@ -449,6 +472,22 @@ export function mapReportToShippingCase(
     },
     managerReview: managerReview || existing?.managerReview || undefined,
     verifier: report.verifier,
+    routingTelemetry: report.routing_telemetry
+      ? {
+          totalFields: report.routing_telemetry.total_fields || 0,
+          resolvedByRules: report.routing_telemetry.resolved_by_rules || 0,
+          sentToLlm: report.routing_telemetry.sent_to_llm || 0,
+          ruleLatencyMs: report.routing_telemetry.rule_latency_ms || 0,
+          llmLatencyMs: report.routing_telemetry.llm_latency_ms || 0,
+          llmCalls: report.routing_telemetry.llm_calls || 0,
+          estimatedCostUsd: report.routing_telemetry.estimated_cost_usd || 0,
+          fullDocumentCostUsd: report.routing_telemetry.full_document_cost_usd || 0,
+          scalabilitySummary: report.routing_telemetry.scalability_summary,
+          ambiguousFields: report.routing_telemetry.ambiguous_fields || [],
+          fieldResolutions: report.routing_telemetry.field_resolutions || {},
+        }
+      : existing?.routingTelemetry,
+    ocrDistortionAnalysis: report.ocr_distortion_analysis || existing?.ocrDistortionAnalysis,
     auditTrail: existing?.auditTrail || [
       {
         time: 'Just now',

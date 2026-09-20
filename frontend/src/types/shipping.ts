@@ -9,12 +9,41 @@ export interface FieldComparison {
   match: boolean;
   varianceNote?: string;
   status: 'match' | 'mismatch' | 'review';
+  resolutionSource?: 'rule' | 'llm';
+  resolutionReason?: string;
+  distortionNote?: string;
   siEvidence?: EvidenceDetail;
   blEvidence?: EvidenceDetail;
   siAlternateReadings?: ReaderReading[];
   blAlternateReadings?: ReaderReading[];
   siReaderAgreement?: string;
   blReaderAgreement?: string;
+}
+
+export interface RoutingTelemetry {
+  totalFields: number;
+  resolvedByRules: number;
+  sentToLlm: number;
+  ruleLatencyMs: number;
+  llmLatencyMs: number;
+  llmCalls: number;
+  estimatedCostUsd: number;
+  fullDocumentCostUsd: number;
+  scalabilitySummary?: string;
+  ambiguousFields: string[];
+  fieldResolutions: Record<string, { source: 'rule' | 'llm'; reason: string }>;
+}
+
+export interface OcrDistortionAnalysis {
+  field: string;
+  diagnosis: string;
+  is_ocr_distortion: boolean;
+  explanation: string;
+  suggested_operator_action?: string;
+  confidence?: number;
+  provider?: string;
+  latency_ms?: number;
+  estimated_cost_usd?: number;
 }
 
 export interface EvidenceDetail {
@@ -101,6 +130,8 @@ export interface ShippingCase {
   aiAnalysis: AIAnalysis;
   managerReview?: ManagerReview;
   verifier?: VerifierResult;
+  routingTelemetry?: RoutingTelemetry;
+  ocrDistortionAnalysis?: OcrDistortionAnalysis[];
   auditTrail: {
     time: string;
     action: string;
