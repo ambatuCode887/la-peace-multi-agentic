@@ -18,7 +18,10 @@ def _ask_gemini(instruction: str, context: dict[str, Any]) -> str:
     try:
         from google import genai
 
-        client = genai.Client(api_key=api_key)
+        from google.genai import types
+
+        # Without a timeout a slow Gemini reply can hang the request for minutes.
+        client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=20_000))
         preferred = env("GOOGLE_MODEL", "gemini-3.1-flash-lite")
         candidates = [preferred, "gemini-3.1-flash-lite", "gemini-3-flash-preview"]
         seen = set()

@@ -60,7 +60,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         return {"ok": True, "cases": items}
 
     @app.get("/cases/{email_id}")
-    async def case_detail(email_id: str) -> dict[str, Any]:
+    def case_detail(email_id: str) -> dict[str, Any]:
         report_path = root / _safe_id(email_id) / "report.json"
         if not report_path.is_file():
             raise HTTPException(status_code=404, detail="Case report not found")
@@ -72,6 +72,10 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                 report["body"] = record["body"]
                 report.setdefault("sender", record.get("from", ""))
                 report.setdefault("subject", record.get("subject", ""))
+        if report.get("status") == "MISMATCH" and "verifier" not in report:
+            # Bulk processing skips the slow AI verifier; run it once, the first time a mismatch is opened.
+            _add_verifier_result(report)
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return {"ok": True, "report": report}
 
     @app.delete("/cases/{email_id}")
@@ -150,7 +154,8 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         }
 
     @app.post("/inbox/process")
-    async def process_inbox(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    def process_inbox(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        # A plain `def` runs in a worker thread, so the dashboard stays responsive meanwhile.
         options = payload or {}
         data_root = options.get("data_root") or env("SHIPPING_DATA_ROOT", "http://localhost:8080")
         if not isinstance(data_root, str) or not data_root.strip():
@@ -479,7 +484,8 @@ def _process_inbox_case(
 
     report = inspect_shipping_email(email.email_id, str(case_root))
     report["source"] = "inbox"
-    _add_verifier_result(report)
+    # The AI verifier is not run here: it calls Gemini once per mismatch and made bulk
+    # processing take minutes. It runs the first time a mismatch is opened (see case_detail).
     if include_ai:
         try:
             report["ai_analysis"] = analyze_shipping_case(report)

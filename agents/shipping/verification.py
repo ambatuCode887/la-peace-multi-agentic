@@ -264,6 +264,8 @@ def write_submission(adapter: DatasetAdapter, output_path: str | Path) -> dict[s
 
 
 def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, Any]:
+    if is_document_chase(email):
+        return awaiting_documents_result()
     if len(email.attachments) < 2:
         return _review_result(
             email,
@@ -348,6 +350,55 @@ def _document_evidence(
         }
         for index, document in enumerate(documents)
     ]
+
+
+AWAITING_DOCUMENTS_MESSAGE = (
+    "The sender is asking for the draft BL to be sent, so there is nothing to compare yet."
+)
+_QUOTED_THREAD = re.compile(r"(?i)^(?:from:|_{5,}|-{3,}\s*original|on .{5,80} wrote:)")
+_SECURITY_BANNER = re.compile(r"(?i)^warning:.*(?:originated outside|external)")
+_ASKS_TO_SEND_BL = re.compile(
+    r"(?i)\b(?:send|forward|share)\b[^.\n]{0,40}?\b(?:draft\s+)?(?:bl|b/l|bill\s+of\s+lading)\b"
+)
+# Any hint that documents were meant to be included means it is not a plain chase.
+_CLAIMS_DOCUMENTS = re.compile(r"(?i)\b(?:compare|attached|attachments?|enclosed|dropped|missing)\b")
+
+
+def _sender_text(body: str) -> str:
+    """The sender's own new message: no security banner and no quoted earlier thread."""
+    kept: list[str] = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if _QUOTED_THREAD.match(stripped):
+            break
+        if _SECURITY_BANNER.match(stripped):
+            continue
+        kept.append(stripped)
+    return "\n".join(kept)
+
+
+def is_document_chase(email: DatasetEmail | Mapping[str, Any]) -> bool:
+    """True when a document-check email only asks for the draft BL to be sent.
+
+    Such an email has nothing to compare yet and needs no human, so it is not sent to review.
+    Anything not clearly a chase (two files attached, or wording that mentions comparing or
+    attached, dropped or missing documents) returns False and is handled as before.
+    """
+    if len(_email_attachments(email)) >= 2:
+        return False
+    text = _sender_text(_email_value(email, "body"))
+    return bool(_ASKS_TO_SEND_BL.search(text)) and not _CLAIMS_DOCUMENTS.search(text)
+
+
+def awaiting_documents_result() -> dict[str, Any]:
+    return {
+        "status": "OK",
+        "review_reason": None,
+        "has_defect": False,
+        "defect_fields": [],
+        "awaiting_documents": True,
+        "message": AWAITING_DOCUMENTS_MESSAGE,
+    }
 
 
 def _email_value(email: DatasetEmail | Mapping[str, Any], name: str) -> str:

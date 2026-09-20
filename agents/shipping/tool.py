@@ -5,7 +5,16 @@ from typing import Any
 
 from .attachments import AttachmentReadError, read_attachment_content
 from .dataset import DatasetAdapter
-from .verification import COMPARE_FIELDS, classify_email, classify_email_details, compare_shipments, extract_shipment_fields, write_submission
+from .verification import (
+    COMPARE_FIELDS,
+    awaiting_documents_result,
+    classify_email,
+    classify_email_details,
+    compare_shipments,
+    extract_shipment_fields,
+    is_document_chase,
+    write_submission,
+)
 
 
 def run_shipping_verification(
@@ -71,6 +80,9 @@ def inspect_shipping_email(
             "defect_fields": [],
             "message": "This email is not a document-comparison request.",
         })
+        return result
+    if is_document_chase(email):
+        result.update(awaiting_documents_result())
         return result
     if len(email.attachments) < 2:
         result.update({"status": "NEEDS_REVIEW", "review_reason": "missing_attachment"})

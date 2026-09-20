@@ -307,3 +307,45 @@ def test_delete_copes_with_read_only_files_and_repeat_requests(tmp_path, monkeyp
     assert not (tmp_path / "locked_case").exists()
     # A repeated request (double click) finds nothing and reports it cleanly.
     assert client.delete("/cases/locked_case").status_code == 404
+
+
+def test_bulk_processing_skips_the_slow_ai_verifier_and_runs_it_once_on_open(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    calls: list[str] = []
+
+    def fake_verifier(report):
+        calls.append(report["email_id"])
+        return {"available": True, "rulings": []}
+
+    monkeypatch.setattr("agents.shipping.api.verify_shipping_discrepancies", fake_verifier)
+
+    data = tmp_path / "data"
+    (data / "inbox").mkdir(parents=True)
+    (data / "attachments").mkdir()
+    si = (
+        b"BILL OF LADING INSTRUCTION\nShipper: ACME LTD\nConsignee: BETA CO\nNotify Party: BETA CO\n"
+        b"Port of Loading: SHANGHAI, CHINA\nPOD: ROTTERDAM, NETHERLANDS\n"
+        b"Total Containers: 2 x 40'HC\nGross Wt (kgs): 40,000 KG\n"
+    )
+    (data / "attachments" / "email_100_SI.txt").write_bytes(si)
+    (data / "attachments" / "email_100_BL.txt").write_bytes(
+        si.replace(b"BILL OF LADING INSTRUCTION", b"BILL OF LADING (DRAFT)").replace(b"40,000", b"41,000")
+    )
+    (data / "inbox" / "email_100.json").write_text(json.dumps({
+        "email_id": "email_100", "from": "docs@example.com", "subject": "TO CONFIRM DOCS",
+        "body": "Please compare the SI and draft BL.",
+        "attachments": ["attachments/email_100_SI.txt", "attachments/email_100_BL.txt"],
+    }), encoding="utf-8")
+
+    client = TestClient(create_app(tmp_path / "cases"))
+    processed = client.post("/inbox/process", json={"data_root": str(data)}).json()
+    assert processed["processed"] == 1 and processed["failed"] == 0
+    assert calls == []  # bulk processing never waits on the AI
+
+    first = client.get("/cases/email_100").json()["report"]
+    assert first["status"] == "MISMATCH"
+    assert first["verifier"] == {"available": True, "rulings": []}
+    assert calls == ["email_100"]
+
+    client.get("/cases/email_100")
+    assert calls == ["email_100"]  # already saved, not asked again
