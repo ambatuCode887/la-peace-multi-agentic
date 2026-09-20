@@ -1,36 +1,85 @@
-import { useState, useEffect } from 'react';
-import { ALL_CASES } from './data/allCases';
-import type { ShippingCase, VerificationStatus, EmailCategory } from './types/shipping';
-import { Header } from './components/layout/Header';
-import { Sidebar } from './components/layout/Sidebar';
-import { DiscrepancyBanner } from './components/verification/DiscrepancyBanner';
-import { BlueprintComparator } from './components/verification/BlueprintComparator';
-import { CopilotDrawer } from './components/copilot/CopilotDrawer';
-import { api, mapReportToShippingCase } from './services/api';
+import { useState, useEffect } from "react";
+import type {
+  ShippingCase,
+  VerificationStatus,
+  EmailCategory,
+} from "./types/shipping";
+import { Header } from "./components/layout/Header";
+import { Sidebar } from "./components/layout/Sidebar";
+import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
+import { BlueprintComparator } from "./components/verification/BlueprintComparator";
+import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
+import { OperationsPanel } from "./components/operations/OperationsPanel";
+import { ReviewPanel } from "./components/review/ReviewPanel";
+import {
+  api,
+  mapReportToShippingCase,
+  mapSummaryToShippingCase,
+} from "./services/api";
+import type { BackendReport } from "./services/api";
 
 export function App() {
-  const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('email_001');
-  const [categoryFilter, setCategoryFilter] = useState<EmailCategory | 'ALL'>('ALL');
-  const [statusFilter, setStatusFilter] = useState<VerificationStatus | 'ALL'>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [cases, setCases] = useState<ShippingCase[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<EmailCategory | "ALL">(
+    "ALL",
+  );
+  const [statusFilter, setStatusFilter] = useState<VerificationStatus | "ALL">(
+    "ALL",
+  );
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [drawerOpen, setDrawerOpen] = useState<boolean>(true);
-  const [activeDrawerTab, setActiveDrawerTab] = useState<'summary' | 'email' | 'chat'>('summary');
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [activeDrawerTab, setActiveDrawerTab] = useState<
+    "summary" | "email" | "chat"
+  >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
+  const [queueLoading, setQueueLoading] = useState<boolean>(true);
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
 
-  // Initial backend health check
+  const refreshCases = async () => {
+    setQueueLoading(true);
+    setQueueError(null);
+    try {
+      const summaries = await api.getCases();
+      setCases((previous) =>
+        summaries.map((summary) =>
+          mapSummaryToShippingCase(
+            summary,
+            previous.find((item) => item.id === summary.email_id),
+          ),
+        ),
+      );
+      setSelectedCaseId((current) =>
+        summaries.some((summary) => summary.email_id === current)
+          ? current
+          : summaries[0]?.email_id || "",
+      );
+    } catch (error) {
+      setQueueError(
+        error instanceof Error
+          ? error.message
+          : "Could not load backend cases.",
+      );
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  // Initial backend health check and live queue hydration.
   useEffect(() => {
     api.checkBackend().then((connected) => {
       setBackendConnected(connected);
+      if (connected) void refreshCases();
+      else setQueueLoading(false);
     });
   }, []);
 
@@ -52,19 +101,23 @@ export function App() {
                 return { ...c, managerReview };
               }
               return c;
-            })
+            }),
           );
         }
       });
     }
   }, [selectedCaseId, backendConnected]);
 
-  const isStatusApplicable = categoryFilter === 'ALL' || categoryFilter === 'BL_COMPARISON';
+  const isStatusApplicable =
+    categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
 
   const filteredCases = cases.filter((c) => {
-    const matchesCategory = categoryFilter === 'ALL' || c.category === categoryFilter;
+    const matchesCategory =
+      categoryFilter === "ALL" || c.category === categoryFilter;
     const matchesStatus =
-      !isStatusApplicable || statusFilter === 'ALL' || c.status === statusFilter;
+      !isStatusApplicable ||
+      statusFilter === "ALL" ||
+      c.status === statusFilter;
     const q = searchQuery.toLowerCase().trim();
     if (!q) return matchesCategory && matchesStatus;
     const matchesSearch =
@@ -77,24 +130,56 @@ export function App() {
   });
 
   const currentCase =
-    cases.find((c) => c.id === selectedCaseId) ||
-    filteredCases[0] ||
-    cases[0];
+    cases.find((c) => c.id === selectedCaseId) || filteredCases[0] || cases[0];
 
-  const handleCategoryFilterChange = (cat: EmailCategory | 'ALL') => {
+  const handleReport = (
+    report: Parameters<typeof mapReportToShippingCase>[0],
+  ) => {
+    setCases((previous) => {
+      const existing = previous.find((item) => item.id === report.email_id);
+      const mapped = mapReportToShippingCase(report, existing);
+      return existing
+        ? previous.map((item) => (item.id === mapped.id ? mapped : item))
+        : [mapped, ...previous];
+    });
+    setSelectedCaseId(report.email_id);
+  };
+
+  const handleReviewSaved = (report: BackendReport) => {
+    handleReport(report);
+  };
+
+  const handleProcessInbox = async () => {
+    await api.processInbox();
+    await refreshCases();
+  };
+
+  const handleRetry = async (emailId: string) => {
+    const report = await api.retryCase(emailId);
+    handleReport(report);
+    await refreshCases();
+  };
+
+  const handleDelete = async (emailId: string) => {
+    await api.deleteCase(emailId);
+    await refreshCases();
+  };
+
+  const handleCategoryFilterChange = (cat: EmailCategory | "ALL") => {
     setCategoryFilter(cat);
-    setStatusFilter('ALL');
-    const matches = cases.filter((c) => cat === 'ALL' || c.category === cat);
+    setStatusFilter("ALL");
+    const matches = cases.filter((c) => cat === "ALL" || c.category === cat);
     if (matches.length > 0 && !matches.some((c) => c.id === selectedCaseId)) {
       setSelectedCaseId(matches[0].id);
     }
   };
 
-  const handleStatusFilterChange = (stat: VerificationStatus | 'ALL') => {
+  const handleStatusFilterChange = (stat: VerificationStatus | "ALL") => {
     setStatusFilter(stat);
     const matches = cases.filter((c) => {
-      const matchCat = categoryFilter === 'ALL' || c.category === categoryFilter;
-      const matchStat = stat === 'ALL' || c.status === stat;
+      const matchCat =
+        categoryFilter === "ALL" || c.category === categoryFilter;
+      const matchStat = stat === "ALL" || c.status === stat;
       return matchCat && matchStat;
     });
     if (matches.length > 0 && !matches.some((c) => c.id === selectedCaseId)) {
@@ -107,14 +192,14 @@ export function App() {
       try {
         await api.submitReviewCorrection(currentCase.id, {
           category: currentCase.category,
-          status: 'OK',
+          status: "OK",
           has_defect: false,
           defect_fields: [],
-          decision: 'false_alarm',
-          note: 'Approved by human operator after review. Clean document release.',
+          decision: "false_alarm",
+          note: "Approved by human operator after review. Clean document release.",
         });
       } catch (err) {
-        console.warn('Backend approval submission error:', err);
+        console.warn("Backend approval submission error:", err);
       }
     }
     setCases((prev) =>
@@ -122,30 +207,33 @@ export function App() {
         c.id === currentCase.id
           ? {
               ...c,
-              status: 'PASS',
-              statusNote: 'Approved by human operator after review. Clean document submitted.',
+              status: "PASS",
+              statusNote:
+                "Approved by human operator after review. Clean document submitted.",
             }
-          : c
-      )
+          : c,
+      ),
     );
-    alert(`Case #${currentCase.id} has been Approved and marked as CLEAN in the verification engine.`);
+    alert(
+      `Case #${currentCase.id} has been Approved and marked as CLEAN in the verification engine.`,
+    );
   };
 
   const handleManualOverride = async () => {
-    const reason = prompt('Enter justification for manual pass override:');
+    const reason = prompt("Enter justification for manual pass override:");
     if (reason) {
       if (backendConnected) {
         try {
           await api.submitReviewCorrection(currentCase.id, {
             category: currentCase.category,
-            status: 'OK',
+            status: "OK",
             has_defect: false,
             defect_fields: [],
-            decision: 'false_alarm',
+            decision: "false_alarm",
             note: `Manual override: ${reason}`,
           });
         } catch (err) {
-          console.warn('Backend manual override error:', err);
+          console.warn("Backend manual override error:", err);
         }
       }
       setCases((prev) =>
@@ -153,18 +241,18 @@ export function App() {
           c.id === currentCase.id
             ? {
                 ...c,
-                status: 'PASS',
+                status: "PASS",
                 statusNote: `Manual override by operator: ${reason}`,
               }
-            : c
-        )
+            : c,
+        ),
       );
     }
   };
 
   const handleOpenClarification = () => {
     setDrawerOpen(true);
-    setActiveDrawerTab('email');
+    setActiveDrawerTab("email");
   };
 
   return (
@@ -184,7 +272,7 @@ export function App() {
         <Sidebar
           allCases={cases}
           cases={filteredCases}
-          selectedCaseId={currentCase.id}
+          selectedCaseId={currentCase?.id || ""}
           onSelectCase={(id) => setSelectedCaseId(id)}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={handleCategoryFilterChange}
@@ -195,30 +283,67 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
-            {/* Conditional Discrepancy & Status Alert Banner */}
-            <DiscrepancyBanner
+            <OperationsPanel
+              backendConnected={backendConnected}
               currentCase={currentCase}
-              onOpenClarification={handleOpenClarification}
+              onVerified={handleReport}
+              onProcessInbox={handleProcessInbox}
+              onRefresh={refreshCases}
+              onRetry={handleRetry}
+              onDelete={handleDelete}
             />
+            {/* Conditional Discrepancy & Status Alert Banner */}
+            {currentCase && (
+              <DiscrepancyBanner
+                currentCase={currentCase}
+                onOpenClarification={handleOpenClarification}
+              />
+            )}
 
             {/* Side-by-Side Blueprint Diff Comparator */}
-            <BlueprintComparator
-              currentCase={currentCase}
-              onApprove={handleApproveCase}
-              onDraftClarification={handleOpenClarification}
-              onManualOverride={handleManualOverride}
-            />
+            {queueLoading && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+                Loading live backend queue...
+              </div>
+            )}
+            {queueError && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                {queueError}
+              </div>
+            )}
+            {!queueLoading && !currentCase && !queueError && (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+                No backend cases are available yet. Upload a case or process the
+                inbox.
+              </div>
+            )}
+            {currentCase && (
+              <BlueprintComparator
+                currentCase={currentCase}
+                onApprove={handleApproveCase}
+                onDraftClarification={handleOpenClarification}
+                onManualOverride={handleManualOverride}
+              />
+            )}
+            {currentCase && (
+              <ReviewPanel
+                currentCase={currentCase}
+                onSaved={handleReviewSaved}
+              />
+            )}
           </div>
         </main>
 
         {/* Zone 3: AI Assistant Intelligence Drawer (Right) */}
-        <CopilotDrawer
-          currentCase={currentCase}
-          isOpen={drawerOpen}
-          onToggle={() => setDrawerOpen((prev) => !prev)}
-          activeTab={activeDrawerTab}
-          onTabChange={setActiveDrawerTab}
-        />
+        {currentCase && (
+          <CopilotDrawer
+            currentCase={currentCase}
+            isOpen={drawerOpen}
+            onToggle={() => setDrawerOpen((prev) => !prev)}
+            activeTab={activeDrawerTab}
+            onTabChange={setActiveDrawerTab}
+          />
+        )}
       </div>
     </div>
   );

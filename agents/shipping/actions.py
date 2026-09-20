@@ -52,3 +52,28 @@ def preview_targeted_reread(report: dict[str, Any], field: str) -> dict[str, Any
         "field": field,
         "request": f"Re-read the {field.replace('_', ' ')} field in the SI and BL and compare the source evidence.",
     }
+
+
+def preview_ai_field_correction(report: dict[str, Any], request: str = "") -> dict[str, Any]:
+    """Prepare an editable correction proposal from the deterministic SI source values."""
+    documents = report.get("documents", {})
+    si_fields = documents.get("si", {}).get("fields", {})
+    bl_fields = documents.get("bl", {}).get("fields", {})
+    changes = []
+    proposed_bl = dict(bl_fields)
+    for field in report.get("defect_fields", []):
+        si_value = si_fields.get(field)
+        bl_value = bl_fields.get(field)
+        if si_value is not None and si_value != bl_value:
+            proposed_bl[field] = si_value
+            changes.append({"document": "bl", "field": field, "before": bl_value, "after": si_value})
+    return {
+        "action": "ai_field_correction",
+        "requires_confirmation": True,
+        "persisted": False,
+        "request": request,
+        "changes": changes,
+        "si_fields": dict(si_fields),
+        "bl_fields": proposed_bl,
+        "explanation": "Proposal uses the Shipping Instruction as the deterministic source of truth. Review every change before applying it.",
+    }

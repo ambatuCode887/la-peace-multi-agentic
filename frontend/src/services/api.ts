@@ -6,6 +6,8 @@ import type {
   ManagerReview,
   VerifierResult,
   ActionPreview,
+  EvidenceDetail,
+  ReaderReading,
 } from '../types/shipping';
 
 const API_BASE = '/api';
@@ -16,6 +18,15 @@ export interface BackendCaseSummary {
   status: string;
   review_reason: string | null;
   updated_at: string;
+  deletable?: boolean;
+}
+
+export interface VerificationUpload {
+  emailId: string;
+  sender: string;
+  subject: string;
+  body: string;
+  attachments: File[];
 }
 
 export interface BackendReport {
@@ -30,14 +41,20 @@ export interface BackendReport {
       fields: Record<string, any>;
       missing_fields?: string[];
       evidence?: Record<string, string>;
+      evidence_details?: Record<string, EvidenceDetail>;
       confidence?: Record<string, string>;
+      reader_fields?: Record<string, Record<string, any>>;
+      reader_agreement?: Record<string, string>;
     };
     bl?: {
       attachment: string;
       fields: Record<string, any>;
       missing_fields?: string[];
       evidence?: Record<string, string>;
+      evidence_details?: Record<string, EvidenceDetail>;
       confidence?: Record<string, string>;
+      reader_fields?: Record<string, Record<string, any>>;
+      reader_agreement?: Record<string, string>;
     };
   };
   status: 'OK' | 'MISMATCH' | 'NEEDS_REVIEW' | 'UNPROCESSED';
@@ -79,6 +96,50 @@ export const api = {
     return data.report;
   },
 
+  async verifyUpload(upload: VerificationUpload): Promise<BackendReport> {
+    const form = new FormData();
+    form.append('email_id', upload.emailId);
+    form.append('sender', upload.sender);
+    form.append('subject', upload.subject);
+    form.append('body', upload.body);
+    upload.attachments.forEach((attachment) => form.append('attachments', attachment));
+    const res = await fetch(`${API_BASE}/verify`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Verification failed');
+    }
+    const data = await res.json();
+    return data.report;
+  },
+
+  async processInbox(dataRoot?: string, includeAi = false): Promise<{ processed: number; failed: number }> {
+    const res = await fetch(`${API_BASE}/inbox/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...(dataRoot ? { data_root: dataRoot } : {}), include_ai: includeAi }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Inbox processing failed');
+    }
+    return res.json();
+  },
+
+  async retryCase(emailId: string): Promise<BackendReport> {
+    const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}/retry`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Retry failed: ${res.statusText}`);
+    const data = await res.json();
+    return data.report;
+  },
+
+  async deleteCase(emailId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Delete failed');
+    }
+  },
+
   async getManagerReview(emailId: string): Promise<ManagerReview | null> {
     try {
       const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}/manager-review`, {
@@ -96,7 +157,7 @@ export const api = {
 
   async previewAction(
     emailId: string,
-    action: 'draft_correction_email' | 'false_alarm' | 'targeted_reread',
+    action: 'draft_correction_email' | 'false_alarm' | 'targeted_reread' | 'ai_field_correction',
     extra: Record<string, any> = {}
   ): Promise<ActionPreview> {
     const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}/action-preview`, {
@@ -197,6 +258,8 @@ export function mapReportToShippingCase(
 
     if (hasDocFields) {
       fields = Object.keys(FIELD_LABELS).map((key) => {
+        const siDocument = report.documents?.si;
+        const blDocument = report.documents?.bl;
         const siVal =
           siFields[key] !== undefined
             ? String(siFields[key])
@@ -206,6 +269,11 @@ export function mapReportToShippingCase(
             ? String(blFields[key])
             : existing?.fields?.find((f) => f.key === key)?.blValue || 'N/A';
         const isDefect = defectSet.has(key);
+        const alternateReadings = (
+          document: typeof siDocument
+        ): ReaderReading[] => Object.entries(document?.reader_fields || {})
+          .filter(([, readerFields]) => readerFields[key] !== undefined)
+          .map(([reader, readerFields]) => ({ reader, value: readerFields[key] }));
 
         let varianceNote: string | undefined;
         if (isDefect) {
@@ -224,6 +292,12 @@ export function mapReportToShippingCase(
           match: !isDefect,
           varianceNote,
           status: isDefect ? 'mismatch' : 'match',
+          siEvidence: siDocument?.evidence_details?.[key],
+          blEvidence: blDocument?.evidence_details?.[key],
+          siAlternateReadings: alternateReadings(siDocument),
+          blAlternateReadings: alternateReadings(blDocument),
+          siReaderAgreement: siDocument?.reader_agreement?.[key],
+          blReaderAgreement: blDocument?.reader_agreement?.[key],
         };
       });
     } else if (existing?.fields && existing.fields.length > 0) {
@@ -237,9 +311,9 @@ export function mapReportToShippingCase(
     status = existing?.status || 'INQUIRY';
   } else if (report.status === 'MISMATCH') {
     status = 'MISMATCH';
-  } else if (report.status === 'NEEDS_REVIEW' && existing?.status === 'NEEDS_REVIEW') {
+  } else if (report.status === 'NEEDS_REVIEW') {
     status = 'NEEDS_REVIEW';
-  } else if (report.status === 'OK' && existing?.status === 'PASS') {
+  } else if (report.status === 'OK') {
     status = 'PASS';
   }
 
@@ -314,5 +388,44 @@ export function mapReportToShippingCase(
         actor: 'Multi-Agent Verification Engine',
       },
     ],
+  };
+}
+
+export function mapSummaryToShippingCase(
+  summary: BackendCaseSummary,
+  existing?: ShippingCase,
+): ShippingCase {
+  const category = (summary.category as EmailCategory) || existing?.category || 'GENERAL';
+  const status: VerificationStatus =
+    summary.status === 'OK'
+      ? 'PASS'
+      : summary.status === 'MISMATCH'
+        ? 'MISMATCH'
+        : summary.status === 'NEEDS_REVIEW'
+          ? 'NEEDS_REVIEW'
+          : existing?.status || 'INQUIRY';
+
+  return {
+    id: summary.email_id,
+    subject: existing?.subject || summary.email_id,
+    sender: existing?.sender || 'Unknown sender',
+    timestamp: summary.updated_at || existing?.timestamp || 'Unknown',
+    category,
+    status,
+    statusNote: summary.review_reason || existing?.statusNote || 'Backend case awaiting detail review.',
+    vessel: existing?.vessel || 'N/A',
+    voyageNumber: existing?.voyageNumber || 'N/A',
+    pol: existing?.pol || 'N/A',
+    pod: existing?.pod || 'N/A',
+    fields: existing?.fields || [],
+    aiAnalysis: existing?.aiAnalysis || {
+      confidence: 0,
+      summary: 'AI review summary is available after opening the case detail.',
+      recommendation: 'Open the case to inspect the deterministic result.',
+      model: 'Unavailable',
+    },
+    managerReview: existing?.managerReview,
+    verifier: existing?.verifier,
+    auditTrail: existing?.auditTrail || [],
   };
 }
