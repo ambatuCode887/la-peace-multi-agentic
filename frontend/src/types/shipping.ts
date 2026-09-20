@@ -9,6 +9,25 @@ export interface FieldComparison {
   match: boolean;
   varianceNote?: string;
   status: 'match' | 'mismatch' | 'review';
+  siEvidence?: EvidenceDetail;
+  blEvidence?: EvidenceDetail;
+  siAlternateReadings?: ReaderReading[];
+  blAlternateReadings?: ReaderReading[];
+  siReaderAgreement?: string;
+  blReaderAgreement?: string;
+}
+
+export interface EvidenceDetail {
+  attachment?: string;
+  page?: number | null;
+  source_text?: string | null;
+  coordinates?: Record<string, number> | null;
+  method?: string;
+}
+
+export interface ReaderReading {
+  reader: string;
+  value: string | number | null;
 }
 
 export interface AIAnalysis {
@@ -57,6 +76,10 @@ export interface ActionPreview {
   note?: string;
   field?: string;
   request?: string;
+  changes?: Array<{ document: string; field: string; before: any; after: any }>;
+  si_fields?: Record<string, any>;
+  bl_fields?: Record<string, any>;
+  explanation?: string;
 }
 
 export interface ShippingCase {
