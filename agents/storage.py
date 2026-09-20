@@ -42,7 +42,7 @@ class FilesystemCaseStore(CaseStore):
                 "category": report.get("category", "UNKNOWN"),
                 "status": report.get("status", "UNPROCESSED"),
                 "review_reason": report.get("review_reason"),
-                "deletable": False,
+                "deletable": _is_user_upload(report_path.parent, report_path.parent.name),
                 "updated_at": datetime.fromtimestamp(
                     report_path.stat().st_mtime, tz=timezone.utc
                 ).isoformat(),
@@ -176,7 +176,35 @@ def _ensure_report_metadata(report: dict[str, Any]) -> None:
 
 
 def _remove_case_files(case_root: Path) -> None:
-    shutil.rmtree(case_root)
+    """Delete a case folder, coping with read-only files and briefly locked files on Windows."""
+    import os
+    import stat
+    import sys
+    import time
+
+    def clear_read_only_and_retry(function: Any, path: str, _error: Any) -> None:
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    handler = {"onexc" if sys.version_info >= (3, 12) else "onerror": clear_read_only_and_retry}
+    for attempt in range(3):
+        try:
+            shutil.rmtree(case_root, **handler)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.3)
+
+
+def _is_user_upload(case_root: Path, email_id: str) -> bool:
+    import re
+
+    record = _read_json(case_root / "inbox" / f"{email_id}.json", {})
+    if record.get("source") is not None:
+        return record["source"] == "upload"
+    report = _read_json(case_root / "report.json", {})
+    return report.get("source") != "inbox" and not re.fullmatch(r"email_\d+", email_id)
 
 
 def _safe_case_id(value: str) -> str:
