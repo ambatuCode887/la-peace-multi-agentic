@@ -91,6 +91,8 @@ export interface ShippingCase {
   category: EmailCategory;
   status: VerificationStatus;
   statusNote?: string;
+  promptInjectionDetected?: boolean;
+  promptInjectionMatches?: Array<{ source: string; text: string }>;
   vessel: string;
   voyageNumber: string;
   pol: string;

@@ -28,6 +28,13 @@ _BLOCK_STOP = re.compile(
     r"|gross|net[ \t]+weight|measurement|carrier|date)"
 )
 REVIEW_REASONS = ("wrong_doc_type", "missing_attachment", "unreadable", "missing_value")
+_INSTRUCTION_LIKE_PATTERNS = (
+    re.compile(r"(?i)\bignore\s+(?:all\s+)?previous\s+instructions?\b"),
+    re.compile(r"(?i)\bdisregard\s+(?:all\s+)?(?:prior|previous)\s+instructions?\b"),
+    re.compile(r"(?i)\b(?:system|developer)\s+prompt\b"),
+    re.compile(r"(?i)\b(?:reveal|show|print| disclose)\b[^\n]{0,40}\b(?:prompt|instructions?|secrets?|api\s*key)\b"),
+    re.compile(r"(?i)\b(?:report|mark|set)\b[^\n]{0,30}\b(?:status|result)\b[^\n]{0,20}\b(?:ok|mismatch|needs?\s+review)\b"),
+)
 
 
 @dataclass(frozen=True)
@@ -256,6 +263,7 @@ def build_submission(adapter: DatasetAdapter) -> dict[str, dict[str, Any]]:
             "defect_fields": [],
             "decided_by": "rule",
         }
+        result.update(_prompt_injection_metadata({"email": _email_value(email, "body")}))
         if category == "BL_COMPARISON":
             result.update(_compare_email(adapter, email))
         submission[email.email_id] = result
@@ -271,42 +279,51 @@ def write_submission(adapter: DatasetAdapter, output_path: str | Path) -> dict[s
 
 
 def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, Any]:
+    security_texts: dict[str, str] = {"email": _email_value(email, "body")}
+    security = _prompt_injection_metadata(security_texts)
     if len(email.attachments) < 2:
-        return _review_result(
+        result = _review_result(
             email,
             "missing_attachment",
             attachment_count=len(email.attachments),
         )
+        result.update(security)
+        return result
     documents = []
     failed_reference: str | None = None
     try:
         for reference in email.attachments:
             failed_reference = reference
-            documents.append(
-                extract_shipment_fields(
-                    (content := read_attachment_content(adapter, reference)).text,
-                    filename=reference,
-                    source_spans=content.spans,
-                    alternate_readings=content.reader_texts,
-                )
-            )
+            content = read_attachment_content(adapter, reference)
+            security_texts[reference] = content.text
+            documents.append(extract_shipment_fields(
+                content.text,
+                filename=reference,
+                source_spans=content.spans,
+                alternate_readings=content.reader_texts,
+            ))
     except AttachmentReadError as error:
-        return _review_result(
+        result = _review_result(
             email,
             "unreadable",
             failed_attachment=failed_reference,
             error=str(error),
         )
+        result.update(security)
+        return result
+    security = _prompt_injection_metadata(security_texts)
     si = next((document for document in documents if document.document_type == "SI"), None)
     bl = next((document for document in documents if document.document_type == "BL"), None)
     if si is None or bl is None:
-        return _review_result(
+        result = _review_result(
             email,
             "wrong_doc_type",
             documents=_document_evidence(email, documents),
         )
+        result.update(security)
+        return result
     if si.missing_fields or bl.missing_fields:
-        return _review_result(
+        result = _review_result(
             email,
             "missing_value",
             documents=_document_evidence(email, documents),
@@ -315,6 +332,8 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
                 "bl": list(bl.missing_fields),
             },
         )
+        result.update(security)
+        return result
     comparison = compare_shipments(si, bl)
     comparison["has_defect"] = comparison["status"] == "MISMATCH"
     comparison["documents"] = _document_evidence(email, documents)
@@ -323,7 +342,21 @@ def _compare_email(adapter: DatasetAdapter, email: DatasetEmail) -> dict[str, An
         for reference, document in zip(email.attachments, documents)
         if document.document_type not in {"SI", "BL"}
     ]
+    comparison.update(security)
     return comparison
+
+
+def _prompt_injection_metadata(texts: Mapping[str, str]) -> dict[str, Any]:
+    matches: list[dict[str, str]] = []
+    for source, text in texts.items():
+        for pattern in _INSTRUCTION_LIKE_PATTERNS:
+            match = pattern.search(text or "")
+            if match:
+                matches.append({"source": source, "text": match.group(0)[:120]})
+    return {
+        "prompt_injection_detected": bool(matches),
+        "prompt_injection_matches": matches,
+    }
 
 
 def _review_result(email: DatasetEmail, reason: str, **details: Any) -> dict[str, Any]:
