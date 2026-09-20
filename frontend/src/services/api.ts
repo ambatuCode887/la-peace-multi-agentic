@@ -75,6 +75,44 @@ export interface BackendReport {
   manager_review?: ManagerReview;
 }
 
+export interface EvaluationSnapshot {
+  label: string;
+  created_at: string;
+  evaluated: number;
+  disagreement_count: number;
+  false_positives: number;
+  false_negatives: number;
+  precision: number;
+  recall: number;
+}
+
+export interface EvaluationResult {
+  evaluated: number;
+  available_reports: number;
+  matched: number;
+  disagreement_count: number;
+  status_counts: {
+    reference: Record<string, number>;
+    actual: Record<string, number>;
+  };
+  confusion: Record<string, Record<string, number>>;
+  mismatch: {
+    true_positive: number;
+    false_positive: number;
+    false_negative: number;
+    precision: number;
+    recall: number;
+  };
+  disagreements: Array<{
+    email_id: string;
+    expected: { category?: string; status: string; review_reason?: string | null; defect_fields: string[] };
+    actual: { category?: string; status: string; review_reason?: string | null; defect_fields: string[] } | null;
+    reason: string;
+  }>;
+  ground_truth_path: string;
+  snapshots: EvaluationSnapshot[];
+}
+
 export const api = {
   async checkBackend(): Promise<boolean> {
     try {
@@ -156,6 +194,30 @@ export const api = {
       console.warn('Manager review error:', err);
       return null;
     }
+  },
+
+  async getEvaluation(): Promise<EvaluationResult> {
+    const res = await fetch(`${API_BASE}/evaluation`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || 'Evaluation data unavailable');
+    }
+    const data = await res.json();
+    return data.evaluation;
+  },
+
+  async saveEvaluationSnapshot(label: string): Promise<EvaluationSnapshot> {
+    const res = await fetch(`${API_BASE}/evaluation/snapshots`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || 'Could not save evaluation snapshot');
+    }
+    const data = await res.json();
+    return data.snapshot;
   },
 
   async previewAction(

@@ -19,6 +19,13 @@ from .actions import draft_correction_email, preview_ai_field_correction, previe
 from .ui import dashboard_page
 from .ai import AIUnavailable, analyze_shipping_case, chat_about_shipping_case, verify_shipping_discrepancies
 from .dataset import DatasetAdapter, DatasetEmail
+from agents.eval.shipping import (
+    append_snapshot,
+    evaluate_shipping_reports,
+    load_ground_truth,
+    load_reports,
+    read_snapshots,
+)
 from .verification import COMPARE_FIELDS, values_match
 from agents.config import env
 from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
@@ -165,6 +172,32 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                 for category in {report.get("category") for report in reports if report.get("category")}
             },
         }
+
+    @app.get("/evaluation")
+    async def evaluation() -> dict[str, Any]:
+        ground_truth_path = _ground_truth_path()
+        try:
+            ground_truth = load_ground_truth(ground_truth_path)
+        except (FileNotFoundError, ValueError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        result = evaluate_shipping_reports(ground_truth, load_reports(root))
+        result["ground_truth_path"] = str(ground_truth_path)
+        result["snapshots"] = read_snapshots(root.parent / "evaluation-history.json")
+        return {"ok": True, "evaluation": result}
+
+    @app.post("/evaluation/snapshots")
+    async def save_evaluation_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+        label = payload.get("label")
+        if not isinstance(label, str) or not label.strip():
+            raise HTTPException(status_code=422, detail="label is required")
+        ground_truth_path = _ground_truth_path()
+        try:
+            ground_truth = load_ground_truth(ground_truth_path)
+        except (FileNotFoundError, ValueError) as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        result = evaluate_shipping_reports(ground_truth, load_reports(root))
+        snapshot = append_snapshot(root.parent / "evaluation-history.json", label, result)
+        return {"ok": True, "snapshot": snapshot}
 
     @app.post("/inbox/process")
     def process_inbox(payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -320,6 +353,13 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         return {"ok": True, "email_id": email_id, "result": corrected_report, "correction": correction, "clarification_draft": clarification}
 
     return app
+
+
+def _ground_truth_path() -> Path:
+    configured = env("SHIPPING_GROUND_TRUTH_PATH", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path.home() / "Downloads" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json"
 
 
 def _add_verifier_result(report: dict[str, Any]) -> None:

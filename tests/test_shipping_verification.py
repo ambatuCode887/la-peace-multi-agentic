@@ -182,9 +182,14 @@ Giross Weight 128,544 KG
 
     result = compare_shipments(si, bl)
 
-    assert result["status"] == "OK"
+    assert result["status"] == "NEEDS_REVIEW"
+    assert result["review_reason"] == "ambiguous_field"
     assert result["defect_fields"] == []
-    assert result["normalized_equivalences"] == ["shipper"]
+    assert result["uncertain_fields"] == ["shipper"]
+    assert result["normalized_equivalences"] == []
+    assert result["routing_telemetry"]["resolved_by_rules"] == 6
+    assert result["routing_telemetry"]["sent_to_llm"] == 1
+    assert result["routing_telemetry"]["ambiguous_fields"] == ["shipper"]
 
 
 def test_reader_disagreement_requires_human_review() -> None:
@@ -228,8 +233,9 @@ Gross Weight: 128544 KG
     assert si.reader_agreement["shipper"] == "disagree"
     assert si.confidence["port_of_loading"] == "low"
     assert result["status"] == "NEEDS_REVIEW"
-    assert result["review_reason"] == "low_confidence"
+    assert result["review_reason"] == "ambiguous_field"
     assert result["uncertain_fields"] == ["port_of_loading", "shipper"]
+    assert result["routing_telemetry"]["sent_to_llm"] == 2
 
 
 def test_extracts_pipe_separated_workbook_rows() -> None:
@@ -302,6 +308,33 @@ Berat Kasar (KG): 22.000 KG
     assert result["status"] == "MISMATCH"
     assert result["defect_fields"] == ["container_count"]
     assert si.fields["gross_weight_kg"] == bl.fields["gross_weight_kg"] == 22000
+
+
+def test_extracts_multilingual_next_line_labels() -> None:
+    document = extract_shipment_fields(
+        """BILL OF LADING (DRAFT)
+Pengirim
+GREENFIELD TIMBER TRADING PTE LTD
+Penerima
+BUYER COMPANY
+Pihak Untuk Dimaklumkan
+BUYER COMPANY
+Pelabuhan Pemuatan
+PORT KLANG, MALAYSIA
+Pelabuhan Pelepasan
+SHANGHAI, CHINA
+Bilangan Kontena
+3
+Berat Kasar
+22,000 KG
+"""
+    )
+
+    assert document.missing_fields == ()
+    assert document.fields["shipper"] == "GREENFIELD TIMBER TRADING PTE LTD"
+    assert document.fields["port_of_loading"] == "PORT KLANG, MALAYSIA"
+    assert document.fields["container_count"] == 3
+    assert document.fields["gross_weight_kg"] == 22000
 
 
 def test_detects_chinese_document_injection_without_hiding_weight_mismatch() -> None:

@@ -1,5 +1,14 @@
-import { Search, Sparkles, Sun, Moon, ShieldCheck, Database, Inbox } from 'lucide-react';
-import lapeaceIcon from '../../assets/lapeace_icon.png';
+import {
+  Search,
+  Sparkles,
+  Sun,
+  Moon,
+  ShieldCheck,
+  Database,
+  Inbox,
+  BarChart3,
+} from "lucide-react";
+import lapeaceIcon from "../../assets/lapeace_icon.png";
 
 interface HeaderProps {
   darkMode: boolean;
@@ -9,6 +18,8 @@ interface HeaderProps {
   backendConnected?: boolean;
   operationsOpen?: boolean;
   onToggleOperations?: () => void;
+  evaluationOpen?: boolean;
+  onToggleEvaluation?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   backendConnected = false,
   operationsOpen = false,
   onToggleOperations,
+  evaluationOpen = false,
+  onToggleEvaluation,
 }) => {
   return (
     <header className="h-16 border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 transition-colors">
@@ -28,12 +41,13 @@ export const Header: React.FC<HeaderProps> = ({
           src={lapeaceIcon}
           alt="La Peace SDOC"
           className="w-8 h-8 object-contain drop-shadow-sm select-none"
-          style={{ imageRendering: 'pixelated' }}
+          style={{ imageRendering: "pixelated" }}
         />
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-              La Peace <span className="text-[#345ec4] dark:text-[#5a82e2]">SDOC</span>
+              La Peace{" "}
+              <span className="text-[#345ec4] dark:text-[#5a82e2]">SDOC</span>
             </h1>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
               Multi-Agent
@@ -77,7 +91,10 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Live Backend Telemetry */}
         <div className="hidden xl:flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center space-x-1 font-mono" title="Docker challenge inbox on port 8080">
+          <div
+            className="flex items-center space-x-1 font-mono"
+            title="Docker challenge inbox on port 8080"
+          >
             <Database className="w-3.5 h-3.5 text-[#345ec4]" />
             <span>:8080</span>
           </div>
@@ -85,13 +102,17 @@ export const Header: React.FC<HeaderProps> = ({
           <div
             className={`flex items-center space-x-1.5 font-mono px-2 py-0.5 rounded-md ${
               backendConnected
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
-                : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60'
+                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
+                : "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
             }`}
-            title={backendConnected ? 'FastAPI backend live on port 8090' : 'FastAPI backend reconnecting...'}
+            title={
+              backendConnected
+                ? "FastAPI backend live on port 8090"
+                : "FastAPI backend reconnecting..."
+            }
           >
             <span
-              className={`w-2 h-2 rounded-full ${backendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}
+              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-400"}`}
             />
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>:8090</span>
@@ -107,13 +128,31 @@ export const Header: React.FC<HeaderProps> = ({
             aria-pressed={operationsOpen}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
               operationsOpen
-                ? 'bg-[#1a3d8e] border-[#1a3d8e] text-white'
-                : 'border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:text-slate-300 dark:hover:bg-[#0a1e4d]'
+                ? "bg-[#1a3d8e] border-[#1a3d8e] text-white"
+                : "border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:text-slate-300 dark:hover:bg-[#0a1e4d]"
             }`}
             title="Process the inbox, upload a case, retry or delete"
           >
             <Inbox className="w-4 h-4" />
             <span>Operations</span>
+          </button>
+        )}
+
+        {onToggleEvaluation && (
+          <button
+            id="evaluation-toggle"
+            data-testid="evaluation-toggle"
+            onClick={onToggleEvaluation}
+            aria-pressed={evaluationOpen}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
+              evaluationOpen
+                ? "bg-[#1a3d8e] border-[#1a3d8e] text-white"
+                : "border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:text-slate-300 dark:hover:bg-[#0a1e4d]"
+            }`}
+            title="View benchmark precision, recall, and disagreements"
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Evaluation</span>
           </button>
         )}
 
@@ -125,7 +164,11 @@ export const Header: React.FC<HeaderProps> = ({
           className="p-2 rounded-xl border border-slate-200/80 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:hover:bg-[#0a1e4d] text-slate-600 dark:text-slate-300 transition-colors cursor-pointer shadow-2xs"
           title="Toggle Dark/Light Mode"
         >
-          {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-[#345ec4]" />}
+          {darkMode ? (
+            <Sun className="w-4 h-4 text-amber-400" />
+          ) : (
+            <Moon className="w-4 h-4 text-[#345ec4]" />
+          )}
         </button>
       </div>
     </header>
