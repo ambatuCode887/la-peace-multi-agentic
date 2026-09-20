@@ -88,6 +88,11 @@ export interface BackendReport {
     field_resolutions?: Record<string, { source: 'rule' | 'llm'; reason: string }>;
   };
   ocr_distortion_analysis?: OcrDistortionAnalysis[];
+  created_at?: string;
+  updated_at?: string;
+  review_decisions?: Array<Record<string, any>>;
+  correction_history?: Array<Record<string, any>>;
+  audit_events?: Array<Record<string, any>>;
 }
 
 export interface EvaluationSnapshot {
@@ -195,6 +200,7 @@ export const api = {
       throw new Error(err.detail || 'Delete failed');
     }
   },
+
 
   async getManagerReview(emailId: string): Promise<ManagerReview | null> {
     try {
