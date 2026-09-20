@@ -548,12 +548,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={c.id}
                 data-case-id={c.id}
                 onClick={() => onSelectCase(c.id)}
-                className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer ${
+                className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] ${
                   isSelected
                     ? "bg-[#eef3fc] border-l-4 border-[#345ec4] dark:bg-[#091f52]/60 dark:border-[#5a82e2]"
                     : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-transparent"
                 }`}
-              >
+                >
                 {/* Header Line: ID, Category Badge, Timestamp */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 shrink-0">

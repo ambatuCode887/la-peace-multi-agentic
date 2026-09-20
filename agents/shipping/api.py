@@ -35,13 +35,21 @@ from agents.eval.shipping import (
 )
 from .verification import COMPARE_FIELDS, values_match
 from agents.config import env
+from agents.storage import CaseStore, FilesystemCaseStore, get_case_store
 from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
-def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
+def create_app(
+    upload_root: str | Path = ".artifacts/uploads",
+    case_store: CaseStore | None = None,
+) -> FastAPI:
     root = Path(upload_root).expanduser().resolve()
+    store = case_store or get_case_store(
+        root,
+        prefer_mongo=Path(upload_root) == Path(".artifacts/uploads"),
+    )
     app = FastAPI(title="Shipping Document Verification API")
     app.add_middleware(
         CORSMiddleware,
@@ -57,41 +65,19 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
 
     @app.get("/cases")
     async def cases() -> dict[str, Any]:
-        items = []
-        if root.is_dir():
-            for report_path in sorted(root.glob("*/report.json")):
-                report = _read_json(report_path, {})
-                items.append({
-                    "email_id": report.get("email_id", report_path.parent.name),
-                    "category": report.get("category", "UNKNOWN"),
-                    "status": report.get("status", "UNPROCESSED"),
-                    "review_reason": report.get("review_reason"),
-                    "deletable": _is_user_upload(report_path.parent, report_path.parent.name),
-                    "updated_at": datetime.fromtimestamp(
-                        report_path.stat().st_mtime, tz=timezone.utc
-                    ).isoformat(),
-                })
-        return {"ok": True, "cases": items}
+        return {"ok": True, "cases": store.list_cases()}
 
     @app.get("/cases/{email_id}")
     def case_detail(email_id: str) -> dict[str, Any]:
-        report_path = root / _safe_id(email_id) / "report.json"
-        if not report_path.is_file():
+        report = store.get_case(email_id)
+        if report is None:
             raise HTTPException(status_code=404, detail="Case report not found")
-        report = _read_json(report_path, {})
-        if "body" not in report:
-            # Reports saved before the body was stored: read it from the saved email.
-            record = _read_json(report_path.parent / "inbox" / f"{email_id}.json", {})
-            if "body" in record:
-                report["body"] = record["body"]
-                report.setdefault("sender", record.get("from", ""))
-                report.setdefault("subject", record.get("subject", ""))
         if report.get("status") == "MISMATCH" and "verifier" not in report:
             # Bulk processing skips the slow AI verifier; run it once, the first time a mismatch is opened.
             _add_verifier_result(report)
-            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            store.save_report(report)
         if _add_ambiguity_analysis(report):
-            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            store.save_report(report)
         return {"ok": True, "report": report}
 
     @app.get("/cases/{email_id}/attachments/{attachment_path:path}")
@@ -108,11 +94,15 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
     @app.delete("/cases/{email_id}")
     async def delete_case(email_id: str) -> dict[str, Any]:
         case_root = root / _safe_id(email_id)
-        if not case_root.is_dir():
+        if isinstance(store, FilesystemCaseStore) and not case_root.is_dir():
             raise HTTPException(status_code=404, detail="Case not found")
-        if not _is_user_upload(case_root, email_id):
+        if isinstance(store, FilesystemCaseStore) and not _is_user_upload(case_root, email_id):
             raise HTTPException(status_code=403, detail="Only cases created from the upload form can be deleted")
-        _remove_case(case_root)
+        deleted = store.delete_case(email_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Case not found")
+        if case_root.is_dir():
+            _remove_case(case_root)
         return {"ok": True, "email_id": email_id}
 
     @app.post("/cases/{email_id}/manager-review")
@@ -147,10 +137,9 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
 
     @app.post("/cases/{email_id}/action-preview")
     async def action_preview(email_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        report_path = root / _safe_id(email_id) / "report.json"
-        if not report_path.is_file():
+        report = store.get_case(email_id)
+        if report is None:
             raise HTTPException(status_code=404, detail="Uploaded email report not found")
-        report = _read_json(report_path, {})
         action = payload.get("action")
         try:
             if action == "draft_correction_email":
@@ -169,7 +158,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
 
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:
-        reports = [_read_json(path, {}) for path in root.glob("*/report.json")] if root.is_dir() else []
+        reports = store.list_reports()
         return {
             "ok": True,
             "processed": len(reports),
@@ -229,6 +218,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         for email in emails:
             try:
                 report = _process_inbox_case(root, adapter, email, include_ai=include_ai)
+                store.save_report(report)
                 results.append({
                     "email_id": email.email_id,
                     "status": report.get("status", "UNPROCESSED"),
@@ -246,6 +236,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
                     "error": str(error),
                     "source": "inbox",
                 }
+                store.save_report(failure)
                 (case_root / "report.json").write_text(
                     json.dumps(failure, indent=2) + "\n", encoding="utf-8"
                 )
@@ -280,6 +271,7 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
         (dataset_root / "report.json").write_text(
             json.dumps(report, indent=2) + "\n", encoding="utf-8"
         )
+        store.save_report(report)
         return {"ok": True, "report": report}
 
     @app.post("/verify")
@@ -300,13 +292,13 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
             report["ai_analysis"] = {"available": False, "reason": str(error)}
         report_path = dataset_root / "report.json"
         report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        store.save_report(report)
         return {"ok": True, "report": report, "report_path": str(report_path)}
 
     @app.post("/chat/{email_id}")
     async def chat(email_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        dataset_root = root / _safe_id(email_id)
-        report_path = dataset_root / "report.json"
-        if not report_path.is_file():
+        report = store.get_case(email_id)
+        if report is None:
             raise HTTPException(status_code=404, detail="Uploaded email report not found")
         message = payload.get("message")
         if not isinstance(message, str) or not message.strip():
@@ -319,7 +311,6 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
             for turn in history
         ):
             raise HTTPException(status_code=422, detail="history must be a list of role/content messages")
-        report = _read_json(report_path, {})
         try:
             answer = chat_about_shipping_case(report, message, history[-20:])
         except AIUnavailable as error:
@@ -342,8 +333,23 @@ def create_app(upload_root: str | Path = ".artifacts/uploads") -> FastAPI:
             "reviewed_at": datetime.now(timezone.utc).isoformat(),
         }
         corrections[email_id] = correction
+        corrected_report.setdefault("review_decisions", []).append(correction)
+        corrected_report.setdefault("correction_history", []).append({
+            "reviewed_at": correction["reviewed_at"],
+            "decision": correction.get("decision"),
+            "note": correction.get("note"),
+            "status": corrected_report.get("status"),
+            "defect_fields": corrected_report.get("defect_fields", []),
+        })
+        corrected_report.setdefault("audit_events", []).append({
+            "event": "review_saved",
+            "actor": correction.get("reviewer", "operator"),
+            "at": correction["reviewed_at"],
+            "decision": correction.get("decision"),
+        })
         corrections_path.write_text(json.dumps(corrections, indent=2) + "\n", encoding="utf-8")
         report_path.write_text(json.dumps(corrected_report, indent=2) + "\n", encoding="utf-8")
+        store.save_report(corrected_report)
 
         submission = _read_json(dataset_root / "submission.json", {})
         submission[email_id] = {

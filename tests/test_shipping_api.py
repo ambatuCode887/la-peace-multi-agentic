@@ -7,12 +7,43 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from agents.shipping.api import _save_upload, create_app
+from agents.storage import CaseStore
 
 
 class FakeUpload:
     def __init__(self, filename: str, content: bytes) -> None:
         self.filename = filename
         self.file = SimpleNamespace(read=lambda: content)
+
+
+class InMemoryCaseStore(CaseStore):
+    def __init__(self, *reports: dict) -> None:
+        self.reports = {report["email_id"]: report for report in reports}
+
+    def list_cases(self) -> list[dict]:
+        return [
+            {
+                "email_id": report["email_id"],
+                "category": report.get("category", "UNKNOWN"),
+                "status": report.get("status", "UNPROCESSED"),
+                "review_reason": report.get("review_reason"),
+                "deletable": False,
+                "updated_at": report.get("updated_at"),
+            }
+            for report in self.reports.values()
+        ]
+
+    def list_reports(self) -> list[dict]:
+        return list(self.reports.values())
+
+    def get_case(self, email_id: str) -> dict | None:
+        return self.reports.get(email_id)
+
+    def save_report(self, report: dict) -> None:
+        self.reports[report["email_id"]] = report
+
+    def delete_case(self, email_id: str) -> bool:
+        return self.reports.pop(email_id, None) is not None
 
 
 def test_upload_storage_creates_expected_dataset_shape(tmp_path) -> None:
@@ -38,6 +69,22 @@ def test_create_app_returns_fastapi_application(tmp_path) -> None:
     assert any(route.path == "/verify" for route in application.routes)
     assert any(route.path == "/reviews/{email_id}" for route in application.routes)
     assert any(route.path == "/cases/{email_id}/manager-review" for route in application.routes)
+
+
+def test_delete_case_removes_database_record(tmp_path) -> None:
+    store = InMemoryCaseStore({
+        "email_id": "email_db_only",
+        "category": "GENERAL",
+        "status": "OK",
+    })
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.delete("/cases/email_db_only")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "email_id": "email_db_only"}
+    assert store.get_case("email_db_only") is None
+    assert client.delete("/cases/email_db_only").status_code == 404
 
 
 def test_manager_review_returns_advisory_result_without_changing_report(tmp_path, monkeypatch) -> None:
