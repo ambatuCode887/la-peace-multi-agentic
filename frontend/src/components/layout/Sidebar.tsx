@@ -79,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Category counts across total dataset
   const blCount = safeAll.filter((c) => c.category === 'BL_COMPARISON').length;
+  const chaseCount = safeAll.filter((c) => c.category === 'DOCUMENT_CHASE').length;
   const siCount = safeAll.filter((c) => c.category === 'SI_REQUEST').length;
   const invCount = safeAll.filter((c) => c.category === 'INVOICE_QUERY').length;
   const genCount = safeAll.filter((c) => c.category === 'GENERAL').length;
@@ -105,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }> = [
     { value: 'ALL', label: 'All Email Types', shortLabel: 'All Types', count: safeAll.length, icon: Layers, color: 'text-[#345ec4]' },
     { value: 'BL_COMPARISON', label: 'BL Verification', shortLabel: 'BL Verify', count: blCount, icon: FileText, color: 'text-[#345ec4]' },
+    { value: 'DOCUMENT_CHASE', label: 'Send Draft BL', shortLabel: 'Send Draft BL', count: chaseCount, icon: HelpCircle, color: 'text-violet-600' },
     { value: 'SI_REQUEST', label: 'SI Requests', shortLabel: 'SI Requests', count: siCount, icon: FileCheck, color: 'text-cyan-600' },
     { value: 'INVOICE_QUERY', label: 'Invoice Queries', shortLabel: 'Invoices', count: invCount, icon: Receipt, color: 'text-indigo-600' },
     { value: 'GENERAL', label: 'General Inquiries', shortLabel: 'General', count: genCount, icon: Mail, color: 'text-slate-600' },
@@ -134,6 +136,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30 shrink-0">
             BL Verify
+          </span>
+        );
+      case 'DOCUMENT_CHASE':
+        return (
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/60 shrink-0">
+            Send Draft BL
           </span>
         );
       case 'SI_REQUEST':
@@ -433,13 +441,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {/* Header Line: ID, Category Badge, Timestamp */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 shrink-0">
                     <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
                       {c.id}
                     </span>
                     {getCategoryBadge(c.category)}
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">
+                  <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
                     {c.timestamp.split(' ')[0]}
                   </span>
                 </div>

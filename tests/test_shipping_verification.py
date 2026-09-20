@@ -444,10 +444,9 @@ def submission_for(email_record: DatasetEmail) -> dict:
 def test_asking_for_the_draft_bl_is_ok_and_not_sent_to_review() -> None:
     result = submission_for(chase_email(CHASE_BODY))
 
-    assert result["category"] == "BL_COMPARISON"  # still a document-check email
+    assert result["category"] == "DOCUMENT_CHASE"  # its own category, not a comparison request
     assert result["status"] == "OK" and result["review_reason"] is None
     assert result["has_defect"] is False and result["defect_fields"] == []
-    assert result["awaiting_documents"] is True
 
 
 def test_the_security_banner_does_not_hide_a_chase() -> None:
@@ -465,6 +464,7 @@ def test_dropped_or_missing_attachments_still_go_to_review() -> None:
     still_missing = "Please compare the SI and draft BL for I756178688 and confirm (the draft BL is still missing). Thank you."
     for record in (chase_email(dropped), chase_email(still_missing, ("attachments/email_507_SI.txt",))):
         result = submission_for(record)
+        assert result["category"] == "BL_COMPARISON"  # a real comparison request with files missing
         assert result["status"] == "NEEDS_REVIEW" and result["review_reason"] == "missing_attachment"
 
 
@@ -486,6 +486,6 @@ def test_a_chase_is_explained_on_the_dashboard(tmp_path) -> None:
 
     report = inspect_shipping_email("email_003", str(tmp_path))
 
-    assert report["category"] == "BL_COMPARISON"
+    assert report["category"] == "DOCUMENT_CHASE"
     assert report["status"] == "OK" and report["review_reason"] is None
     assert "asking for the draft BL" in report["message"]

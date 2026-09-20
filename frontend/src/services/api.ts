@@ -34,6 +34,7 @@ export interface BackendReport {
   category: string;
   sender: string;
   subject: string;
+  body?: string;
   attachments: string[];
   documents?: {
     si?: {
@@ -360,6 +361,7 @@ export function mapReportToShippingCase(
     id: report.email_id || existing?.id || '',
     subject: report.subject || existing?.subject || `Shipping Case ${report.email_id}`,
     sender: report.sender || existing?.sender || 'ops@shipping.com',
+    body: report.body ?? existing?.body,
     timestamp: existing?.timestamp || 'Today',
     category,
     status,
@@ -409,6 +411,7 @@ export function mapSummaryToShippingCase(
     id: summary.email_id,
     subject: existing?.subject || summary.email_id,
     sender: existing?.sender || 'Unknown sender',
+    body: existing?.body,
     timestamp: summary.updated_at || existing?.timestamp || 'Unknown',
     category,
     status,

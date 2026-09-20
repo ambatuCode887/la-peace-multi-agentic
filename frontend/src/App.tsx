@@ -7,6 +7,7 @@ import type {
 import { Header } from "./components/layout/Header";
 import { Sidebar } from "./components/layout/Sidebar";
 import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
+import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { ReviewPanel } from "./components/review/ReviewPanel";
@@ -273,6 +274,9 @@ export function App() {
                 onOpenClarification={handleOpenClarification}
               />
             )}
+
+            {/* The email this case came from: sender, subject and message */}
+            {currentCase && <EmailMessage currentCase={currentCase} />}
 
             {/* Side-by-Side Blueprint Diff Comparator */}
             {queueLoading && (
