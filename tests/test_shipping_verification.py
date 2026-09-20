@@ -310,6 +310,33 @@ Berat Kasar (KG): 22.000 KG
     assert si.fields["gross_weight_kg"] == bl.fields["gross_weight_kg"] == 22000
 
 
+def test_extracts_multilingual_next_line_labels() -> None:
+    document = extract_shipment_fields(
+        """BILL OF LADING (DRAFT)
+Pengirim
+GREENFIELD TIMBER TRADING PTE LTD
+Penerima
+BUYER COMPANY
+Pihak Untuk Dimaklumkan
+BUYER COMPANY
+Pelabuhan Pemuatan
+PORT KLANG, MALAYSIA
+Pelabuhan Pelepasan
+SHANGHAI, CHINA
+Bilangan Kontena
+3
+Berat Kasar
+22,000 KG
+"""
+    )
+
+    assert document.missing_fields == ()
+    assert document.fields["shipper"] == "GREENFIELD TIMBER TRADING PTE LTD"
+    assert document.fields["port_of_loading"] == "PORT KLANG, MALAYSIA"
+    assert document.fields["container_count"] == 3
+    assert document.fields["gross_weight_kg"] == 22000
+
+
 def test_detects_chinese_document_injection_without_hiding_weight_mismatch() -> None:
     bl = extract_shipment_fields(
         """BILL OF LADING (DRAFT)

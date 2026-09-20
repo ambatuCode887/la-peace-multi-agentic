@@ -538,11 +538,22 @@ def _normalized_value(value: str | int | None) -> str | int | None:
     return re.sub(r"[^A-Z0-9]", "", value.upper())
 
 
+_PORT_VALUE_NORMALIZATIONS = (
+    (re.compile(r"\s*\([^)]*\)\s*$"), ""),
+    (re.compile(r"\bPELABUHAN\b", flags=re.IGNORECASE), "PORT"),
+)
+
+
+def _normalize_port_value(value: str) -> str:
+    for pattern, replacement in _PORT_VALUE_NORMALIZATIONS:
+        value = pattern.sub(replacement, value)
+    return value
+
+
 def _normalized_field_value(field: str, value: str | int | None) -> str | int | None:
     """Normalize comparison values while keeping the raw OCR value for evidence."""
     if field in {"port_of_loading", "port_of_discharge"} and isinstance(value, str):
-        value = re.sub(r"\s*\([^)]*\)\s*$", "", value)
-        value = re.sub(r"\bPELABUHAN\b", "PORT", value, flags=re.IGNORECASE)
+        value = _normalize_port_value(value)
     return _normalized_value(value)
 
 
@@ -697,21 +708,21 @@ def _next_line_value(text: str, field: str) -> str | None:
 
 
 _FIELD_PATTERNS = {
-    "shipper": re.compile(r"(?im)^\s*(?:shipper|pengirim|发货人)(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "shipper": re.compile(r"(?im)^\s*(?:shipper|pengirim|发货人)(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*(?:[^|:\r\n]*?(?:\||:|\.)[ \t]*|[ \t]+(?=[A-Z0-9]))([^|\r\n]+)"),
     "consignee": re.compile(r"(?im)^\s*(?:consignee|penerima|收货人|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*(?:[ \t]*(?:\||:|\.)[ \t]*|[ \t]+)([^|\r\n]+)"),
-    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify|pihak[ \t]+untuk[ \t]+dimaklumkan|通知方)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
-    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol|pelabuhan[ \t]+pemuatan|装货港)(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
-    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod|pelabuhan[ \t]+pelepasan|卸货港)(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify|pihak[ \t]+untuk[ \t]+dimaklumkan|通知方)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*(?:[^|:\r\n]*?(?:\||:|\.)[ \t]*|[ \t]+(?=[A-Z0-9]))([^|\r\n]+)"),
+    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol|pelabuhan[ \t]+pemuatan|装货港)(?:[ \t]*\([^)]*\))*(?:[^|:\r\n]*?(?:\||:|\.)[ \t]*|[ \t]+(?=[A-Z0-9]))([^|\r\n]+)"),
+    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod|pelabuhan[ \t]+pelepasan|卸货港)(?:[ \t]*\([^)]*\))*(?:[^|:\r\n]*?(?:\||:|\.)[ \t]*|[ \t]+(?=[A-Z0-9]))([^|\r\n]+)"),
     "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?|bilangan[ \t]+kontena|集装箱数量)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
     "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?(?:g(?:ross|iross)[ \t]*(?:weight|wt)|berat[ \t]+kasar|毛重)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
 }
 
 _STANDALONE_LABEL_PATTERNS = {
-    "shipper": re.compile(r"(?i)^shipper(?:\s*/\s*exporter)?(?:\s*\([^)]*\))*$"),
-    "consignee": re.compile(r"(?i)^(?:consignee|to\s+the\s+order\s+of)(?:\s*\([^)]*\))*$"),
-    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify(?:\s+party)?)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
-    "port_of_loading": re.compile(r"(?i)^(?:port\s*of\s*(?:loading|lcading)|load\s+port|pol)(?:\s*\([^)]*\))*$"),
-    "port_of_discharge": re.compile(r"(?i)^(?:port\s*of\s*discharge|discharge\s+port|pod)(?:\s*\([^)]*\))*$"),
-    "container_count": re.compile(r"(?i)^(?:total\s+containers?|no\.?\s+of\s+containers?(?:\s+or\s+packages)?|container\s+count|containe\s*rs?|containers?)(?:\s*\([^)]*\))*$"),
-    "gross_weight_kg": re.compile(r"(?i)^(?:total\s+)?gro?ss?\s*(?:weight|wt)(?:\s*\([^)]*\))*$"),
+    "shipper": re.compile(r"(?i)^(?:shipper|pengirim|发货人)(?:\s*/\s*exporter)?(?:\s*\([^)]*\))*$"),
+    "consignee": re.compile(r"(?i)^(?:consignee|penerima|收货人|to\s+the\s+order\s+of)(?:\s*\([^)]*\))*$"),
+    "notify_party": re.compile(r"(?i)^(?:notify(?:\s+party)?|also\s+notify(?:\s+party)?|pihak\s+untuk\s+dimaklumkan|通知方)(?:\s*/\s*intermediate\s+consignee)?(?:\s*\([^)]*\))*$"),
+    "port_of_loading": re.compile(r"(?i)^(?:port\s*of\s*(?:loading|lcading)|load\s+port|pol|pelabuhan\s+pemuatan|装货港)(?:\s*\([^)]*\))*$"),
+    "port_of_discharge": re.compile(r"(?i)^(?:port\s*of\s*discharge|discharge\s+port|pod|pelabuhan\s+pelepasan|卸货港)(?:\s*\([^)]*\))*$"),
+    "container_count": re.compile(r"(?i)^(?:total\s+containers?|no\.?\s+of\s+containers?(?:\s+or\s+packages)?|container\s+count|containe\s*rs?|containers?|bilangan\s+kontena|集装箱数量)(?:\s*\([^)]*\))*$"),
+    "gross_weight_kg": re.compile(r"(?i)^(?:total\s+)?(?:gro?ss?\s*(?:weight|wt)|berat\s+kasar|毛重)(?:\s*\([^)]*\))*$"),
 }
