@@ -76,6 +76,47 @@ def test_ambiguity_analysis_preserves_review_status(monkeypatch) -> None:
     assert "10,000 emails/day" in report["routing_telemetry"]["scalability_summary"]
 
 
+def test_text_ambiguity_requires_human_review_without_llm(monkeypatch) -> None:
+    def fail_if_called(*args):
+        raise AssertionError("Text attachments must not invoke ambiguity LLM analysis")
+
+    monkeypatch.setattr("agents.shipping.api.analyze_field_ambiguity", fail_if_called)
+    report = {
+        "status": "NEEDS_REVIEW",
+        "review_reason": "ambiguous_field",
+        "has_defect": False,
+        "routing_telemetry": {
+            "total_fields": 7,
+            "resolved_by_rules": 6,
+            "sent_to_llm": 1,
+            "rule_latency_ms": 1.2,
+            "llm_latency_ms": 0.0,
+            "ambiguous_fields": ["shipper"],
+        },
+        "documents": {
+            "si": {
+                "attachment": "attachments/case_SI.txt",
+                "fields": {"shipper": "SDN BHD"},
+                "evidence": {"shipper": "SI evidence"},
+            },
+            "bl": {
+                "attachment": "attachments/case_BL.txt",
+                "fields": {"shipper": "SDN SHD"},
+                "evidence": {"shipper": "BL evidence"},
+            },
+        },
+    }
+
+    assert _add_ambiguity_analysis(report) is True
+    assert report["status"] == "NEEDS_REVIEW"
+    assert report["review_reason"] == "ambiguous_field"
+    assert report["routing_telemetry"]["sent_to_llm"] == 0
+    assert report["routing_telemetry"]["llm_calls"] == 0
+    assert report["routing_telemetry"]["estimated_cost_usd"] == 0.0
+    assert report["routing_telemetry"]["field_resolutions"]["shipper"]["source"] == "human"
+    assert report["ocr_distortion_analysis"] == []
+
+
 def test_ai_analysis_requires_configuration(monkeypatch) -> None:
     monkeypatch.setattr("agents.shipping.ai.env", lambda name, default=None: None)
     try:

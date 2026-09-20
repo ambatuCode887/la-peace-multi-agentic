@@ -46,9 +46,15 @@ def create_app(
     case_store: CaseStore | None = None,
 ) -> FastAPI:
     root = Path(upload_root).expanduser().resolve()
+    production_root = Path(upload_root) == Path(".artifacts/uploads")
+    if case_store is None and production_root and not env("MONGODB_URI"):
+        raise RuntimeError(
+            "MONGODB_URI is required for the production shipping API; "
+            "refusing to fall back to local or Docker report storage."
+        )
     store = case_store or get_case_store(
         root,
-        prefer_mongo=Path(upload_root) == Path(".artifacts/uploads"),
+        prefer_mongo=production_root,
     )
     app = FastAPI(title="Shipping Document Verification API")
     app.add_middleware(
@@ -396,11 +402,34 @@ def _add_ambiguity_analysis(report: dict[str, Any]) -> bool:
     ambiguous_fields = telemetry.get("ambiguous_fields", []) if isinstance(telemetry, dict) else []
     if not ambiguous_fields or not isinstance(documents, dict):
         return False
-    if report.get("ocr_distortion_analysis") is not None:
-        return False
 
     si = documents.get("si", {})
     bl = documents.get("bl", {})
+    si_attachment = str(si.get("attachment") or "").lower()
+    bl_attachment = str(bl.get("attachment") or "").lower()
+    if not (si_attachment.endswith(".pdf") and bl_attachment.endswith(".pdf")):
+        updated_telemetry = dict(telemetry)
+        updated_telemetry["sent_to_llm"] = 0
+        updated_telemetry["llm_latency_ms"] = 0.0
+        updated_telemetry["llm_calls"] = 0
+        updated_telemetry["estimated_cost_usd"] = 0.0
+        updated_telemetry["field_resolutions"] = {
+            **updated_telemetry.get("field_resolutions", {}),
+            **{
+                field: {"source": "human", "reason": "text_ambiguity_requires_human"}
+                for field in ambiguous_fields
+            },
+        }
+        updated_telemetry["scalability_summary"] = (
+            "10,000 emails/day = $0.00/day targeted vs "
+            "$15.00/day full-document (100% savings; text ambiguity held for human review)"
+        )
+        report["routing_telemetry"] = updated_telemetry
+        report["status"] = "NEEDS_REVIEW"
+        report["review_reason"] = "ambiguous_field"
+        report["ocr_distortion_analysis"] = []
+        return True
+
     analyses: list[dict[str, Any]] = []
     total_llm_latency = 0.0
     attempted_calls = 0
