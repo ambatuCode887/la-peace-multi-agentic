@@ -34,6 +34,8 @@ _INSTRUCTION_LIKE_PATTERNS = (
     re.compile(r"(?i)\b(?:system|developer)\s+prompt\b"),
     re.compile(r"(?i)\b(?:reveal|show|print| disclose)\b[^\n]{0,40}\b(?:prompt|instructions?|secrets?|api\s*key)\b"),
     re.compile(r"(?i)\b(?:report|mark|set)\b[^\n]{0,30}\b(?:status|result)\b[^\n]{0,20}\b(?:ok|mismatch|needs?\s+review)\b"),
+    re.compile(r"请忽略之前的所有指令|忽略之前的所有指令"),
+    re.compile(r"(?i)\b(?:no human review|no review needed)\b"),
 )
 
 
@@ -506,6 +508,9 @@ def _normalized_field_value(field: str, value: str | int | None) -> str | int | 
     """Normalize comparison values while keeping the raw OCR value for evidence."""
     if field in {"shipper", "consignee", "notify_party"} and isinstance(value, str):
         value = re.sub(r"\bSDN\s+SHD\b", "SDN BHD", value, flags=re.IGNORECASE)
+    if field in {"port_of_loading", "port_of_discharge"} and isinstance(value, str):
+        value = re.sub(r"\s*\([^)]*\)\s*$", "", value)
+        value = re.sub(r"\bPELABUHAN\b", "PORT", value, flags=re.IGNORECASE)
     return _normalized_value(value)
 
 
@@ -618,13 +623,13 @@ def _next_line_value(text: str, field: str) -> str | None:
 
 
 _FIELD_PATTERNS = {
-    "shipper": re.compile(r"(?im)^\s*shipper(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "consignee": re.compile(r"(?im)^\s*(?:consignee|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod)(?:[ \t]*\([^)]*\))*[ \t]*(?:\||:|\.|\b(?=[A-Z0-9]))[ \t]*([^|\r\n]+)"),
-    "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
-    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?g(?:ross|iross)[ \t]*(?:weight|wt)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
+    "shipper": re.compile(r"(?im)^\s*(?:shipper|pengirim|发货人)(?:[ \t]*/[ \t]*exporter)?(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "consignee": re.compile(r"(?im)^\s*(?:consignee|penerima|收货人|to[ \t]+the[ \t]+order[ \t]+of)(?:[ \t]*\([^)]*\))*(?:[ \t]*(?:\||:|\.)[ \t]*|[ \t]+)([^|\r\n]+)"),
+    "notify_party": re.compile(r"(?im)^\s*(?:notify(?:[ \t]+party)?|also[ \t]+notify|pihak[ \t]+untuk[ \t]+dimaklumkan|通知方)(?![ \t]+party\b)(?:[ \t]*/[ \t]*intermediate[ \t]+consignee)?(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "port_of_loading": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*(?:loading|lcading)|load[ \t]+port|pol|pelabuhan[ \t]+pemuatan|装货港)(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "port_of_discharge": re.compile(r"(?im)^\s*(?:port[ \t]*of[ \t]*discharge|discharge[ \t]+port|pod|pelabuhan[ \t]+pelepasan|卸货港)(?:[ \t]*\([^)]*\))*[^|:\r\n]*(?:\||:|\.)[ \t]*([^|\r\n]+)"),
+    "container_count": re.compile(r"(?im)^\s*(?:total[ \t]+containers?|no\.?[ \t]+of[ \t]+containers?(?:[ \t]+or[ \t]+packages)?|container[ \t]+count|containe[ \t]*rs?|containers?|bilangan[ \t]+kontena|集装箱数量)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
+    "gross_weight_kg": re.compile(r"(?im)^\s*(?:total[ \t]+)?(?:g(?:ross|iross)[ \t]*(?:weight|wt)|berat[ \t]+kasar|毛重)[^|:\r\n0-9]*(?:[:|.]|\b)[ \t]*([^|\r\n]+)"),
 }
 
 _STANDALONE_LABEL_PATTERNS = {

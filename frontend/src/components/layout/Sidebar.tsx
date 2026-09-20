@@ -1,5 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
-import type { ShippingCase, VerificationStatus, EmailCategory } from '../../types/shipping';
+import { useState, useRef, useEffect } from "react";
+import type {
+  ShippingCase,
+  VerificationStatus,
+  EmailCategory,
+} from "../../types/shipping";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -16,17 +20,17 @@ import {
   Receipt,
   Mail,
   ShieldAlert,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface SidebarProps {
   allCases?: ShippingCase[];
   cases: ShippingCase[];
   selectedCaseId: string;
   onSelectCase: (caseId: string) => void;
-  categoryFilter: EmailCategory | 'ALL';
-  onCategoryFilterChange: (category: EmailCategory | 'ALL') => void;
-  statusFilter: VerificationStatus | 'ALL';
-  onStatusFilterChange: (status: VerificationStatus | 'ALL') => void;
+  categoryFilter: EmailCategory | "ALL";
+  onCategoryFilterChange: (category: EmailCategory | "ALL") => void;
+  statusFilter: VerificationStatus | "ALL";
+  onStatusFilterChange: (status: VerificationStatus | "ALL") => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -49,120 +53,213 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const safeAll = allCases && allCases.length > 0 ? allCases : cases;
 
   // Verification status only applies to BL Verification or when viewing All
-  const isStatusApplicable = categoryFilter === 'ALL' || categoryFilter === 'BL_COMPARISON';
+  const isStatusApplicable =
+    categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
 
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (typeDropdownRef.current && !typeDropdownRef.current.contains(event.target as Node)) {
+      if (
+        typeDropdownRef.current &&
+        !typeDropdownRef.current.contains(event.target as Node)
+      ) {
         setTypeDropdownOpen(false);
       }
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+      if (
+        statusDropdownRef.current &&
+        !statusDropdownRef.current.contains(event.target as Node)
+      ) {
         setStatusDropdownOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   // Close on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setTypeDropdownOpen(false);
         setStatusDropdownOpen(false);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Category counts across total dataset
-  const blCount = safeAll.filter((c) => c.category === 'BL_COMPARISON').length;
-  const chaseCount = safeAll.filter((c) => c.category === 'DOCUMENT_CHASE').length;
-  const siCount = safeAll.filter((c) => c.category === 'SI_REQUEST').length;
-  const invCount = safeAll.filter((c) => c.category === 'INVOICE_QUERY').length;
-  const genCount = safeAll.filter((c) => c.category === 'GENERAL').length;
-  const spamCount = safeAll.filter((c) => c.category === 'SPAM').length;
+  const blCount = safeAll.filter((c) => c.category === "BL_COMPARISON").length;
+  const chaseCount = safeAll.filter(
+    (c) => c.category === "DOCUMENT_CHASE",
+  ).length;
+  const siCount = safeAll.filter((c) => c.category === "SI_REQUEST").length;
+  const invCount = safeAll.filter((c) => c.category === "INVOICE_QUERY").length;
+  const genCount = safeAll.filter((c) => c.category === "GENERAL").length;
+  const spamCount = safeAll.filter((c) => c.category === "SPAM").length;
 
   // Status counts relative to current scope
   const casesInScope =
-    categoryFilter === 'ALL'
+    categoryFilter === "ALL"
       ? safeAll
       : safeAll.filter((c) => c.category === categoryFilter);
 
-  const cleanCount = casesInScope.filter((c) => c.status === 'PASS').length;
-  const discrepancyCount = casesInScope.filter((c) => c.status === 'MISMATCH').length;
-  const reviewCount = casesInScope.filter((c) => c.status === 'NEEDS_REVIEW').length;
+  const cleanCount = casesInScope.filter((c) => c.status === "PASS").length;
+  const discrepancyCount = casesInScope.filter(
+    (c) => c.status === "MISMATCH",
+  ).length;
+  const reviewCount = casesInScope.filter(
+    (c) => c.status === "NEEDS_REVIEW",
+  ).length;
 
   // Category options list
   const categoryOptions: Array<{
-    value: EmailCategory | 'ALL';
+    value: EmailCategory | "ALL";
     label: string;
     shortLabel: string;
     count: number;
     icon: typeof Layers;
     color: string;
   }> = [
-    { value: 'ALL', label: 'All Email Types', shortLabel: 'All Types', count: safeAll.length, icon: Layers, color: 'text-[#345ec4]' },
-    { value: 'BL_COMPARISON', label: 'BL Verification', shortLabel: 'BL Verify', count: blCount, icon: FileText, color: 'text-[#345ec4]' },
-    { value: 'DOCUMENT_CHASE', label: 'Send Draft BL', shortLabel: 'Send Draft BL', count: chaseCount, icon: HelpCircle, color: 'text-violet-600' },
-    { value: 'SI_REQUEST', label: 'SI Requests', shortLabel: 'SI Requests', count: siCount, icon: FileCheck, color: 'text-cyan-600' },
-    { value: 'INVOICE_QUERY', label: 'Invoice Queries', shortLabel: 'Invoices', count: invCount, icon: Receipt, color: 'text-indigo-600' },
-    { value: 'GENERAL', label: 'General Inquiries', shortLabel: 'General', count: genCount, icon: Mail, color: 'text-slate-600' },
-    { value: 'SPAM', label: 'Spam & Quarantined', shortLabel: 'Spam', count: spamCount, icon: ShieldAlert, color: 'text-rose-600' },
+    {
+      value: "ALL",
+      label: "All Email Types",
+      shortLabel: "All Types",
+      count: safeAll.length,
+      icon: Layers,
+      color: "text-[#345ec4]",
+    },
+    {
+      value: "BL_COMPARISON",
+      label: "BL Verification",
+      shortLabel: "BL Verify",
+      count: blCount,
+      icon: FileText,
+      color: "text-[#345ec4]",
+    },
+    {
+      value: "DOCUMENT_CHASE",
+      label: "Send Draft BL",
+      shortLabel: "Send Draft BL",
+      count: chaseCount,
+      icon: HelpCircle,
+      color: "text-violet-600",
+    },
+    {
+      value: "SI_REQUEST",
+      label: "SI Requests",
+      shortLabel: "SI Requests",
+      count: siCount,
+      icon: FileCheck,
+      color: "text-cyan-600",
+    },
+    {
+      value: "INVOICE_QUERY",
+      label: "Invoice Queries",
+      shortLabel: "Invoices",
+      count: invCount,
+      icon: Receipt,
+      color: "text-indigo-600",
+    },
+    {
+      value: "GENERAL",
+      label: "General Inquiries",
+      shortLabel: "General",
+      count: genCount,
+      icon: Mail,
+      color: "text-slate-600",
+    },
+    {
+      value: "SPAM",
+      label: "Spam & Quarantined",
+      shortLabel: "Spam",
+      count: spamCount,
+      icon: ShieldAlert,
+      color: "text-rose-600",
+    },
   ];
 
   // Status options list (when active)
   const statusOptions: Array<{
-    value: VerificationStatus | 'ALL';
+    value: VerificationStatus | "ALL";
     label: string;
     count: number;
     color: string;
     badgeBg: string;
   }> = [
-    { value: 'ALL', label: 'All Statuses', count: casesInScope.length, color: 'bg-slate-400', badgeBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300' },
-    { value: 'PASS', label: 'Clean', count: cleanCount, color: 'bg-emerald-500', badgeBg: 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300' },
-    { value: 'MISMATCH', label: 'Discrepancy', count: discrepancyCount, color: 'bg-rose-500', badgeBg: 'bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300' },
-    { value: 'NEEDS_REVIEW', label: 'Needs Review', count: reviewCount, color: 'bg-amber-500', badgeBg: 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300' },
+    {
+      value: "ALL",
+      label: "All Statuses",
+      count: casesInScope.length,
+      color: "bg-slate-400",
+      badgeBg:
+        "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+    },
+    {
+      value: "PASS",
+      label: "OK",
+      count: cleanCount,
+      color: "bg-emerald-500",
+      badgeBg:
+        "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300",
+    },
+    {
+      value: "MISMATCH",
+      label: "Mismatch",
+      count: discrepancyCount,
+      color: "bg-rose-500",
+      badgeBg:
+        "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300",
+    },
+    {
+      value: "NEEDS_REVIEW",
+      label: "Needs Review",
+      count: reviewCount,
+      color: "bg-amber-500",
+      badgeBg:
+        "bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300",
+    },
   ];
 
-  const currentCategoryObj = categoryOptions.find((o) => o.value === categoryFilter) || categoryOptions[0];
-  const currentStatusObj = statusOptions.find((o) => o.value === statusFilter) || statusOptions[0];
+  const currentCategoryObj =
+    categoryOptions.find((o) => o.value === categoryFilter) ||
+    categoryOptions[0];
+  const currentStatusObj =
+    statusOptions.find((o) => o.value === statusFilter) || statusOptions[0];
 
   const getCategoryBadge = (category: EmailCategory) => {
     switch (category) {
-      case 'BL_COMPARISON':
+      case "BL_COMPARISON":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30 shrink-0">
             BL Verify
           </span>
         );
-      case 'DOCUMENT_CHASE':
+      case "DOCUMENT_CHASE":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/60 shrink-0">
             Send Draft BL
           </span>
         );
-      case 'SI_REQUEST':
+      case "SI_REQUEST":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-cyan-50 text-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200/60 dark:border-cyan-800/60 shrink-0">
             SI Request
           </span>
         );
-      case 'INVOICE_QUERY':
+      case "INVOICE_QUERY":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
             Invoice
           </span>
         );
-      case 'GENERAL':
+      case "GENERAL":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
             General
           </span>
         );
-      case 'SPAM':
+      case "SPAM":
         return (
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/40 shrink-0">
             Spam
@@ -173,7 +270,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const getStatusBadge = (c: ShippingCase) => {
     // If not BL Verification, status is just default (verification does not apply)
-    if (c.category !== 'BL_COMPARISON') {
+    if (c.category !== "BL_COMPARISON") {
       return (
         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-[#0a1e4d]/50 dark:text-slate-400 border border-slate-200/50 dark:border-[#1a3d8e]/40">
           <span>Default</span>
@@ -182,28 +279,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     switch (c.status) {
-      case 'PASS':
+      case "PASS":
         return (
           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
             <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            <span>Clean</span>
+            <span>OK</span>
           </span>
         );
-      case 'MISMATCH':
+      case "MISMATCH":
         return (
           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/60">
             <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-            <span>Discrepancy</span>
+            <span>Mismatch</span>
           </span>
         );
-      case 'NEEDS_REVIEW':
+      case "NEEDS_REVIEW":
         return (
           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
             <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
             <span>Needs Review</span>
           </span>
         );
-      case 'INQUIRY':
+      case "INQUIRY":
       default:
         return (
           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-[#0a1e4d]/50 dark:text-slate-400 border border-slate-200/50 dark:border-[#1a3d8e]/40">
@@ -229,11 +326,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </h2>
           </div>
           <div className="flex items-center space-x-1.5">
-            {(categoryFilter !== 'ALL' || statusFilter !== 'ALL') && (
+            {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
               <button
                 onClick={() => {
-                  onCategoryFilterChange('ALL');
-                  onStatusFilterChange('ALL');
+                  onCategoryFilterChange("ALL");
+                  onStatusFilterChange("ALL");
                 }}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
                 title="Reset all filters"
@@ -267,12 +364,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }}
             className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
               typeDropdownOpen
-                ? 'bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs'
-                : 'bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200'
+                ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
+                : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
             }`}
           >
             <div className="flex items-center space-x-2 truncate">
-              <currentCategoryObj.icon className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`} />
+              <currentCategoryObj.icon
+                className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
+              />
               <span className="truncate">{currentCategoryObj.label}</span>
             </div>
             <div className="flex items-center space-x-1.5 shrink-0 ml-2">
@@ -281,7 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                  typeDropdownOpen ? 'rotate-180' : ''
+                  typeDropdownOpen ? "rotate-180" : ""
                 }`}
               />
             </div>
@@ -303,19 +402,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60'
+                        ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
                     }`}
                   >
                     <div className="flex items-center space-x-2 truncate">
-                      <IconComponent className={`w-3.5 h-3.5 ${opt.color} shrink-0`} />
+                      <IconComponent
+                        className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
+                      />
                       <span className="truncate">{opt.label}</span>
                     </div>
                     <div className="flex items-center space-x-2 shrink-0 ml-2">
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
                         {opt.count}
                       </span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />}
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                      )}
                     </div>
                   </button>
                 );
@@ -345,21 +448,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
               className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
                 statusDropdownOpen
-                  ? 'bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs'
-                  : 'bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200'
+                  ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
+                  : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
               }`}
             >
               <div className="flex items-center space-x-2 truncate">
-                <span className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`} />
+                <span
+                  className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
+                />
                 <span className="truncate">{currentStatusObj.label}</span>
               </div>
               <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${currentStatusObj.badgeBg}`}>
+                <span
+                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${currentStatusObj.badgeBg}`}
+                >
                   {currentStatusObj.count}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                    statusDropdownOpen ? 'rotate-180' : ''
+                    statusDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
               </div>
@@ -374,7 +481,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center space-x-2 truncate">
                 <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                <span className="truncate">Default (All {casesInScope.length})</span>
+                <span className="truncate">
+                  Default (All {casesInScope.length})
+                </span>
               </div>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
                 N/A
@@ -397,19 +506,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
                       isSelected
-                        ? 'bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60'
+                        ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
                     }`}
                   >
                     <div className="flex items-center space-x-2 truncate">
-                      <span className={`w-2 h-2 rounded-full ${opt.color} shrink-0`} />
+                      <span
+                        className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
+                      />
                       <span className="truncate">{opt.label}</span>
                     </div>
                     <div className="flex items-center space-x-2 shrink-0 ml-2">
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}>
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
+                      >
                         {opt.count}
                       </span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />}
+                      {isSelected && (
+                        <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                      )}
                     </div>
                   </button>
                 );
@@ -435,8 +550,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectCase(c.id)}
                 className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer ${
                   isSelected
-                    ? 'bg-[#eef3fc] border-l-4 border-[#345ec4] dark:bg-[#091f52]/60 dark:border-[#5a82e2]'
-                    : 'hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-transparent'
+                    ? "bg-[#eef3fc] border-l-4 border-[#345ec4] dark:bg-[#091f52]/60 dark:border-[#5a82e2]"
+                    : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-transparent"
                 }`}
               >
                 {/* Header Line: ID, Category Badge, Timestamp */}
@@ -448,7 +563,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {getCategoryBadge(c.category)}
                   </div>
                   <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                    {c.timestamp.split(' ')[0]}
+                    {c.timestamp.split(" ")[0]}
                   </span>
                 </div>
 
@@ -456,7 +571,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
                     <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                    <span className="truncate">{c.vessel !== 'N/A' ? c.vessel : c.subject}</span>
+                    <span className="truncate">
+                      {c.vessel !== "N/A" ? c.vessel : c.subject}
+                    </span>
                   </div>
                   {getStatusBadge(c)}
                 </div>
@@ -481,7 +598,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
             <span className="text-[10px] text-slate-400 block mt-1">
-              Showing {Math.min(visibleCount, cases.length)} of {cases.length} cases
+              Showing {Math.min(visibleCount, cases.length)} of {cases.length}{" "}
+              cases
             </span>
           </div>
         )}
