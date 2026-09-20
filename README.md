@@ -14,7 +14,7 @@ See [TODO.md](TODO.md) for the implementation checklist.
 
 ### Cloud provider decision
 
-The current repository choice is **Google**: Google ADK orchestrates the agents, and Google Gemini is the default LLM and embedding provider. The code also supports Ollama for local model execution. The problem statement does not mandate a cloud provider, so confirm whether the project requirement is specifically **Google Cloud Vertex AI** or the **Google Gemini API/AI Studio**. Qdrant and Confluence are separate services and are not the AI cloud provider.
+The current repository choice is **Google**: Google ADK orchestrates the agents, and Google Gemini is supported for LLM and embeddings. The code also supports Ollama for local model execution. Qdrant provides optional retrieval-backed guidance for the shipping review workflow.
 
 ### Prepared dataset
 
@@ -44,25 +44,6 @@ Submit a generated result to the local evaluator:
 Invoke-RestMethod -Uri http://localhost:8080/submit -Method Post `
 	-ContentType 'application/json' -InFile .artifacts\\final-submission.json
 ```
-
-### How emails are classified
-
-Each email gets one category from keyword rules on the subject, the sender's own message, and the attachments:
-
-| Category | Meaning |
-| --- | --- |
-| `BL_COMPARISON` | A document-check request with documents to compare |
-| `DOCUMENT_CHASE` (shown as "Send Draft BL") | A document-check thread where the sender only asks for the draft BL to be sent |
-| `SI_REQUEST`, `INVOICE_QUERY`, `GENERAL`, `SPAM` | Classified only, never compared |
-
-`DOCUMENT_CHASE` is a sixth category, added on purpose. The brief lists its categories with "including", and a "please send me the draft BL" email has nothing to compare, so it is neither a comparison request nor something a person needs to review (status `OK`). The local scoreboard only knows five categories and counts these 91 emails as misclassified (classification accuracy 100% to 82.5%, final score 1.0 to about 0.98). In exchange, human review drops from 111 cases to the 20 that need it (escalation precision 0.18 to 1.0).
-
-An email is a chase only when all of these hold; otherwise it stays a comparison request and goes to review as before:
-
-- it is already recognised as a document-check email;
-- it has fewer than two attachments;
-- the sender's new text (security banner and quoted earlier thread removed) asks to send, forward or share the draft BL;
-- that text does not mention comparing, attached, enclosed, dropped or missing documents.
 
 ### Accept new shipping uploads
 
@@ -151,22 +132,18 @@ flowchart LR
 		B -->|Other categories| F
 ```
 
-This project is a Google ADK multi-agent retrieval system that:
+This project is a Google ADK shipping verification system that:
 
 - ingests local documents into Qdrant
 - chunks content with hybrid chunking (structure-aware + semantic boundaries)
 - embeds chunks with Google Gemini embeddings
 - retrieves relevant context for grounded answers
-- prepares Confluence publish payloads
-- supports optional Confluence MCP bridge or direct REST publishing
 
 ## Prerequisites
 
 - Python 3.10+
 - Docker Desktop (for the local Qdrant container)
 - A Google API key for Gemini embeddings
-- Optional: Confluence credentials if you want direct publishing
-- Optional: Atlassian MCP server if you want the MCP bridge
 
 ## 1. Create your local environment
 
@@ -212,7 +189,7 @@ Test-NetConnection localhost -Port 6333
 .\.venv\Scripts\python -m agents.eval.smoke
 ```
 
-This command validates that the chunking path and publish payload preparation work with the current configuration.
+This command validates the local document chunking path.
 
 ## 4. Ingest knowledge documents
 
@@ -269,16 +246,7 @@ Use shipping_review_manager_agent to review email ID <EMAIL_ID> from data root C
 
 Use an email ID from the challenge dataset or upload dashboard. The manager may retrieve guidance from Qdrant, so start Qdrant and ingest the knowledge files first if you want to test the RAG step. It must report the deterministic verifier result unchanged; it does not persist corrections or send messages.
 
-## 7. Optional: publish to Confluence
-
-The project supports two publish paths:
-
-- direct REST publishing using `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, and `CONFLUENCE_API_TOKEN`
-- optional MCP bridge using `CONFLUENCE_MCP_URL` or `CONFLUENCE_MCP_COMMAND`
-
-The direct publish helpers default to a `dry_run` preview, so you can validate the generated payload before writing to Confluence.
-
-## 8. Environment variables
+## 7. Environment variables
 
 The project expects the following variables in `.env`:
 
@@ -294,21 +262,11 @@ QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION=multi_agentic_rag
 
-CONFLUENCE_BASE_URL=https://your-company.atlassian.net/wiki
-CONFLUENCE_EMAIL=you@example.com
-CONFLUENCE_API_TOKEN=your_confluence_api_token_here
-CONFLUENCE_SPACE_KEY=YOUR_SPACE_KEY
-CONFLUENCE_PARENT_ID=
-
-ATLASSIAN_MCP_URL=
-CONFLUENCE_MCP_URL=
-CONFLUENCE_MCP_COMMAND=
-CONFLUENCE_MCP_ARGS=
 ```
 
 A reusable skeleton is already provided in `.env.example`.
 
-## 9. Common troubleshooting
+## 8. Common troubleshooting
 
 ### `Missing required environment variable`
 

@@ -5,7 +5,6 @@
 - [x] Use Google as the current AI provider choice. The repository already uses Google ADK and supports Google Gemini models and embeddings.
 - [ ] Confirm whether the required deployment target is Google Cloud Vertex AI or Google AI Studio/Gemini API.
 - [ ] Decide whether Qdrant remains local for development or is deployed as a managed/hosted service.
-- [ ] Keep Confluence as an optional reporting destination, separate from the required evaluation output.
 
 ## Dataset and evaluation
 
@@ -27,7 +26,7 @@
 - [x] Generate a valid submission for all 520 emails, using `GENERAL`/`OK` only as a temporary fallback for unimplemented cases.
 - [x] Start the supplied Docker server and submit the baseline to `/submit` to establish a score.
 
-Do not start with Google ADK, Qdrant, Confluence, OCR, or a multi-agent graph. First make the local batch pipeline correct and measurable; add agents and cloud services around the verified comparison core afterward.
+The local batch pipeline is the verification baseline; agents, OCR, and retrieval services are optional layers around that verified comparison core.
 
 ## Basic workflow
 
