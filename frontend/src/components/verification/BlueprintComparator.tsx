@@ -4,19 +4,16 @@ import {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
-  FileText,
   Send,
   Check,
   ShieldAlert,
   Compass,
   RefreshCw,
   Search,
-  Mail,
-  Receipt,
-  FileCheck,
   Gauge,
 } from "lucide-react";
 import { api } from "../../services/api";
+import { OperationalEmailHub } from "./OperationalEmailHub";
 
 interface BlueprintComparatorProps {
   currentCase: ShippingCase;
@@ -65,125 +62,10 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     currentCase.category !== "BL_COMPARISON" ||
     currentCase.fields.length === 0
   ) {
-    const categoryDetails: Record<
-      string,
-      {
-        title: string;
-        desc: string;
-        icon: typeof FileText;
-        color: string;
-        bg: string;
-      }
-    > = {
-      DOCUMENT_CHASE: {
-        title: "Send Draft BL",
-        desc: "The sender is asking for the draft Bill of Lading to be sent. No documents are attached, so there is nothing to compare yet and no review is needed.",
-        icon: Send,
-        color: "text-violet-600 dark:text-violet-400",
-        bg: "bg-violet-50 dark:bg-violet-950/40 border-violet-200 dark:border-violet-900/60",
-      },
-      SI_REQUEST: {
-        title: "Shipping Instruction Request",
-        desc: "This email contains a forwarder or shipper request for shipping instructions and does not require Bill of Lading verification.",
-        icon: FileCheck,
-        color: "text-cyan-600 dark:text-cyan-400",
-        bg: "bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-900/60",
-      },
-      INVOICE_QUERY: {
-        title: "Freight Invoice & Charges Inquiry",
-        desc: "This email concerns local charges, freight billing, or telex release fees. No paired Bill of Lading comparison is applicable.",
-        icon: Receipt,
-        color: "text-indigo-600 dark:text-indigo-400",
-        bg: "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/60",
-      },
-      GENERAL: {
-        title: "General Logistics Inquiry",
-        desc: "This email is a general customer service or operational communication without paired shipping documents.",
-        icon: Mail,
-        color: "text-slate-600 dark:text-slate-400",
-        bg: "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800",
-      },
-      SPAM: {
-        title: "Quarantined / Spam Communication",
-        desc: "Automated newsletter, unsolicited marketing, or system notification flagged as non-operational.",
-        icon: ShieldAlert,
-        color: "text-rose-600 dark:text-rose-400",
-        bg: "bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/60",
-      },
-    };
-
-    const details = categoryDetails[currentCase.category] || {
-      title: "Operational Communication",
-      desc: "This message does not contain paired Bill of Lading or Shipping Instruction documents.",
-      icon: FileText,
-      color: "text-[#345ec4] dark:text-[#5a82e2]",
-      bg: "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/60",
-    };
-
-    const CategoryIcon = details.icon;
-
     return (
       <div className="space-y-6">
         {securityWarning}
-        {/* Email Header Card */}
-        <div className="p-6 bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-md bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-[#8ea9f7]">
-                  {currentCase.id}
-                </span>
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  {currentCase.timestamp}
-                </span>
-              </div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white pt-1">
-                {currentCase.subject}
-              </h2>
-              <div className="text-xs text-slate-500 dark:text-slate-400 pt-0.5">
-                From:{" "}
-                <span className="font-mono text-slate-700 dark:text-slate-300">
-                  {currentCase.sender}
-                </span>
-              </div>
-            </div>
-            <span
-              className={`px-3 py-1 rounded-lg text-xs font-bold border ${details.bg} ${details.color}`}
-            >
-              {details.title}
-            </span>
-          </div>
-        </div>
-
-        {/* Empty State / Non-BL Notice Card */}
-        <div className="p-10 text-center bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs space-y-4">
-          <div
-            className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center border ${details.bg}`}
-          >
-            <CategoryIcon className={`w-7 h-7 ${details.color}`} />
-          </div>
-          <div className="max-w-md mx-auto">
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-              No Document Comparison Required
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-              {details.desc}
-            </p>
-          </div>
-
-          <div className="p-4 max-w-lg mx-auto rounded-xl bg-slate-50 dark:bg-[#091f52]/30 border border-slate-200/60 dark:border-[#1a3d8e]/40 text-left text-xs space-y-2">
-            <div className="font-semibold text-slate-700 dark:text-slate-300">
-              AI Triage Summary:
-            </div>
-            <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-              {currentCase.aiAnalysis.summary}
-            </p>
-            <div className="pt-1 flex items-center space-x-1.5 text-slate-500 dark:text-slate-400 text-[11px]">
-              <span className="font-semibold">Recommended Action:</span>
-              <span>{currentCase.aiAnalysis.recommendation}</span>
-            </div>
-          </div>
-        </div>
+        <OperationalEmailHub currentCase={currentCase} />
       </div>
     );
   }
