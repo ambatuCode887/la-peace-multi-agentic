@@ -46,9 +46,15 @@ def create_app(
     case_store: CaseStore | None = None,
 ) -> FastAPI:
     root = Path(upload_root).expanduser().resolve()
+    production_root = Path(upload_root) == Path(".artifacts/uploads")
+    if case_store is None and production_root and not env("MONGODB_URI"):
+        raise RuntimeError(
+            "MONGODB_URI is required for the production shipping API; "
+            "refusing to fall back to local or Docker report storage."
+        )
     store = case_store or get_case_store(
         root,
-        prefer_mongo=Path(upload_root) == Path(".artifacts/uploads"),
+        prefer_mongo=production_root,
     )
     app = FastAPI(title="Shipping Document Verification API")
     app.add_middleware(
@@ -395,8 +401,6 @@ def _add_ambiguity_analysis(report: dict[str, Any]) -> bool:
     documents = report.get("documents", {})
     ambiguous_fields = telemetry.get("ambiguous_fields", []) if isinstance(telemetry, dict) else []
     if not ambiguous_fields or not isinstance(documents, dict):
-        return False
-    if report.get("ocr_distortion_analysis") is not None:
         return False
 
     si = documents.get("si", {})
