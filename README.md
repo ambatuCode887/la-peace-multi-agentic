@@ -1,6 +1,8 @@
 ﻿# Team: La Peace
 
-# Multi-Agent Shipping Verification
+# Multi-Agent Shipping Verification With Qdrant
+
+# Repository : https://github.com/ambatuCode887/la-peace-multi-agentic
 
 La Peace SDOC is a multi-agent shipping-document verification workspace with optional Qdrant-backed RAG. The production deployment uses **Vercel** for the React frontend, **Render** for the FastAPI backend, and **MongoDB Atlas** for case reports and attachment persistence.
 
@@ -62,18 +64,22 @@ Open the Vite URL, normally `http://localhost:5173`. The frontend uses `/api` lo
 
 ### Production deployment
 
-1. **MongoDB Atlas:** create a database named `shipping`, allow the Render service IP/network access, and set `MONGODB_URI` and `MONGODB_DB` in Render. The backend stores reports in `cases` and attachments in `cases_attachments`.
-2. **Render:** create a Python web service from this repository.
-   - Build command: `pip install -r requirements.txt`
-   - Start command: `uvicorn agents.shipping.api:create_app --factory --host 0.0.0.0 --port $PORT`
+1. **Prepare the dataset:** place the supplied challenge data in the repository as `data_v2/inbox/*.json` and `data_v2/attachments/*` before building the image. The Dockerfile copies this directory to `/app/data_v2`; the current repository includes only the expected empty directories because the challenge dataset is not committed.
+2. **MongoDB Atlas:** create a database named `shipping`, allow the Render service IP/network access, and set `MONGODB_URI` and `MONGODB_DB` in Render. The backend stores reports in `cases` and attachments in `cases_attachments`.
+3. **Render:** connect the GitHub repository and use the included `render.yaml`, or create a Docker web service manually.
+   - Dockerfile: `./Dockerfile`
+   - Health check: `/cases`
+   - `SHIPPING_DATA_ROOT=/app/data_v2`
    - Add `MONGODB_URI`, `MONGODB_DB`, and any Gemini/Qdrant variables required by the deployment.
-3. **Vercel:** import the repository, set the project root to `frontend`, and configure:
+4. **Vercel:** import the repository, set the project root to `frontend`, and configure:
    - Build command: `npm run build`
    - Output directory: `dist`
    - Environment variable: `VITE_API_BASE_URL=https://<your-render-service>.onrender.com`
-4. Redeploy the frontend after changing `VITE_API_BASE_URL`. Redeploy the backend after changing MongoDB, Gemini, or Qdrant settings.
+5. Redeploy the frontend after changing `VITE_API_BASE_URL`. Redeploy the backend after changing MongoDB, Gemini, or Qdrant settings.
 
 The browser must call the Render API in production; Vercel’s filesystem is not used for case reports or attachments.
+
+`Process inbox` now reads the bundled `/app/data_v2` directory by default instead of calling `localhost:8080`. `Retry selected` can reconstruct a processed case’s inbox record and attachments from MongoDB after a Render restart. New uploads and processed attachments are persisted to MongoDB, which is necessary because Render’s local filesystem is ephemeral.
 
 ## Shipping verification project scope
 

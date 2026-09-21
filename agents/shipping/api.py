@@ -258,7 +258,7 @@ def create_app(
     def process_inbox(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         # A plain `def` runs in a worker thread, so the dashboard stays responsive meanwhile.
         options = payload or {}
-        data_root = options.get("data_root") or env("SHIPPING_DATA_ROOT", "http://localhost:8080")
+        data_root = options.get("data_root") or env("SHIPPING_DATA_ROOT", "/app/data_v2")
         if not isinstance(data_root, str) or not data_root.strip():
             raise HTTPException(status_code=422, detail="data_root must be a non-empty string")
         include_ai = options.get("include_ai", False)
@@ -327,6 +327,8 @@ def create_app(
     async def retry_case(email_id: str) -> dict[str, Any]:
         dataset_root = root / _safe_id(email_id)
         inbox_path = dataset_root / "inbox" / f"{email_id}.json"
+        if not inbox_path.is_file() and isinstance(store, MongoCaseStore):
+            _materialize_mongo_case(store, email_id, dataset_root)
         if not inbox_path.is_file():
             raise HTTPException(status_code=404, detail="Uploaded email not found")
         report = inspect_shipping_email(email_id, str(dataset_root))
@@ -457,6 +459,34 @@ def _ground_truth_path() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     return Path.home() / "Downloads" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json"
+
+
+def _materialize_mongo_case(store: MongoCaseStore, email_id: str, dataset_root: Path) -> None:
+    """Recreate retry inputs from MongoDB after an ephemeral Render restart."""
+    report = store.get_case(email_id)
+    if report is None:
+        return
+    attachments = list(report.get("attachments") or [])
+    inbox = dataset_root / "inbox"
+    attachment_root = dataset_root / "attachments"
+    inbox.mkdir(parents=True, exist_ok=True)
+    attachment_root.mkdir(parents=True, exist_ok=True)
+    for reference in attachments:
+        name = Path(reference).name
+        stored = store.get_attachment(email_id, name)
+        if stored is not None:
+            (attachment_root / name).write_bytes(stored[0])
+    (inbox / f"{email_id}.json").write_text(
+        json.dumps({
+            "email_id": email_id,
+            "from": report.get("sender", ""),
+            "subject": report.get("subject", ""),
+            "body": report.get("body", ""),
+            "attachments": [f"attachments/{Path(reference).name}" for reference in attachments],
+            "source": report.get("source", "inbox"),
+        }, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _validate_export_reports(reports: list[dict[str, Any] | None], email_ids: list[str]) -> None:
