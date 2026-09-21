@@ -311,11 +311,11 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       >
         {/* Left Side: SI Blueprint, a tinted band so the source of truth stands apart from the draft BL */}
         <div className="flex flex-col justify-center border-l-[3px] border-[#345ec4] bg-[#e9f0fd] py-3.5 pl-3 pr-4 dark:border-[#5a82e2] dark:bg-[#0d2f7a]/70">
-          <div className="text-[11px] uppercase tracking-wider font-bold text-[#345ec4] dark:text-[#8ea9f7] mb-0.5">
-            <span>{field.label}</span>
-            <span className="ml-2 inline-block normal-case tracking-normal">
-              {resolutionBadge}
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-[#345ec4]/15 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wide text-[#1a3d8e] dark:bg-[#5a82e2]/25 dark:text-[#b4c5fa]">
+              {field.label}
             </span>
+            {resolutionBadge}
           </div>
           <div className="font-mono text-sm text-slate-900 dark:text-white font-semibold">
             {field.siValue}
@@ -553,6 +553,15 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
                   </div>
                 )}
               </div>
+              {currentCase.status === "PASS" && !currentCase.promptInjectionDetected && (
+                <span
+                  className="ml-auto inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  title="Every extracted field matches the Shipping Instruction. Ready for auto-submission."
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Clean · All {currentCase.fields.length} fields match
+                </span>
+              )}
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
               <span className="inline-flex items-center gap-1.5">
