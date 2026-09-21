@@ -21,9 +21,13 @@ import type { BackendReport } from "./services/api";
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
-  const [selectedCaseId, setSelectedCaseId] = useState<string>(
-    ALL_CASES[0]?.id || "email_001",
-  );
+  const [selectedCaseId, setSelectedCaseId] = useState<string>(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get("case");
+      if (param) return param;
+    } catch {}
+    return ALL_CASES[0]?.id || "email_001";
+  });
   const [categoryFilter, setCategoryFilter] = useState<EmailCategory | "ALL">(
     "ALL",
   );
@@ -39,6 +43,7 @@ export function App() {
     "summary" | "review" | "email" | "chat"
   >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
+  const [mobileInboxOpen, setMobileInboxOpen] = useState<boolean>(false);
   // Starts true: the first backend check may retry while a hosted backend wakes up.
   const [queueLoading, setQueueLoading] = useState<boolean>(true);
   const [queueError, setQueueError] = useState<string | null>(null);
@@ -81,11 +86,17 @@ export function App() {
             ),
           ),
         );
-        setSelectedCaseId((current) =>
-          summaries.some((summary) => summary.email_id === current)
+        setSelectedCaseId((current) => {
+          try {
+            const urlParam = new URLSearchParams(window.location.search).get("case");
+            if (urlParam && summaries.some((s) => s.email_id === urlParam)) {
+              return urlParam;
+            }
+          } catch {}
+          return summaries.some((summary) => summary.email_id === current)
             ? current
-            : summaries[0]?.email_id || "",
-        );
+            : summaries[0]?.email_id || "";
+        });
       }
     } catch (error) {
       console.warn("Backend cases unavailable, using active dataset:", error);
@@ -231,10 +242,11 @@ export function App() {
   const handleSelectCase = (id: string) => {
     setOperationsOpen(false);
     setSelectedCaseId(id);
+    setMobileInboxOpen(false);
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#f5f8ff] text-[#0d1a3a] dark:bg-[#05163a] dark:text-[#eef3fc] transition-colors">
+    <div className="flex flex-col h-screen h-dvh bg-[#f5f8ff] text-[#0d1a3a] dark:bg-[#05163a] dark:text-[#eef3fc] transition-colors">
       {/* Top Header with La Peace SDOC Branding, raw Lapis Lazuli icon & Live Backend Telemetry */}
       <Header
         darkMode={darkMode}
@@ -244,11 +256,13 @@ export function App() {
         backendConnected={backendConnected}
         operationsOpen={operationsOpen}
         onToggleOperations={() => setOperationsOpen((open) => !open)}
+        mobileInboxOpen={mobileInboxOpen}
+        onToggleMobileInbox={() => setMobileInboxOpen((prev) => !prev)}
       />
 
       {/* Main 3-Zone Workspace */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Zone 1: Queue (Left ~336px) */}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Zone 1: Queue (Left ~336px or Mobile Drawer) */}
         <Sidebar
           allCases={cases}
           cases={filteredCases}
@@ -261,10 +275,12 @@ export function App() {
           onRefreshInbox={refreshCases}
           collapsed={inboxCollapsed}
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
+          mobileOpen={mobileInboxOpen}
+          onCloseMobile={() => setMobileInboxOpen(false)}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
-        <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div
             className={`mx-auto transition-[max-width] duration-200 ${inboxCollapsed ? "max-w-6xl" : "max-w-4xl"}`}
           >

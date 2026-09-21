@@ -326,7 +326,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
       </div>
 
       {/* 2. AI SUMMARY POINT-FORM CARD */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-indigo-50/70 via-blue-50/40 to-white dark:from-[#091b49]/90 dark:via-[#06163a] dark:to-[#040f2b] border border-indigo-200/80 dark:border-indigo-900/70 shadow-xs p-6 space-y-4">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-indigo-50/70 via-blue-50/40 to-white dark:from-[#091b49]/90 dark:via-[#06163a] dark:to-[#040f2b] border border-indigo-200/80 dark:border-indigo-900/70 shadow-xs p-4 sm:p-6 space-y-4">
         {/* Subtle Decorative Gradient Glow */}
         <div className="absolute -top-16 -right-16 w-48 h-48 bg-indigo-400/10 dark:bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -339,7 +339,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
             <span className="text-xs font-bold tracking-wide uppercase text-indigo-900 dark:text-indigo-200">
               AI Summary
             </span>
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/60">
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/60 hidden sm:inline-block">
               Point-Form Triage
             </span>
           </div>
@@ -398,14 +398,14 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
       {/* 3. MODERN GMAIL-STYLE EMAIL VIEWER */}
       <div className="rounded-2xl bg-white dark:bg-[#06163a] border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs overflow-hidden">
         {/* Email Header Bar */}
-        <div className="p-5 border-b border-slate-100 dark:border-[#1a3d8e]/40 space-y-3">
+        <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#1a3d8e]/40 space-y-3">
           <div className="flex items-start justify-between gap-4">
             <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
               {currentCase.subject}
             </h2>
             <button
               onClick={() => setEmailExpanded(!emailExpanded)}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
               title={emailExpanded ? "Collapse message" : "Expand message"}
             >
               {emailExpanded ? (
@@ -416,23 +416,23 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
             </button>
           </div>
 
-          <div className="flex items-center justify-between text-xs pt-1">
-            <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-1">
+            <div className="flex items-center space-x-3 min-w-0">
               {/* Avatar circle */}
               <div className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800/80 flex items-center justify-center text-xs font-bold text-indigo-700 dark:text-indigo-300 shrink-0">
                 {senderInitials}
               </div>
-              <div>
-                <div className="font-semibold text-slate-800 dark:text-slate-200">
+              <div className="min-w-0">
+                <div className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                   {currentCase.sender}
                 </div>
-                <div className="text-[11px] text-slate-400 dark:text-slate-500">
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
                   To: Documentation Operations Desk &lt;docs@shipping.com&gt;
                 </div>
               </div>
             </div>
 
-            <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+            <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 shrink-0">
               {formatMalaysiaTime(currentCase.timestamp)}
             </div>
           </div>
@@ -440,7 +440,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
 
         {/* Email Body Content */}
         {emailExpanded && (
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-wrap font-sans">
               {currentCase.body ? (
                 currentCase.body

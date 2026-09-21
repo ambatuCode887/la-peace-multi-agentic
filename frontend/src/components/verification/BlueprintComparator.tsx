@@ -231,13 +231,16 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             );
           }
         }}
-        className={`group grid grid-cols-2 items-stretch border-b border-slate-200 dark:border-[#1a3d8e]/60 last:border-b-0 overflow-hidden transition-colors cursor-pointer ${selectedFieldKey === field.key ? "bg-[#eef3fc] ring-1 ring-inset ring-[#345ec4]/50 dark:bg-[#091f52]/60" : ""}`}
+        className={`group grid grid-cols-1 sm:grid-cols-2 items-stretch border-b border-slate-200 dark:border-[#1a3d8e]/60 last:border-b-0 overflow-hidden transition-colors cursor-pointer ${selectedFieldKey === field.key ? "bg-[#eef3fc] ring-1 ring-inset ring-[#345ec4]/50 dark:bg-[#091f52]/60" : ""}`}
       >
         {/* Left Side: SI Blueprint, a tinted band so the source of truth stands apart from the draft BL */}
-        <div className="flex flex-col justify-center border-l-[3px] border-[#345ec4] bg-[#e9f0fd] py-3.5 pl-3 pr-4 dark:border-[#5a82e2] dark:bg-[#0d2f7a]/70">
+        <div className="flex flex-col justify-center border-l-[3px] border-[#345ec4] bg-[#e9f0fd] py-3 sm:py-3.5 pl-3 pr-3 sm:pr-4 dark:border-[#5a82e2] dark:bg-[#0d2f7a]/70">
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <span className="rounded-md bg-[#345ec4]/15 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wide text-[#1a3d8e] dark:bg-[#5a82e2]/25 dark:text-[#b4c5fa]">
               {field.label}
+            </span>
+            <span className="sm:hidden text-[10px] font-bold text-[#1a3d8e] dark:text-[#8ea9f7] uppercase tracking-wider">
+              SI Source of Truth
             </span>
             {!hasSiValue && missingValueLabel && (
               <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
@@ -246,16 +249,16 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
               </span>
             )}
           </div>
-          <div className="font-mono text-sm text-slate-900 dark:text-white font-semibold">
+          <div className="font-mono text-xs sm:text-sm text-slate-900 dark:text-white font-semibold break-words">
             {field.siValue}
           </div>
         </div>
 
         {/* Right Side: BL Draft */}
         <div
-          className={`flex flex-col justify-center border-l border-slate-200 py-3.5 pl-4 pr-2 transition-colors dark:border-[#1a3d8e]/60 ${selectedFieldKey === field.key ? "" : "bg-slate-50 group-hover:bg-slate-100 dark:bg-white/[0.05] dark:group-hover:bg-white/[0.09]"}`}
+          className={`flex flex-col justify-center border-t sm:border-t-0 sm:border-l border-slate-200 py-3 sm:py-3.5 pl-3 sm:pl-4 pr-3 sm:pr-2 transition-colors dark:border-[#1a3d8e]/60 ${selectedFieldKey === field.key ? "" : "bg-slate-50 group-hover:bg-slate-100 dark:bg-white/[0.05] dark:group-hover:bg-white/[0.09]"}`}
         >
-          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
             Incoming Draft BL Value
           </div>
           {blContent}
@@ -445,97 +448,141 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 
       {renderOcrAlert()}
 
-      {/* Shipment Header Details */}
-      <div className="bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 p-5 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-[#1a3d8e]/60">
-          <div className="min-w-0 flex-1 basis-[420px]">
-            <div className="flex items-start gap-2.5">
-              <span className="mt-0.5 shrink-0 text-base font-mono font-bold px-3 py-1 rounded-xl bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
-                {currentCase.id}
+      {/* Shipment Header Details (Discrepancy Report Card Header) */}
+      <div className="bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 p-4 sm:p-5 shadow-xs">
+        {/* Row 1: Case ID, Reply Badge, Subtitle & Verification Status Pill */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-100 dark:border-[#1a3d8e]/40">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-xs sm:text-sm font-mono font-bold px-2.5 py-1 rounded-lg bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
+              {currentCase.id}
+            </span>
+            {subject.isReply && (
+              <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                Reply
               </span>
-              <div className="min-w-0">
-                <h2
-                  className="text-lg font-bold leading-snug text-slate-900 dark:text-white"
-                  title={currentCase.subject}
-                >
-                  {subject.isReply && (
-                    <span className="mr-2 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                      Reply
-                    </span>
-                  )}
-                  {subject.title}
-                </h2>
-                {subject.references.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {subject.references.map((reference, index) => (
-                      <span
-                        key={`${reference}-${index}`}
-                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-600 dark:border-[#1a3d8e]/60 dark:bg-white/[0.05] dark:text-slate-300"
-                      >
-                        {reference}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {currentCase.status === "PASS" &&
-                !currentCase.promptInjectionDetected && (
-                  <span
-                    className="ml-auto inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
-                    title="Every extracted field matches the Shipping Instruction. Ready for auto-submission."
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Clean · All {currentCase.fields.length} fields match
-                  </span>
-                )}
-            </div>
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-              <span className="inline-flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5 shrink-0" />
-                <span>Sender:</span>
-                <span className="font-mono text-slate-700 dark:text-slate-300">
-                  {currentCase.sender}
-                </span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  Ingested{" "}
-                  <span className="font-medium text-slate-700 dark:text-slate-300">
-                    {formatMalaysiaTime(currentCase.timestamp)}
-                  </span>
-                </span>
-              </span>
-            </div>
+            )}
+            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 hidden sm:inline">
+              Shipping Instruction vs Draft BL
+            </span>
           </div>
 
-          <div className="flex items-center space-x-4 text-xs font-mono">
-            <div className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-100 dark:border-[#1a3d8e]/40">
-              <span className="text-slate-400 block text-[10px]">VESSEL</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">
-                {currentCase.vessel}
+          {/* Status Badge */}
+          {currentCase.status === "PASS" && !currentCase.promptInjectionDetected ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+              title="Every extracted field matches the Shipping Instruction."
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>Clean · All {currentCase.fields.length} fields match</span>
+            </span>
+          ) : currentCase.status === "MISMATCH" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+              <AlertCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>Discrepancy Detected</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Needs Review</span>
+            </span>
+          )}
+        </div>
+
+        {/* Row 2: Full-Width Email Title with Clean Typographic Hierarchy */}
+        <div className="py-2.5">
+          <h2
+            className="text-sm sm:text-base md:text-[17px] font-semibold text-slate-800 dark:text-slate-100 leading-relaxed break-words"
+            title={currentCase.subject}
+          >
+            {subject.segments && subject.segments.length > 0 ? (
+              subject.segments.map((segment, index) => (
+                <span key={index} className="inline">
+                  {index > 0 && (
+                    <span className="inline-block px-2 text-slate-400 dark:text-slate-500 font-normal select-none">
+                      /
+                    </span>
+                  )}
+                  <span className="inline-block">{segment}</span>
+                </span>
+              ))
+            ) : (
+              <span>{subject.title}</span>
+            )}
+          </h2>
+
+          {/* Reference Chips */}
+          {subject.references.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500 mr-1">
+                Ref:
               </span>
+              {subject.references.map((reference, index) => (
+                <span
+                  key={`${reference}-${index}`}
+                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-white/[0.05] dark:text-slate-300"
+                >
+                  {reference}
+                </span>
+              ))}
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-100 dark:border-[#1a3d8e]/40">
-              <span className="text-slate-400 block text-[10px]">VOYAGE</span>
-              <span className="font-bold text-slate-800 dark:text-slate-200">
-                {currentCase.voyageNumber}
-              </span>
-            </div>
-            <div className="px-3 py-1.5 rounded-xl bg-[#eef3fc] dark:bg-[#052464]/80 border border-[#345ec4]/30 dark:border-[#1a3d8e]">
-              <span className="text-[#345ec4] dark:text-[#5a82e2] block text-[10px]">
-                ROUTE
-              </span>
-              <span className="font-bold text-[#1a3d8e] dark:text-[#8ea9f7]">
-                {currentCase.pol} → {currentCase.pod}
-              </span>
-            </div>
+          )}
+        </div>
+
+        {/* Row 3: Sender & Ingestion Metadata */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400 pt-1 pb-3">
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="text-slate-400">Sender:</span>
+            <span className="font-mono text-slate-700 dark:text-slate-300 font-medium truncate max-w-[240px] sm:max-w-none">
+              {currentCase.sender}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 shrink-0">
+            <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <span className="text-slate-400">Ingested:</span>
+            <span className="font-medium text-slate-700 dark:text-slate-300">
+              {formatMalaysiaTime(currentCase.timestamp)}
+            </span>
+          </span>
+        </div>
+
+        {/* Row 4: Dedicated Logistics Strip (Vessel / Voyage / Route) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 pt-3 border-t border-slate-100 dark:border-[#1a3d8e]/40 text-xs font-mono">
+          <div className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-100 dark:border-[#1a3d8e]/40 flex flex-col justify-center">
+            <span className="text-slate-400 text-[10px] font-sans font-bold uppercase tracking-wider mb-0.5">
+              VESSEL
+            </span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 truncate" title={currentCase.vessel}>
+              {currentCase.vessel || "N/A"}
+            </span>
+          </div>
+          <div className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-100 dark:border-[#1a3d8e]/40 flex flex-col justify-center">
+            <span className="text-slate-400 text-[10px] font-sans font-bold uppercase tracking-wider mb-0.5">
+              VOYAGE
+            </span>
+            <span className="font-bold text-slate-800 dark:text-slate-200 truncate" title={currentCase.voyageNumber}>
+              {currentCase.voyageNumber || "N/A"}
+            </span>
+          </div>
+          <div className="col-span-2 sm:col-span-1 px-3 py-2 rounded-xl bg-[#eef3fc] dark:bg-[#052464]/80 border border-[#345ec4]/30 dark:border-[#1a3d8e] flex flex-col justify-center">
+            <span className="text-[#345ec4] dark:text-[#5a82e2] text-[10px] font-sans font-bold uppercase tracking-wider mb-0.5">
+              ROUTE
+            </span>
+            <span className="font-bold text-[#1a3d8e] dark:text-[#8ea9f7] truncate" title={`${currentCase.pol} → ${currentCase.pod}`}>
+              {currentCase.pol} → {currentCase.pod}
+            </span>
           </div>
         </div>
 
         {/* Side-by-Side Blueprint Diff Card */}
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-[#1a3d8e]/60">
-          <div className="grid grid-cols-2 border-b-2 border-slate-300 dark:border-[#5a82e2]/50 font-semibold text-xs text-slate-500">
+          {/* Mobile indicator bar */}
+          <div className="sm:hidden px-3 py-2 bg-slate-100 dark:bg-[#091f52]/40 text-[11px] text-slate-600 dark:text-slate-400 font-semibold flex items-center justify-between border-b border-slate-200 dark:border-[#1a3d8e]/60">
+            <span>SI Source vs Draft BL</span>
+            <span className="text-[10px] text-[#345ec4] dark:text-[#8ea9f7]">Tap row for evidence</span>
+          </div>
+
+          <div className="hidden sm:grid grid-cols-2 border-b-2 border-slate-300 dark:border-[#5a82e2]/50 font-semibold text-xs text-slate-500">
             <div className="flex items-center space-x-2 border-l-[3px] border-[#345ec4] bg-[#dbe6fb] py-3 pl-3 pr-4 dark:border-[#5a82e2] dark:bg-[#10388c]/70">
               <span className="px-2 py-0.5 rounded bg-white text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] text-[10px] font-bold border border-[#345ec4]/40 dark:border-[#5a82e2]/50">
                 SI BLUEPRINT

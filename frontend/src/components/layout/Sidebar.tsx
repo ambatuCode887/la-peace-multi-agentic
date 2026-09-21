@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 
@@ -40,6 +41,8 @@ interface SidebarProps {
   /** When true, the inbox shrinks to a slim rail so the case gets the full width. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -54,6 +57,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRefreshInbox,
   collapsed = false,
   onToggleCollapsed,
+  mobileOpen = false,
+  onCloseMobile,
 }) => {
   const [visibleCount, setVisibleCount] = useState<number>(40);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
@@ -423,11 +428,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Collapsed: a slim rail with just the way back. The hooks above keep running, so the filters
-  // and how far the list was scrolled/expanded are still there when the inbox is opened again.
-  if (collapsed) {
+  // Collapsed: a slim rail with just the way back on desktop.
+  if (collapsed && !mobileOpen) {
     return (
-      <aside className="w-12 shrink-0 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col items-center gap-3 py-3 h-[calc(100vh-4rem)] transition-colors select-none">
+      <aside className="w-12 shrink-0 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 hidden md:flex flex-col items-center gap-3 py-3 h-[calc(100dvh-4rem)] transition-colors select-none">
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -449,16 +453,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside className="w-84 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-[calc(100vh-4rem)] shadow-xs transition-colors select-none">
-      {/* Queue Header with Two Clean Dropdown Selectors */}
-      <div className="p-3.5 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2.5">
-        {/* Title Bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Filter className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
-            <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
-              Inbox
-            </h2>
+    <>
+      {/* Mobile Drawer Backdrop Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col shadow-2xl md:shadow-xs transition-all select-none ${
+          mobileOpen
+            ? "fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs sm:max-w-sm h-dvh flex"
+            : "hidden md:flex md:h-[calc(100dvh-4rem)] md:w-84"
+        }`}
+      >
+        {/* Queue Header with Two Clean Dropdown Selectors */}
+        <div className="p-3.5 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2.5">
+          {/* Title Bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              {onCloseMobile && (
+                <button
+                  type="button"
+                  onClick={onCloseMobile}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
+                  title="Close inbox"
+                  aria-label="Close inbox"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <Filter className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
+                Inbox
+              </h2>
             <button
               type="button"
               id="sidebar-refresh-inbox"
@@ -519,7 +550,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 onClick={onToggleCollapsed}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
                 title="Hide inbox"
                 aria-label="Hide inbox"
                 data-testid="collapse-inbox"
@@ -779,7 +810,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={c.id}
                 data-case-id={c.id}
-                onClick={() => onSelectCase(c.id)}
+                onClick={() => {
+                  onSelectCase(c.id);
+                  if (onCloseMobile) onCloseMobile();
+                }}
                 className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-300 dark:border-b-[#1a3d8e] ${
                   isSelected
                     ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
@@ -850,5 +884,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
     </aside>
-  );
+  </>
+);
 };
