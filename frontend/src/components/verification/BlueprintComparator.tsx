@@ -114,7 +114,8 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
                 Cheap-First Routing:
               </span>{" "}
               <span className="text-xs text-slate-600 dark:text-slate-300">
-                {routingTelemetry.resolvedByRules} rules ({routingTelemetry.ruleLatencyMs.toFixed(1)}ms)
+                {routingTelemetry.resolvedByRules} rules (
+                {routingTelemetry.ruleLatencyMs.toFixed(1)}ms)
                 {routingTelemetry.sentToLlm > 0
                   ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
                   : ""}
@@ -360,11 +361,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     );
     const readerWarning =
       agreement === "disagree" || agreement === "unavailable";
-    const coordinates = evidence?.coordinates
-      ? Object.entries(evidence.coordinates)
-          .map(([key, value]) => `${key}: ${value}`)
-          .join(" | ")
-      : "Coordinates unavailable";
 
     return (
       <div
@@ -423,14 +419,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             <strong>Page:</strong> {evidence?.page ?? "Text fallback"} ·{" "}
             <strong>Format:</strong> {evidence?.method || "Unknown"}
           </div>
-          <div>
-            <strong>Coordinates:</strong> {coordinates}
-          </div>
-          {sourceUrl && isVisualAttachment && evidence?.coordinates && (
-            <div>
-              <strong>Bounding box:</strong> Spatial coordinates mapped to page layout.
-            </div>
-          )}
         </div>
         <div className="text-[11px] text-slate-600 dark:text-slate-300">
           <strong>Primary value:</strong> {primaryValue || "No value"}
@@ -454,7 +442,14 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     if (!selectedField) {
       return (
         <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 dark:border-[#1a3d8e]/40 dark:bg-[#06163a]/40 px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
-          <span>💡 <strong className="font-semibold text-slate-600 dark:text-slate-300">Tip:</strong> Click any comparison row above to inspect source document text, OCR bounding box coordinates, and reader confidence.</span>
+          <span>
+            💡{" "}
+            <strong className="font-semibold text-slate-600 dark:text-slate-300">
+              Tip:
+            </strong>{" "}
+            Click any comparison row above to inspect source document text and
+            reader confidence.
+          </span>
         </div>
       );
     }
@@ -471,7 +466,9 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <span>{selectedField.label}</span>
-              <span className="text-xs font-normal text-slate-400 font-mono">({selectedField.key})</span>
+              <span className="text-xs font-normal text-slate-400 font-mono">
+                ({selectedField.key})
+              </span>
             </h3>
           </div>
           <div className="flex items-center space-x-3">
@@ -553,15 +550,16 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
                   </div>
                 )}
               </div>
-              {currentCase.status === "PASS" && !currentCase.promptInjectionDetected && (
-                <span
-                  className="ml-auto inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
-                  title="Every extracted field matches the Shipping Instruction. Ready for auto-submission."
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Clean · All {currentCase.fields.length} fields match
-                </span>
-              )}
+              {currentCase.status === "PASS" &&
+                !currentCase.promptInjectionDetected && (
+                  <span
+                    className="ml-auto inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+                    title="Every extracted field matches the Shipping Instruction. Ready for auto-submission."
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Clean · All {currentCase.fields.length} fields match
+                  </span>
+                )}
             </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
               <span className="inline-flex items-center gap-1.5">
@@ -628,9 +626,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             </div>
           </div>
 
-          <div>
-            {currentCase.fields.map(renderFieldDiff)}
-          </div>
+          <div>{currentCase.fields.map(renderFieldDiff)}</div>
         </div>
       </div>
 
