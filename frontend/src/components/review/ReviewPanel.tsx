@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { BackendReport } from "../../services/api";
 import type { ShippingCase } from "../../types/shipping";
 import { api } from "../../services/api";
@@ -31,34 +31,25 @@ export function ReviewPanel({
   onSwitchToEmail,
 }: ReviewPanelProps) {
   const [showFields, setShowFields] = useState(false);
-  const [siFields, setSiFields] = useState<Record<string, string>>({});
-  const [blFields, setBlFields] = useState<Record<string, string>>({});
+  const [siFields, setSiFields] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      currentCase.fields.map((field) => [field.key, field.siValue]),
+    ),
+  );
+  const [blFields, setBlFields] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      currentCase.fields.map((field) => [field.key, field.blValue]),
+    ),
+  );
   const [note, setNote] = useState("");
-  const [decision, setDecision] = useState<ReviewDecision>("accept");
+  const [decision, setDecision] = useState<ReviewDecision>(() =>
+    currentCase.status === "MISMATCH" ? "confirm_mismatch" : "accept",
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
-
-  useEffect(() => {
-    setSiFields(
-      Object.fromEntries(
-        currentCase.fields.map((field) => [field.key, field.siValue]),
-      ),
-    );
-    setBlFields(
-      Object.fromEntries(
-        currentCase.fields.map((field) => [field.key, field.blValue]),
-      ),
-    );
-    setNote("");
-    setDecision(
-      currentCase.status === "MISMATCH" ? "confirm_mismatch" : "accept",
-    );
-    setMessage(null);
-    setShowFields(false);
-  }, [currentCase.id, currentCase.fields, currentCase.status]);
 
   const saveReview = async () => {
     setSaving(true);
@@ -150,7 +141,7 @@ export function ReviewPanel({
               Mark False Alarm (Manual Override)
             </option>
             <option value="request_clarification">
-              Request Carrier Clarification
+              Request Carrier Clarification (Needs Review)
             </option>
           </select>
           <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 leading-normal">

@@ -426,6 +426,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       {activeTab === "review" && (
         <div className="flex-1 overflow-y-auto p-4 select-text">
           <ReviewPanel
+            key={currentCase.id}
             currentCase={currentCase}
             onSaved={(report) => {
               if (onReviewSaved) onReviewSaved(report);

@@ -503,7 +503,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 
   return (
     <div className="flex flex-col space-y-6">
-      {securityWarning}
       {/* Toast Notice for Re-read */}
       {rereadMessage && (
         <div className="p-3 bg-[#eef3fc] dark:bg-[#052464] border border-[#345ec4]/40 text-[#1a3d8e] dark:text-[#8ea9f7] rounded-xl text-xs flex items-center space-x-2 animate-in fade-in">
