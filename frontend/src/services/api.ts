@@ -220,12 +220,27 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: res.statusText }));
+        return {
+          available: false,
+          route: 'human_review',
+          reason: error.detail || `Manager review failed: ${res.statusText}`,
+        };
+      }
       const data = await res.json();
-      return data.manager_review || null;
+      return data.manager_review || {
+        available: false,
+        route: 'human_review',
+        reason: 'The backend returned no manager-review result.',
+      };
     } catch (err) {
       console.warn('Manager review error:', err);
-      return null;
+      return {
+        available: false,
+        route: 'human_review',
+        reason: err instanceof Error ? err.message : 'Manager review request failed.',
+      };
     }
   },
 
