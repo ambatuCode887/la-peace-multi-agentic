@@ -216,26 +216,27 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   };
 
   const renderFieldDiff = (field: FieldComparison) => {
-    const resolutionBadge =
-      field.resolutionSource === "llm" ? (
-        <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-          LLM ambiguity check
-        </span>
-      ) : field.resolutionSource === "human" ? (
-        <span className="rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
-          Human review required
-        </span>
-      ) : (
-        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
-          Rule checked
-        </span>
-      );
+    const hasSiValue =
+      field.siValue !== null &&
+      field.siValue !== undefined &&
+      !["", "null", "n/a"].includes(String(field.siValue).trim().toLowerCase());
+    const hasBlValue =
+      field.blValue !== null &&
+      field.blValue !== undefined &&
+      !["", "null", "n/a"].includes(String(field.blValue).trim().toLowerCase());
     let blContent = (
       <div className="flex items-center space-x-2">
         <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
           {field.blValue}
         </span>
-        <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        {hasSiValue && hasBlValue ? (
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        ) : (
+          <AlertTriangle
+            className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
+            aria-label={!hasSiValue ? "Missing SI value" : "Missing BL value"}
+          />
+        )}
       </div>
     );
 
@@ -316,7 +317,12 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             <span className="rounded-md bg-[#345ec4]/15 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wide text-[#1a3d8e] dark:bg-[#5a82e2]/25 dark:text-[#b4c5fa]">
               {field.label}
             </span>
-            {resolutionBadge}
+            {!hasSiValue && (
+              <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                Missing SI value
+              </span>
+            )}
           </div>
           <div className="font-mono text-sm text-slate-900 dark:text-white font-semibold">
             {field.siValue}
