@@ -11,7 +11,7 @@ import type {
   OcrDistortionAnalysis,
 } from '../types/shipping';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
 export interface BackendCaseSummary {
   email_id: string;

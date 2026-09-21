@@ -12,7 +12,7 @@ import {
   Search,
   Gauge,
 } from "lucide-react";
-import { api } from "../../services/api";
+import { API_BASE, api } from "../../services/api";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 import { OperationalEmailHub } from "./OperationalEmailHub";
 
@@ -338,7 +338,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       .map((part) => encodeURIComponent(part))
       .join("/");
     const sourceUrl = attachmentPath
-      ? `/api/cases/${encodeURIComponent(currentCase.id)}/attachments/${attachmentPath}`
+      ? `${API_BASE}/cases/${encodeURIComponent(currentCase.id)}/attachments/${attachmentPath}`
       : null;
     const isVisualAttachment = /\.(pdf|png|jpe?g|webp)$/i.test(
       evidence?.attachment || "",
