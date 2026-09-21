@@ -59,8 +59,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
+  const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
+    "success",
+  );
+  const scanNoticeTimeoutRef = useRef<number | null>(null);
+
+  const scheduleScanNoticeClear = () => {
+    if (scanNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(scanNoticeTimeoutRef.current);
+    }
+    scanNoticeTimeoutRef.current = window.setTimeout(() => {
+      setScanNotice(null);
+      scanNoticeTimeoutRef.current = null;
+    }, 3000);
+  };
 
   const handleRefreshInbox = async () => {
+    if (!onRefreshInbox) return;
     setIsRefreshing(true);
     setScanNotice(null);
     const start = Date.now();
@@ -72,15 +87,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (elapsed < 1200) {
         await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
       }
+      setScanNoticeTone("success");
       setScanNotice("Inbox updated");
-      setTimeout(() => setScanNotice(null), 3000);
+      scheduleScanNoticeClear();
     } catch {
       const elapsed = Date.now() - start;
       if (elapsed < 1200) {
         await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
       }
-      setScanNotice("Scanned live mailboxes");
-      setTimeout(() => setScanNotice(null), 3000);
+      setScanNoticeTone("error");
+      setScanNotice("Inbox refresh failed");
+      scheduleScanNoticeClear();
     } finally {
       setIsRefreshing(false);
     }
@@ -113,6 +130,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scanNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(scanNoticeTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Close on Escape key
@@ -393,7 +418,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               id="sidebar-refresh-inbox"
               data-testid="sidebar-refresh-inbox"
               onClick={handleRefreshInbox}
-              disabled={isRefreshing}
+              disabled={isRefreshing || !onRefreshInbox}
+              aria-label="Scan and refresh live inbox"
               title="Scan and refresh live inbox"
               className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
             >
@@ -411,8 +437,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             )}
             {!isRefreshing && scanNotice && (
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5 animate-in fade-in">
-                <Check className="w-3 h-3" /> {scanNotice}
+              <span
+                role="status"
+                aria-live="polite"
+                className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+              >
+                {scanNoticeTone === "success" ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <AlertTriangle className="w-3 h-3" />
+                )}{" "}
+                {scanNotice}
               </span>
             )}
           </div>
@@ -679,7 +714,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Subject Preview */}
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 line-clamp-1 leading-snug">
+                <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
                   {c.subject}
                 </p>
               </button>

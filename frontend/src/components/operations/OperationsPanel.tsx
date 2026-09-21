@@ -73,7 +73,7 @@ export function OperationsPanel({
       void run("process", async () => {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         setMessage(
-          "Live Mailbox Scan Demo: Successfully polled incoming enterprise mailbox. Scanned 520 shipment messages and synchronized multi-agent verification queue.",
+          "Live Mailbox Scan Demo: Successfully polled the incoming enterprise mailbox and synchronized the multi-agent verification queue.",
         );
       });
     }
@@ -86,7 +86,7 @@ export function OperationsPanel({
       void run("refresh", async () => {
         await new Promise((resolve) => setTimeout(resolve, 600));
         setMessage(
-          "Queue Refreshed: Displaying all 520 verified operational shipment records.",
+          "Queue refreshed: displaying the latest verified operational shipment records.",
         );
       });
     }
@@ -130,6 +130,11 @@ export function OperationsPanel({
             type="button"
             onClick={handleRefreshAction}
             disabled={busy !== null}
+            aria-label={
+              backendConnected
+                ? "Refresh inbox"
+                : "Run demo inbox refresh"
+            }
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-[#1a3d8e]/60 dark:text-slate-200 dark:hover:bg-[#091f52] cursor-pointer"
           >
             {busy === "refresh" ? (
@@ -137,7 +142,7 @@ export function OperationsPanel({
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
             )}{" "}
-            Refresh inbox
+            {backendConnected ? "Refresh inbox" : "Refresh inbox demo"}
           </button>
           <button
             type="button"
