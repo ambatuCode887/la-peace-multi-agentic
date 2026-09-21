@@ -326,11 +326,11 @@ def create_app(
     @app.post("/reviews/{email_id}")
     async def correct_review(email_id: str, correction: dict[str, Any]) -> dict[str, Any]:
         dataset_root = root / _safe_id(email_id)
-        if not (dataset_root / "inbox" / f"{email_id}.json").is_file():
-            raise HTTPException(status_code=404, detail="Uploaded email not found")
+        report = store.get_case(email_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Case report not found")
         _validate_correction(correction)
         report_path = dataset_root / "report.json"
-        report = _read_json(report_path, {})
         corrected_report = _apply_review_correction(report, correction)
         corrections_path = dataset_root / "review-corrections.json"
         corrections = _read_json(corrections_path, {})
@@ -353,8 +353,9 @@ def create_app(
             "at": correction["reviewed_at"],
             "decision": correction.get("decision"),
         })
-        corrections_path.write_text(json.dumps(corrections, indent=2) + "\n", encoding="utf-8")
-        report_path.write_text(json.dumps(corrected_report, indent=2) + "\n", encoding="utf-8")
+        if dataset_root.is_dir():
+            corrections_path.write_text(json.dumps(corrections, indent=2) + "\n", encoding="utf-8")
+            report_path.write_text(json.dumps(corrected_report, indent=2) + "\n", encoding="utf-8")
         store.save_report(corrected_report)
 
         submission = _read_json(dataset_root / "submission.json", {})
@@ -365,11 +366,12 @@ def create_app(
             "has_defect": corrected_report.get("has_defect", False),
             "defect_fields": corrected_report.get("defect_fields", []),
         }
-        (dataset_root / "submission.json").write_text(
-            json.dumps(submission, indent=2) + "\n", encoding="utf-8"
-        )
+        if dataset_root.is_dir():
+            (dataset_root / "submission.json").write_text(
+                json.dumps(submission, indent=2) + "\n", encoding="utf-8"
+            )
         clarification = _clarification_draft(report, correction) if correction.get("decision") == "request_clarification" else None
-        if clarification:
+        if clarification and dataset_root.is_dir():
             (dataset_root / "clarification-draft.json").write_text(
                 json.dumps(clarification, indent=2) + "\n", encoding="utf-8"
             )
