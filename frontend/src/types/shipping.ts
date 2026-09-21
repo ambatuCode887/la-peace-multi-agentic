@@ -60,7 +60,7 @@ export interface ReaderReading {
 }
 
 export interface AIAnalysis {
-  confidence: number;
+  confidence?: number;
   summary: string;
   recommendation: string;
   carrierRule?: string;

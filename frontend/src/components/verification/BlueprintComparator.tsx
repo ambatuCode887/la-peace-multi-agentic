@@ -511,7 +511,9 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
               Confidence
             </div>
             <div className="text-lg font-bold text-[#1a3d8e] dark:text-[#8ea9f7]">
-              {currentCase.aiAnalysis.confidence}%
+              {currentCase.aiAnalysis.confidence !== undefined
+                ? `${currentCase.aiAnalysis.confidence}%`
+                : "Not provided"}
             </div>
           </div>
           <div className="max-w-[140px] text-[10px] text-slate-500 dark:text-slate-400">

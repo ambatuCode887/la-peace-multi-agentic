@@ -443,19 +443,21 @@ export function mapReportToShippingCase(
   let recommendation =
     existing?.aiAnalysis?.recommendation ||
     (status === 'PASS' ? 'Auto-approve clean document.' : 'Send clarification to carrier.');
-  let confidence =
-    existing?.aiAnalysis?.confidence || (status === 'PASS' ? 99.4 : 92.5);
+  let confidence = existing?.aiAnalysis?.confidence;
 
   if (report.ai_analysis?.text) {
     try {
       const parsed = JSON.parse(report.ai_analysis.text);
       if (parsed.summary) summary = parsed.summary;
       if (parsed.recommended_action) recommendation = parsed.recommended_action;
-      if (parsed.confidence) {
-        confidence =
+      if (parsed.confidence !== undefined && parsed.confidence !== null) {
+        const parsedConfidence =
           typeof parsed.confidence === 'number'
             ? parsed.confidence
-            : parseFloat(parsed.confidence) || confidence;
+            : parseFloat(String(parsed.confidence));
+        if (Number.isFinite(parsedConfidence)) {
+          confidence = parsedConfidence <= 1 ? parsedConfidence * 100 : parsedConfidence;
+        }
       }
     } catch {
       summary = report.ai_analysis.text.slice(0, 200);
