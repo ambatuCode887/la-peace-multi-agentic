@@ -292,7 +292,7 @@ export function ReviewPanel({
             </p>
 
             <div className="rounded-xl border border-[#9fb8f5] bg-[#eef4ff] dark:border-[#345ec4]/60 dark:bg-[#091f52]/60 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div>
                   <p className="text-[11px] font-bold text-[#183b88] dark:text-[#cbd9ff]">
                     AI auto-fill suggestion
@@ -305,7 +305,7 @@ export function ReviewPanel({
                   type="button"
                   onClick={() => void requestAiSuggestion()}
                   disabled={suggesting}
-                  className="shrink-0 rounded-lg bg-[#345ec4] px-2.5 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-[#274da9] disabled:opacity-50"
+                  className="w-full sm:w-auto shrink-0 rounded-lg bg-[#345ec4] px-3 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-[#274da9] disabled:opacity-50 text-center"
                 >
                   {suggesting ? "Preparing..." : "Suggest with AI"}
                 </button>
@@ -352,7 +352,7 @@ export function ReviewPanel({
                     <button
                       type="button"
                       onClick={() => setAiPreview(null)}
-                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                      className="flex-1 sm:flex-initial rounded-lg border border-slate-300 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300 text-center"
                     >
                       Dismiss
                     </button>
@@ -360,7 +360,7 @@ export function ReviewPanel({
                       type="button"
                       onClick={applyAiSuggestion}
                       disabled={!aiPreview.changes?.length}
-                      className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                      className="flex-1 sm:flex-initial rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50 text-center"
                     >
                       Apply suggestion
                     </button>
@@ -378,7 +378,7 @@ export function ReviewPanel({
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     {field.label}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div>
                       <span className="text-[10px] text-slate-400 block mb-0.5">
                         SI Value
@@ -391,7 +391,7 @@ export function ReviewPanel({
                             [field.key]: e.target.value,
                           }))
                         }
-                        className="w-full font-mono text-xs rounded-lg border border-slate-200 dark:border-[#1a3d8e]/50 bg-white dark:bg-[#05163a] px-2 py-1 text-slate-800 dark:text-slate-100 outline-none focus:border-[#345ec4]"
+                        className="w-full font-mono text-xs rounded-lg border border-slate-200 dark:border-[#1a3d8e]/50 bg-white dark:bg-[#05163a] px-2.5 py-1.5 text-slate-800 dark:text-slate-100 outline-none focus:border-[#345ec4]"
                       />
                     </div>
                     <div>
@@ -406,7 +406,7 @@ export function ReviewPanel({
                             [field.key]: e.target.value,
                           }))
                         }
-                        className="w-full font-mono text-xs rounded-lg border border-slate-200 dark:border-[#1a3d8e]/50 bg-white dark:bg-[#05163a] px-2 py-1 text-slate-800 dark:text-slate-100 outline-none focus:border-[#345ec4]"
+                        className="w-full font-mono text-xs rounded-lg border border-slate-200 dark:border-[#1a3d8e]/50 bg-white dark:bg-[#05163a] px-2.5 py-1.5 text-slate-800 dark:text-slate-100 outline-none focus:border-[#345ec4]"
                       />
                     </div>
                   </div>

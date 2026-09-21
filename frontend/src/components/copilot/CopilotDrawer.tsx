@@ -317,7 +317,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     return (
       <button
         onClick={onToggle}
-        className="fixed right-6 bottom-6 z-40 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2.5 transition-all hover:scale-105 border border-[#5a82e2]/40 cursor-pointer"
+        className="fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px]"
       >
         <img
           src={lapeaceIcon}
@@ -325,48 +325,57 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           className="w-5 h-5 object-contain drop-shadow"
           style={{ imageRendering: "pixelated" }}
         />
-        <span className="text-xs font-bold">Open Review & AI Workspace</span>
+        <span className="text-xs font-bold hidden sm:inline">Open Review & AI Workspace</span>
+        <span className="text-xs font-bold sm:hidden">AI & Review</span>
       </button>
     );
   }
 
   return (
-    <aside className="w-96 xl:w-[420px] border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-[calc(100vh-4rem)] shadow-lg select-none">
-      {/* Drawer Header */}
-      <div className="p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25">
-        <div className="flex items-center space-x-2.5">
-          <img
-            src={lapeaceIcon}
-            alt="AI Assistant"
-            className="w-7 h-7 object-contain select-none drop-shadow-xs"
-            style={{ imageRendering: "pixelated" }}
-          />
-          <div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
-              <span>AI & Review Workspace</span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
-                Active
+    <>
+      {/* Mobile backdrop for drawer on < lg screens */}
+      <div
+        className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden"
+        onClick={onToggle}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md sm:w-[420px] lg:static lg:z-auto lg:w-96 xl:w-[420px] border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-dvh lg:h-[calc(100vh-4rem)] shadow-2xl lg:shadow-lg select-none">
+        {/* Drawer Header */}
+        <div className="p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25">
+          <div className="flex items-center space-x-2.5">
+            <img
+              src={lapeaceIcon}
+              alt="AI Assistant"
+              className="w-7 h-7 object-contain select-none drop-shadow-xs"
+              style={{ imageRendering: "pixelated" }}
+            />
+            <div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
+                <span>AI & Review Workspace</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
+                  Active
+                </span>
+              </h3>
+              <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-medium">
+                Multi-Agent Verification & Review
               </span>
-            </h3>
-            <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-medium">
-              Multi-Agent Verification & Review
-            </span>
+            </div>
           </div>
+
+          <button
+            onClick={onToggle}
+            className="p-2 sm:p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#091f52]/60 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+            aria-label="Close drawer"
+          >
+            <X className="w-5 h-5 sm:w-4 sm:h-4" />
+          </button>
         </div>
 
-        <button
-          onClick={onToggle}
-          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#091f52]/60 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="grid grid-cols-4 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-[11px] font-semibold">
-        <button
-          onClick={() => onTabChange("summary")}
-          className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
+        {/* Tabs */}
+        <div className="grid grid-cols-4 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-[11px] font-semibold">
+          <button
+            onClick={() => onTabChange("summary")}
+            className={`py-2 sm:py-1.5 rounded-lg text-center transition-all cursor-pointer ${
             activeTab === "summary"
               ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
               : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
@@ -749,5 +758,6 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         </div>
       )}
     </aside>
+    </>
   );
 };

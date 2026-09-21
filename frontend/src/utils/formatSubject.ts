@@ -3,6 +3,8 @@ export interface FormattedSubject {
   isReply: boolean;
   /** The readable part of the subject: descriptive segments joined with a dot. */
   title: string;
+  /** Individual descriptive segments of the subject for clean rendering. */
+  segments: string[];
   /** Short identifiers (booking, bill of lading, invoice numbers) to show as chips. */
   references: string[];
 }
@@ -28,7 +30,7 @@ function tidy(segment: string): string {
  */
 export function formatSubject(subject: string | undefined): FormattedSubject {
   const raw = (subject || "").trim();
-  if (!raw) return { isReply: false, title: "(no subject)", references: [] };
+  if (!raw) return { isReply: false, title: "(no subject)", segments: [], references: [] };
 
   const isReply = REPLY_PREFIX.test(raw);
   const body = raw.replace(REPLY_PREFIX, "");
@@ -49,6 +51,9 @@ export function formatSubject(subject: string | undefined): FormattedSubject {
   }
 
   // Nothing descriptive left (a subject that is only reference numbers): keep it readable as it was.
-  if (words.length === 0) return { isReply, title: tidy(body) || raw, references: [] };
-  return { isReply, title: words.join(" · "), references };
+  if (words.length === 0) {
+    const fallbackTitle = tidy(body) || raw;
+    return { isReply, title: fallbackTitle, segments: [fallbackTitle], references: [] };
+  }
+  return { isReply, title: words.join(" · "), segments: words, references };
 }
