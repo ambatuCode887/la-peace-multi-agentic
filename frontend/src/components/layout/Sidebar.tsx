@@ -438,6 +438,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
             {!isRefreshing && scanNotice && (
               <span
+                role="status"
+                aria-live="polite"
                 className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
               >
                 {scanNoticeTone === "success" ? (
@@ -712,7 +714,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Subject Preview */}
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 line-clamp-1 leading-snug">
+                <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
                   {c.subject}
                 </p>
               </button>
