@@ -114,11 +114,14 @@ def create_app(
     @app.post("/cases/{email_id}/manager-review")
     async def manager_review(email_id: str) -> dict[str, Any]:
         dataset_root = root / _safe_id(email_id)
-        report_path = dataset_root / "report.json"
-        if not report_path.is_file():
+        report = store.get_case(email_id)
+        if report is None:
             raise HTTPException(status_code=404, detail="Uploaded email report not found")
 
-        report = _read_json(report_path, {})
+        report_path = dataset_root / "report.json"
+        if not report_path.is_file():
+            dataset_root.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         try:
             review = await _run_manager_review(email_id, dataset_root)
         except Exception as error:
