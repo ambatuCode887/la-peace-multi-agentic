@@ -238,7 +238,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#eef3fc] via-indigo-50/40 to-white border border-[#345ec4]/20 dark:from-[#052464]/60 dark:via-[#0c1633] dark:to-[#052464]/20 dark:border-[#1a3d8e] shadow-xs">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                Agent Confidence Score
+                {currentCase.aiAnalysis.model === "Deterministic ETL extraction"
+                  ? "Extraction Confidence"
+                  : "AI Confidence Score"}
               </span>
               <span className="font-mono font-bold text-[#345ec4] dark:text-[#5a82e2] text-sm">
                 {currentCase.aiAnalysis.confidence !== undefined
