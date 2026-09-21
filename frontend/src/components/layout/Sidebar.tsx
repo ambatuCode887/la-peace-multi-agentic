@@ -59,6 +59,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
+  const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
+    "success",
+  );
 
   const handleRefreshInbox = async () => {
     setIsRefreshing(true);
@@ -72,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (elapsed < 1200) {
         await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
       }
+      setScanNoticeTone("success");
       setScanNotice("Inbox updated");
       setTimeout(() => setScanNotice(null), 3000);
     } catch {
@@ -79,7 +83,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (elapsed < 1200) {
         await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
       }
-      setScanNotice("Scanned live mailboxes");
+      setScanNoticeTone("error");
+      setScanNotice("Inbox refresh failed");
       setTimeout(() => setScanNotice(null), 3000);
     } finally {
       setIsRefreshing(false);
@@ -411,7 +416,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             )}
             {!isRefreshing && scanNotice && (
-              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5 animate-in fade-in">
+              <span
+                className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+              >
                 <Check className="w-3 h-3" /> {scanNotice}
               </span>
             )}

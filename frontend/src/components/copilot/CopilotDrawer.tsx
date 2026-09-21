@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Loader2,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 import type { BackendReport } from "../../services/api";
@@ -66,7 +67,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [draftBody, setDraftBody] = useState("");
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<
-    "idle" | "sending" | "sent"
+    "idle" | "sending" | "sent" | "failed"
   >("idle");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
 
@@ -301,9 +302,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         setDispatchFeedback(null);
       }, 6000);
     } catch {
-      setDispatchStatus("sent");
+      setDispatchStatus("failed");
       setDispatchFeedback(
-        `Outbound clarification dispatched to ${draftTo || currentCase.sender} (audit logged).`,
+        `Clarification email could not be dispatched to ${draftTo || currentCase.sender}.`,
       );
       setTimeout(() => {
         setDispatchStatus("idle");
@@ -634,6 +635,11 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Dispatched & Recorded in Submission!</span>
               </>
+            ) : dispatchStatus === "failed" ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
+                <span>Dispatch Failed</span>
+              </>
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
@@ -643,8 +649,18 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           </button>
 
           {dispatchFeedback && (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-200 flex items-center gap-2 text-xs font-medium animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div
+              className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-medium animate-in fade-in ${
+                dispatchStatus === "failed"
+                  ? "bg-rose-50 border-rose-200/80 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800/80 dark:text-rose-200"
+                  : "bg-emerald-50 border-emerald-200/80 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-200"
+              }`}
+            >
+              {dispatchStatus === "failed" ? (
+                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              )}
               <span>{dispatchFeedback}</span>
             </div>
           )}

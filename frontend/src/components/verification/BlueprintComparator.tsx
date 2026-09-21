@@ -238,6 +238,11 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       field.blValue !== null &&
       field.blValue !== undefined &&
       !["", "null", "n/a"].includes(String(field.blValue).trim().toLowerCase());
+    const missingValueLabel = !hasSiValue
+      ? "Missing SI value"
+      : !hasBlValue
+        ? "Missing BL value"
+        : null;
     let blContent = (
       <div className="flex items-center space-x-2">
         <span className="font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
@@ -246,10 +251,17 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         {hasSiValue && hasBlValue ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
         ) : (
-          <AlertTriangle
-            className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
-            aria-label={!hasSiValue ? "Missing SI value" : "Missing BL value"}
-          />
+          <>
+            <AlertTriangle
+              className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"
+              aria-label={missingValueLabel ?? undefined}
+            />
+            {!hasBlValue && (
+              <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+                Missing BL value
+              </span>
+            )}
+          </>
         )}
       </div>
     );
@@ -332,10 +344,10 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
               {field.label}
             </span>
             {resolutionBadge}
-            {!hasSiValue && (
+            {!hasSiValue && missingValueLabel && (
               <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
                 <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                Missing SI value
+                {missingValueLabel}
               </span>
             )}
           </div>
