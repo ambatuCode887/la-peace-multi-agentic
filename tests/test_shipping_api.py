@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
-from agents.shipping.api import _save_upload, create_app
+from agents.shipping.api import _run_manager_review, _save_upload, create_app
 from agents.storage import CaseStore
 
 
@@ -396,3 +398,174 @@ def test_bulk_processing_skips_the_slow_ai_verifier_and_runs_it_once_on_open(tmp
 
     client.get("/cases/email_100")
     assert calls == ["email_100"]  # already saved, not asked again
+
+
+def test_manager_review_citations_come_from_retrieval_and_are_deduplicated(tmp_path, monkeypatch) -> None:
+    case_root = tmp_path / "email_cite_001"
+    case_root.mkdir()
+    (case_root / "report.json").write_text(
+        json.dumps({"status": "MISMATCH", "defect_fields": ["container_count"]}), encoding="utf-8"
+    )
+    chunk = {
+        "text": "### Container count mismatch\nDifferent container quantities need review.",
+        "source": r"C:\Users\someone\knowledge\data.md",
+        "chunk_index": 3,
+        "score": 0.8123,
+    }
+    # The same chunk stored twice, as happens when a file is ingested from two machines.
+    monkeypatch.setattr(
+        "agents.shipping.api.retrieve_knowledge",
+        lambda query, limit=5: {"results": [chunk, dict(chunk)]},
+    )
+
+    review = asyncio.run(_run_manager_review("email_cite_001", case_root))
+
+    assert len(review["citations"]) == 1
+    assert review["citations"][0]["source"] == "data.md"
+    assert review["citations"][0]["chunk_index"] == 3
+    assert review["citations"][0]["relevance"] == 0.812
+    assert review["retrieved_guidance"] == [review["citations"][0]["excerpt"]]
+    # Built-in rule text is reported separately and is never presented as retrieved.
+    assert len(review["field_guidance"]) == 1
+    assert review["field_guidance"][0] not in review["retrieved_guidance"]
+
+
+def test_manager_review_reports_no_citations_when_retrieval_is_empty(tmp_path, monkeypatch) -> None:
+    case_root = tmp_path / "email_cite_002"
+    case_root.mkdir()
+    (case_root / "report.json").write_text(
+        json.dumps({"status": "NEEDS_REVIEW", "review_reason": "ambiguous_field"}), encoding="utf-8"
+    )
+    monkeypatch.setattr("agents.shipping.api.retrieve_knowledge", lambda query, limit=5: {"results": []})
+
+    review = asyncio.run(_run_manager_review("email_cite_002", case_root))
+
+    assert review["retrieved_guidance"] == []
+    assert review["citations"] == []
+    assert review["field_guidance"] == []
+
+
+_KNOWLEDGE_CHUNK = {
+    "text": (
+        "tail of a section cut off at the previous chunk boundary, mentioning port and container.\n\n"
+        "### Port mismatch\nCompare the named port and UN/LOCODE for the port of loading and port of discharge.\n\n"
+        "### Gross-weight mismatch\nNormalize both gross weights to kilograms and compare the normalized values.\n\n"
+        "### Shipper, consignee, or party mismatch\nCompare the complete legal entity name, address, and country.\n\n"
+        "### Container count mismatch\nCompare the number of containers and package descriptions on the SI and BL."
+    ),
+    "source": "data.md",
+    "chunk_index": 2,
+    "score": 0.75,
+}
+
+
+def _review(tmp_path, monkeypatch, report: dict, results=None):
+    case_root = tmp_path / "email_gate"
+    case_root.mkdir(exist_ok=True)
+    (case_root / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    monkeypatch.setattr(
+        "agents.shipping.api.retrieve_knowledge",
+        lambda query, limit=5: {"results": [_KNOWLEDGE_CHUNK] if results is None else results},
+    )
+    return asyncio.run(_run_manager_review("email_gate", case_root))
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        {"status": "OK", "category": "BL_COMPARISON"},
+        {"status": "OK", "category": "SI_REQUEST"},
+        {"status": "MISMATCH", "category": "INVOICE_QUERY", "defect_fields": ["container_count"]},
+        {"status": "NEEDS_REVIEW", "category": "SPAM", "review_reason": "missing_value"},
+        {"status": "NEEDS_REVIEW", "category": "BL_COMPARISON", "review_reason": None},
+    ],
+)
+def test_manager_review_skips_citations_when_they_add_nothing(tmp_path, monkeypatch, report) -> None:
+    def fail(*_args, **_kwargs):
+        raise AssertionError("retrieval must not run for a case that gets no citations")
+
+    monkeypatch.setattr("agents.shipping.api.retrieve_knowledge", fail)
+    case_root = tmp_path / "email_gate"
+    case_root.mkdir()
+    (case_root / "report.json").write_text(json.dumps(report), encoding="utf-8")
+
+    review = asyncio.run(_run_manager_review("email_gate", case_root))
+
+    assert review["guidance_applicable"] is False
+    assert review["guidance_note"]
+    assert review["citations"] == []
+    assert review["retrieved_guidance"] == []
+
+
+def test_manager_review_cites_only_the_section_for_the_mismatched_field(tmp_path, monkeypatch) -> None:
+    review = _review(
+        tmp_path, monkeypatch,
+        {"status": "MISMATCH", "category": "BL_COMPARISON", "defect_fields": ["port_of_discharge"]},
+    )
+
+    assert review["guidance_applicable"] is True
+    assert len(review["citations"]) == 1
+    assert review["citations"][0]["excerpt"].startswith("Port mismatch")
+    # Neither another field's section nor the headless fragment is cited.
+    assert "Gross-weight" not in review["citations"][0]["excerpt"]
+    assert not review["citations"][0]["excerpt"].startswith("tail of")
+
+
+def test_manager_review_for_ambiguity_cites_the_ambiguous_field_first(tmp_path, monkeypatch) -> None:
+    review = _review(
+        tmp_path, monkeypatch,
+        {
+            "status": "NEEDS_REVIEW",
+            "category": "BL_COMPARISON",
+            "review_reason": "ambiguous_field",
+            "defect_fields": ["container_count"],
+            "routing_telemetry": {"ambiguous_fields": ["shipper"]},
+        },
+    )
+
+    assert review["citations"][0]["excerpt"].startswith("Shipper, consignee, or party mismatch")
+
+
+def test_manager_review_reports_applicable_but_empty_when_nothing_matches(tmp_path, monkeypatch) -> None:
+    unrelated = {"text": "### Weather\nIt is sunny today and the sea is calm across every route.", "source": "data.md"}
+    review = _review(
+        tmp_path, monkeypatch,
+        {"status": "MISMATCH", "category": "BL_COMPARISON", "defect_fields": ["container_count"]},
+        results=[unrelated],
+    )
+
+    assert review["guidance_applicable"] is True
+    assert review["citations"] == []
+
+
+_ROUTING_CHUNK = {
+    "text": (
+        "### Compared fields\n\nA missing, unreadable, or low-confidence value should be routed to human review.\n\n"
+        "### Review routing\n\n"
+        "- Automatic match: all required fields are present, readable, and deterministically equivalent.\n"
+        "- Human review: any required field is missing, unreadable, low-confidence, or deterministically mismatched.\n"
+        "- Clarification needed: the documents conflict and the correct value cannot be established from the supplied evidence.\n\n"
+        "For a shipper mismatch, compare the full legal name and address on both documents.\n\n"
+        "### Container count mismatch\n\nCompare the number of containers and package descriptions on the SI and BL."
+    ),
+    "source": "data.md",
+    "chunk_index": 1,
+    "score": 0.7,
+}
+
+
+@pytest.mark.parametrize("reason", ["missing_value", "missing_attachment", "wrong_doc_type"])
+def test_manager_review_cites_the_routing_rule_for_missing_or_wrong_documents(tmp_path, monkeypatch, reason) -> None:
+    review = _review(
+        tmp_path, monkeypatch,
+        {"status": "NEEDS_REVIEW", "category": "BL_COMPARISON", "review_reason": reason},
+        results=[_ROUTING_CHUNK],
+    )
+
+    assert review["guidance_applicable"] is True
+    assert review["citations"], "a missing or wrong document must cite the routing rule"
+    excerpts = [citation["excerpt"] for citation in review["citations"]]
+    assert any(excerpt.startswith("Review routing") for excerpt in excerpts)
+    # The unrelated shipper paragraph and the container section are not dragged in.
+    assert not any("shipper mismatch" in excerpt for excerpt in excerpts)
+    assert not any("Container count" in excerpt for excerpt in excerpts)

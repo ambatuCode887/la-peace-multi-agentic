@@ -21,6 +21,7 @@ import {
   Mail,
   ShieldAlert,
 } from "lucide-react";
+import { formatMalaysiaTime } from "../../utils/formatTime";
 
 interface SidebarProps {
   allCases?: ShippingCase[];
@@ -322,7 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center space-x-2">
             <Filter className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
             <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
-              Queue
+              Inbox
             </h2>
           </div>
           <div className="flex items-center space-x-1.5">
@@ -563,7 +564,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {getCategoryBadge(c.category)}
                   </div>
                   <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                    {c.timestamp.split(" ")[0]}
+                    {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
+                      ? formatMalaysiaTime(c.timestamp, "compact")
+                      : c.timestamp.split(" ")[0]}
                   </span>
                 </div>
 

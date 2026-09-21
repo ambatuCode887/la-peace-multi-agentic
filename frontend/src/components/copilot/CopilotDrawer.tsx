@@ -13,6 +13,18 @@ import {
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 import { api } from "../../services/api";
 
+/**
+ * Whether this case shows knowledge citations. A backend that has the newer logic says so itself;
+ * an older one does not, so fall back to the case: a clean match or a non-comparison email has
+ * nothing for the reviewer to decide.
+ */
+function usesGuidance(shippingCase: ShippingCase): boolean {
+  return (
+    shippingCase.managerReview?.guidance_applicable ??
+    (shippingCase.category === "BL_COMPARISON" && shippingCase.status !== "PASS")
+  );
+}
+
 interface CopilotDrawerProps {
   currentCase: ShippingCase;
   isOpen: boolean;
@@ -268,7 +280,8 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           </div>
 
           {/* Real RAG Knowledge Citations from backend manager review */}
-          {currentCase.managerReview?.retrieved_guidance &&
+          {usesGuidance(currentCase) &&
+            currentCase.managerReview?.retrieved_guidance &&
             currentCase.managerReview.retrieved_guidance.length > 0 && (
               <div>
                 <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center justify-between">
@@ -282,22 +295,58 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                 </h4>
                 <div className="space-y-1.5">
                   {currentCase.managerReview.retrieved_guidance.map(
-                    (guidance, gIdx) => (
-                      <p
-                        key={gIdx}
-                        className="text-slate-600 dark:text-slate-300 leading-relaxed bg-[#eef3fc]/60 dark:bg-[#091f52]/40 p-2.5 rounded-xl border border-[#345ec4]/25 text-[11px]"
-                      >
-                        📖 {guidance}
-                      </p>
-                    ),
+                    (guidance, gIdx) => {
+                      const citation =
+                        currentCase.managerReview?.citations?.[gIdx];
+                      return (
+                        <div
+                          key={gIdx}
+                          className="text-slate-600 dark:text-slate-300 leading-relaxed bg-[#eef3fc]/60 dark:bg-[#091f52]/40 p-2.5 rounded-xl border border-[#345ec4]/25 text-[11px]"
+                        >
+                          <p>📖 {guidance}</p>
+                          {citation && (
+                            <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                              Source: {citation.source}
+                              {citation.chunk_index != null
+                                ? ` · section ${citation.chunk_index + 1}`
+                                : ""}
+                              {citation.relevance !== undefined
+                                ? ` · relevance ${Math.round(citation.relevance * 100)}%`
+                                : ""}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    },
                   )}
+                </div>
+              </div>
+            )}
+
+          {usesGuidance(currentCase) &&
+            currentCase.managerReview?.field_guidance &&
+            currentCase.managerReview.field_guidance.length > 0 && (
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                  Recommended checks
+                </h4>
+                <div className="space-y-1.5">
+                  {currentCase.managerReview.field_guidance.map((rule, rIdx) => (
+                    <p
+                      key={rIdx}
+                      className="text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-[#091f52]/30 p-2.5 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40 text-[11px]"
+                    >
+                      {rule}
+                    </p>
+                  ))}
                 </div>
               </div>
             )}
 
           {currentCase.managerReview &&
             (!currentCase.managerReview.available ||
-              !currentCase.managerReview.retrieved_guidance?.length) && (
+              (usesGuidance(currentCase) &&
+                !currentCase.managerReview.retrieved_guidance?.length)) && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
                 <div className="font-bold">RAG guidance unavailable</div>
                 <div className="mt-1">

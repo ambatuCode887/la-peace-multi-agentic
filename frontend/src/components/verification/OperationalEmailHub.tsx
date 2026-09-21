@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { ShippingCase } from "../../types/shipping";
+import { formatMalaysiaTime } from "../../utils/formatTime";
 import {
   Sparkles,
   Clock,
@@ -432,7 +433,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
             </div>
 
             <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
-              {currentCase.timestamp}
+              {formatMalaysiaTime(currentCase.timestamp)}
             </div>
           </div>
         </div>

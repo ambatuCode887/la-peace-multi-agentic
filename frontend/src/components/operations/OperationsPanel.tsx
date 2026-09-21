@@ -45,7 +45,7 @@ export function OperationsPanel({
       await callback();
       setMessage(
         action === "upload"
-          ? "Verification completed and added to the live queue."
+          ? "Verification completed and added to the live inbox."
           : "Operation completed.",
       );
       if (action === "upload") {
@@ -103,7 +103,7 @@ export function OperationsPanel({
             disabled={!backendConnected || busy !== null}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-[#1a3d8e]/60 dark:text-slate-200 dark:hover:bg-[#091f52]"
           >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh queue
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh inbox
           </button>
           <button
             type="button"

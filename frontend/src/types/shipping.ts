@@ -75,6 +75,16 @@ export interface ManagerReview {
   deterministic_status?: string;
   defects?: string[];
   retrieved_guidance?: string[];
+  /** false when this case type does not use knowledge citations (e.g. a clean match). */
+  guidance_applicable?: boolean;
+  guidance_note?: string;
+  citations?: Array<{
+    source: string;
+    chunk_index?: number | null;
+    relevance?: number;
+    excerpt: string;
+  }>;
+  field_guidance?: string[];
   recommended_next_action?: string;
 }
 

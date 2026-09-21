@@ -13,6 +13,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { api } from "../../services/api";
+import { formatMalaysiaTime } from "../../utils/formatTime";
 import { OperationalEmailHub } from "./OperationalEmailHub";
 
 interface BlueprintComparatorProps {
@@ -405,7 +406,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
           </div>
           <div>
             <strong>Page:</strong> {evidence?.page ?? "Text fallback"} ·{" "}
-            <strong>Method:</strong> {evidence?.method || "Unknown"}
+            <strong>Format:</strong> {evidence?.method || "Unknown"}
           </div>
           <div>
             <strong>Coordinates:</strong> {coordinates}
@@ -588,7 +589,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
               <span className="font-mono text-slate-700 dark:text-slate-300">
                 {currentCase.sender}
               </span>{" "}
-              • Ingested: {currentCase.timestamp}
+              • Ingested: {formatMalaysiaTime(currentCase.timestamp)}
             </p>
           </div>
 
