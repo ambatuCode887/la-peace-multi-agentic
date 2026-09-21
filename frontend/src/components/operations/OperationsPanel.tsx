@@ -92,8 +92,7 @@ export function OperationsPanel({
             Process shipping documents
           </h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Upload a case or process the configured inbox using the same
-            verification backend as the legacy dashboard.
+            Upload shipping document packages for automated verification or trigger inbox batch synchronization.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -159,19 +158,19 @@ export function OperationsPanel({
         <input
           value={emailId}
           onChange={(event) => setEmailId(event.target.value)}
-          placeholder="Email ID"
+          placeholder="Case ID (e.g. upload_001)"
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#345ec4] dark:border-[#1a3d8e]/60 dark:bg-[#091f52]/40 dark:text-white"
         />
         <input
           value={sender}
           onChange={(event) => setSender(event.target.value)}
-          placeholder="Sender email"
+          placeholder="Sender email (e.g. docs@shipper.com)"
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#345ec4] dark:border-[#1a3d8e]/60 dark:bg-[#091f52]/40 dark:text-white"
         />
         <input
           value={subject}
           onChange={(event) => setSubject(event.target.value)}
-          placeholder="Subject (required)"
+          placeholder="Email Subject / Vessel Details (required)"
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs outline-none focus:border-[#345ec4] dark:border-[#1a3d8e]/60 dark:bg-[#091f52]/40 dark:text-white"
         />
         <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-[#1a3d8e]/70 dark:bg-[#091f52]/40 dark:text-slate-300">

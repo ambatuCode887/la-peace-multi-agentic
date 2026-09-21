@@ -412,8 +412,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
           </div>
           {sourceUrl && isVisualAttachment && evidence?.coordinates && (
             <div>
-              <strong>Bounding box:</strong> shown by the reported coordinates
-              above; page-local overlay support depends on source dimensions.
+              <strong>Bounding box:</strong> Spatial coordinates mapped to page layout.
             </div>
           )}
         </div>

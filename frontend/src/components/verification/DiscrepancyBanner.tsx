@@ -20,7 +20,21 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
     return null;
   }
 
+  const mismatchedFields = currentCase.fields.filter((f) => f.status === "mismatch");
+  const reviewFields = currentCase.fields.filter((f) => f.status === "review");
+
   if (currentCase.status === "MISMATCH") {
+    const mismatchCount = mismatchedFields.length;
+    const badgeText =
+      mismatchCount > 0
+        ? `${mismatchCount} ${mismatchCount === 1 ? "DISCREPANCY" : "DISCREPANCIES"}`
+        : "MISMATCH";
+
+    const titleText =
+      mismatchCount > 0
+        ? `Discrepancy Alert: ${mismatchedFields.map((f) => f.label).join(", ")} Mismatch`
+        : "Discrepancy Alert: Value Mismatch Detected";
+
     return (
       <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/60 flex items-start justify-between">
         <div className="flex items-start space-x-3">
@@ -29,11 +43,9 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-rose-900 dark:text-rose-200 flex items-center space-x-2">
-              <span>
-                Discrepancy Alert: Variance Exceeds Tolerance Threshold
-              </span>
+              <span>{titleText}</span>
               <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-rose-200/80 text-rose-900 dark:bg-rose-900 dark:text-rose-300 font-bold">
-                1.12% DELTA
+                {badgeText}
               </span>
             </h3>
             <p className="text-xs text-rose-700 dark:text-rose-300 mt-1 leading-relaxed">
@@ -54,6 +66,13 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
   }
 
   if (currentCase.status === "NEEDS_REVIEW") {
+    const isOcr = currentCase.ocrDistortionAnalysis?.some((a) => a.is_ocr_distortion);
+    const reviewTitle = isOcr
+      ? "Human Review Needed: OCR Distortion Suspected"
+      : reviewFields.length > 0
+        ? `Human Review Needed: ${reviewFields.map((f) => f.label).join(", ")} Ambiguity`
+        : "Human Review Needed: Verification Requires Confirmation";
+
     return (
       <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/40 dark:border-amber-900/60 flex items-start justify-between">
         <div className="flex items-start space-x-3">
@@ -62,7 +81,7 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200">
-              Human Review Needed: Entity Variance Detected
+              {reviewTitle}
             </h3>
             <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
               {currentCase.statusNote}

@@ -28,12 +28,17 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   activeTab,
   onTabChange,
 }) => {
+  const vesselTag =
+    currentCase.vessel && currentCase.vessel !== "N/A"
+      ? ` (${currentCase.vessel})`
+      : "";
+
   const [messages, setMessages] = useState<
     Array<{ role: "user" | "assistant"; text: string; time: string }>
   >([
     {
       role: "assistant",
-      text: `Hello! I am your AI Assistant. I have verified Case #${currentCase.id} (${currentCase.vessel}). ${currentCase.aiAnalysis.summary}`,
+      text: `Hello! I am your AI Assistant. I have verified Case #${currentCase.id}${vesselTag}. ${currentCase.aiAnalysis.summary}`,
       time: "Just now",
     },
   ]);
@@ -70,12 +75,20 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           setDraftTo(currentCase.sender);
           setDraftSubject(`Clarification Required: ${currentCase.subject}`);
           setDraftBody(
-            `Dear Forwarder / Carrier Operations,\n\nWe have completed multi-agent document verification for Case #${currentCase.id} (${currentCase.vessel}).\n\nStatus: ${currentCase.status}\nNote: ${currentCase.statusNote}\n\nPlease confirm the correct values.\n\nRegards,\nLa Peace Operations Desk`,
+            `Dear Forwarder / Carrier Operations,\n\nWe have completed multi-agent document verification for Case #${currentCase.id}${vesselTag}.\n\nStatus: ${currentCase.status}\nNote: ${currentCase.statusNote}\n\nPlease confirm the correct values.\n\nRegards,\nLa Peace Operations Desk`,
           );
         })
         .finally(() => setIsDraftLoading(false));
     }
-  }, [currentCase.id, activeTab]);
+  }, [
+    currentCase.id,
+    currentCase.sender,
+    currentCase.subject,
+    currentCase.status,
+    currentCase.statusNote,
+    vesselTag,
+    activeTab,
+  ]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputMessage;
@@ -99,19 +112,63 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       ]);
     } catch {
       // Graceful fallback to multi-agent knowledge logic if backend AI is temporarily offline
-      let reply = `Based on multi-agent verification for ${currentCase.vessel}, all parameters are logged.`;
       const qLower = query.toLowerCase();
+      const mismatched = currentCase.fields.filter((f) => f.status === "mismatch");
+      const matchedCount = currentCase.fields.filter((f) => f.status === "match").length;
+      const vesselStr =
+        currentCase.vessel && currentCase.vessel !== "N/A"
+          ? currentCase.vessel
+          : currentCase.subject;
 
-      if (qLower.includes("weight") || qLower.includes("discrepan")) {
-        reply = `Discrepancy Analysis: The Shipping Instruction records 128,544 KG, while the carrier Draft BL records 127,100 KG (-1,444 KG). This constitutes a 1.12% variance, exceeding maritime Incoterms CFR ±0.20% tolerance limits. Customs clearance risks detention without an amended BL.`;
-      } else if (
-        qLower.includes("alias") ||
-        qLower.includes("spacing") ||
-        qLower.includes("fareast")
+      let reply = "";
+      if (
+        qLower.includes("discrepan") ||
+        qLower.includes("mismatch") ||
+        qLower.includes("defect")
       ) {
-        reply = `Precedent: "APRIL FAREAST" and "APRIL FAR EAST" match Singapore ACRA entity #201402910Z. Port authorities in Rotterdam routinely accept this whitespace variation under documented corporate alias rules.`;
+        if (mismatched.length > 0) {
+          const fieldSummaries = mismatched
+            .map(
+              (f) =>
+                `${f.label}: SI records "${f.siValue}" vs Draft BL "${f.blValue}"${
+                  f.varianceNote ? ` (${f.varianceNote})` : ""
+                }`,
+            )
+            .join(". ");
+          reply = `Discrepancy Breakdown for ${currentCase.id}: Found ${mismatched.length} mismatching field(s). ${fieldSummaries}. Human verification required prior to BL release.`;
+        } else {
+          reply = `Verification Status for ${currentCase.id}: All ${matchedCount} verified fields match between the SI source and Draft BL. No discrepancies found.`;
+        }
+      } else if (qLower.includes("weight") || qLower.includes("gross")) {
+        const weightField = currentCase.fields.find(
+          (f) => f.key === "gross_weight_kg",
+        );
+        if (weightField) {
+          reply = `Gross Weight Analysis: SI records "${weightField.siValue}", while Draft BL records "${weightField.blValue}". Status: ${
+            weightField.status === "match"
+              ? "Exact Match"
+              : `Discrepancy (${weightField.varianceNote || "exceeds threshold"})`
+          }.`;
+        } else {
+          reply = `Gross Weight: No gross weight field extracted for this document. Please inspect source attachments manually.`;
+        }
+      } else if (
+        qLower.includes("recommend") ||
+        qLower.includes("action") ||
+        qLower.includes("next")
+      ) {
+        reply = `Recommended Next Action for ${currentCase.id}: ${
+          currentCase.aiAnalysis.recommendation ||
+          "Review the deterministic comparison and confirm fields."
+        }`;
       } else {
-        reply = `Case Analysis: ${currentCase.aiAnalysis.summary}. Recommended Action: ${currentCase.aiAnalysis.recommendation}`;
+        reply = `Case Analysis for ${currentCase.id} (${vesselStr}): ${
+          currentCase.aiAnalysis.summary
+        } ${
+          currentCase.aiAnalysis.recommendation
+            ? `Recommended action: ${currentCase.aiAnalysis.recommendation}`
+            : ""
+        }`;
       }
 
       setMessages((prev) => [

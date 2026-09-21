@@ -1,10 +1,7 @@
 import {
   Search,
-  Sparkles,
   Sun,
   Moon,
-  ShieldCheck,
-  Database,
   Inbox,
   BarChart3,
 } from "lucide-react";
@@ -27,7 +24,6 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   searchQuery,
   onSearchChange,
-  backendConnected = false,
   operationsOpen = false,
   onToggleOperations,
   evaluationOpen = false,
@@ -76,48 +72,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Status & Model Telemetry */}
+      {/* Action Controls */}
       <div className="flex items-center space-x-3">
-        {/* Multi-Agent Model Indicator */}
-        <div className="hidden lg:flex items-center space-x-2 px-3 py-1 rounded-full bg-[#eef3fc] border border-[#345ec4]/30 dark:bg-[#0a1e4d]/70 dark:border-[#1a3d8e] text-xs text-[#1a3d8e] dark:text-[#8ea9f7] shadow-2xs">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#5a82e2] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#345ec4]"></span>
-          </span>
-          <Sparkles className="w-3.5 h-3.5 text-[#5a82e2]" />
-          <span className="font-semibold">Gemini 3 Flash</span>
-          <span className="text-[10px] opacity-70">| Multi-Agent RAG</span>
-        </div>
-
-        {/* Live Backend Telemetry */}
-        <div className="hidden xl:flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
-          <div
-            className="flex items-center space-x-1 font-mono"
-            title={backendConnected ? "Docker challenge inbox on port 8080" : "Edge-Native Mode"}
-          >
-            <Database className="w-3.5 h-3.5 text-[#345ec4]" />
-            <span>{backendConnected ? ":8080" : "Edge CDN"}</span>
-          </div>
-          <span>•</span>
-          <div
-            className={`flex items-center space-x-1.5 font-mono px-2 py-0.5 rounded-md ${
-              backendConnected
-                ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
-                : "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60"
-            }`}
-            title={
-              backendConnected
-                ? "FastAPI backend live on port 8090"
-                : "Edge Dataset Active (520 Verified Cases)"
-            }
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${backendConnected ? "bg-emerald-500 animate-pulse" : "bg-blue-500"}`}
-            />
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{backendConnected ? ":8090" : "520 Cases"}</span>
-          </div>
-        </div>
 
         {/* Operations: process inbox, upload a case, retry or delete */}
         {onToggleOperations && (
