@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { BackendReport } from "../../services/api";
-import type { ShippingCase } from "../../types/shipping";
+import type { ActionPreview, ShippingCase } from "../../types/shipping";
 import { api } from "../../services/api";
 import {
   Check,
@@ -46,10 +46,56 @@ export function ReviewPanel({
     currentCase.status === "MISMATCH" ? "confirm_mismatch" : "accept",
   );
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [aiPreview, setAiPreview] = useState<ActionPreview | null>(null);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const requestAiSuggestion = async () => {
+    setSuggesting(true);
+    setMessage(null);
+    try {
+      const preview = await api.previewAction(
+        currentCase.id,
+        "ai_field_correction",
+        {
+          request:
+            "Suggest corrections for the extracted SI and BL field values.",
+        },
+      );
+      setAiPreview(preview);
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "AI suggestion could not be prepared.",
+      });
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const applyAiSuggestion = () => {
+    if (!aiPreview) return;
+    for (const change of aiPreview.changes ?? []) {
+      const nextValue = change.after == null ? "" : String(change.after);
+      if (change.document === "si") {
+        setSiFields((previous) => ({ ...previous, [change.field]: nextValue }));
+      }
+      if (change.document === "bl") {
+        setBlFields((previous) => ({ ...previous, [change.field]: nextValue }));
+      }
+    }
+    setAiPreview(null);
+    setMessage({
+      type: "success",
+      text: "AI suggestion applied to the editable fields. Save the review to record it.",
+    });
+  };
 
   const saveReview = async () => {
     setSaving(true);
@@ -240,8 +286,88 @@ export function ReviewPanel({
         {showFields && (
           <div className="p-4 border-t border-slate-100 dark:border-[#1a3d8e]/40 space-y-4">
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Modify extracted text values if OCR misread an ambiguous character. Changes will be saved directly into the audit record.
+              Modify extracted text values if OCR misread an ambiguous
+              character. AI suggestions are previews and require your approval
+              before they change these fields.
             </p>
+
+            <div className="rounded-xl border border-[#9fb8f5] bg-[#eef4ff] dark:border-[#345ec4]/60 dark:bg-[#091f52]/60 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-bold text-[#183b88] dark:text-[#cbd9ff]">
+                    AI auto-fill suggestion
+                  </p>
+                  <p className="text-[10px] text-[#45609a] dark:text-slate-400">
+                    Preview proposed corrections from the SI source of truth.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void requestAiSuggestion()}
+                  disabled={suggesting}
+                  className="shrink-0 rounded-lg bg-[#345ec4] px-2.5 py-1.5 text-[10px] font-bold text-white transition-colors hover:bg-[#274da9] disabled:opacity-50"
+                >
+                  {suggesting ? "Preparing..." : "Suggest with AI"}
+                </button>
+              </div>
+
+              {aiPreview && (
+                <div className="space-y-2 border-t border-[#c4d3f5] pt-2 dark:border-[#345ec4]/40">
+                  <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-200">
+                    Review these proposed changes before applying them:
+                  </p>
+                  {aiPreview.changes && aiPreview.changes.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {aiPreview.changes.map((change) => (
+                        <div
+                          key={`${change.document}-${change.field}`}
+                          className="rounded-lg bg-white/80 px-2 py-1.5 text-[10px] dark:bg-[#05163a]/70"
+                        >
+                          <span className="font-bold uppercase text-slate-500 dark:text-slate-400">
+                            {change.document.toUpperCase()} · {change.field}
+                          </span>
+                          <div className="mt-0.5 font-mono text-slate-700 dark:text-slate-200">
+                            <span className="text-rose-600 dark:text-rose-300">
+                              {String(change.before ?? "Missing")}
+                            </span>
+                            <span className="px-1.5 text-slate-400">-&gt;</span>
+                            <span className="text-emerald-700 dark:text-emerald-300">
+                              {String(change.after ?? "Missing")}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      No corrections were suggested for this case.
+                    </p>
+                  )}
+                  {aiPreview.explanation && (
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {aiPreview.explanation}
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setAiPreview(null)}
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyAiSuggestion}
+                      disabled={!aiPreview.changes?.length}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      Apply suggestion
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-3">
               {currentCase.fields.map((field) => (

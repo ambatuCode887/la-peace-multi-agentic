@@ -12,6 +12,7 @@ import type {
 } from '../types/shipping';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+export type ExportFormat = 'csv' | 'json' | 'pdf';
 
 export interface BackendCaseSummary {
   email_id: string;
@@ -158,7 +159,48 @@ async function fetchWithRetry(input: string, init: RequestInit = {}, retries = 1
   }
 }
 
+async function downloadResponse(response: Response, fallbackName: string): Promise<void> {
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
+  async downloadCaseExport(emailId: string, format: ExportFormat): Promise<void> {
+    const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}/export?format=${format}`);
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      const detail = typeof error.detail === 'string' ? error.detail : error.detail?.message;
+      throw new Error(detail || 'Draft BL export failed');
+    }
+    await downloadResponse(res, `${emailId}-draft-bl.${format}`);
+  },
+
+  async downloadBatchExport(emailIds: string[], format: ExportFormat): Promise<void> {
+    const res = await fetch(`${API_BASE}/exports`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_ids: emailIds, format }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      const detail = typeof error.detail === 'string' ? error.detail : error.detail?.message;
+      const failed = error.detail?.failed_email_ids;
+      throw new Error(
+        failed?.length ? `${detail || 'Draft BL export failed'} (${failed.join(', ')})` : detail || 'Draft BL export failed',
+      );
+    }
+    await downloadResponse(res, `draft-bl-export.${format}`);
+  },
+
   async checkBackendWithRetry(attempts = 4, delayMs = 3000): Promise<boolean> {
     for (let attempt = 0; attempt < attempts; attempt++) {
       if (await api.checkBackend()) return true;
@@ -471,8 +513,6 @@ export function mapReportToShippingCase(
           blReaderAgreement: blDocument?.reader_agreement?.[key],
         };
       });
-    } else if (existing?.fields && existing.fields.length > 0) {
-      fields = existing.fields;
     }
   }
 

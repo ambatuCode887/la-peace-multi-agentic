@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from .exports import render_export
 from .tool import inspect_shipping_email
 from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
 from .ui import dashboard_page
@@ -106,6 +107,42 @@ def create_app(
                     headers={"Content-Disposition": f'inline; filename="{relative_path.name}"'},
                 )
         raise HTTPException(status_code=404, detail="Attachment not found")
+
+    @app.get("/cases/{email_id}/export")
+    async def export_case(email_id: str, format: str = "csv") -> Response:
+        report = store.get_case(email_id)
+        _validate_export_reports([report], [email_id])
+        try:
+            content, media_type, extension = render_export([report], format.lower())
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{_safe_id(email_id)}-draft-bl.{extension}"'},
+        )
+
+    @app.post("/exports")
+    async def export_cases(payload: dict[str, Any]) -> Response:
+        email_ids = payload.get("email_ids")
+        export_format = str(payload.get("format", "csv")).lower()
+        if (
+            not isinstance(email_ids, list)
+            or not email_ids
+            or not all(isinstance(email_id, str) and email_id.strip() for email_id in email_ids)
+        ):
+            raise HTTPException(status_code=422, detail="email_ids must be a non-empty list of case IDs")
+        reports = [store.get_case(email_id) for email_id in email_ids]
+        _validate_export_reports(reports, email_ids)
+        try:
+            content, media_type, extension = render_export(reports, export_format)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="draft-bl-export.{extension}"'},
+        )
 
     @app.delete("/cases/{email_id}")
     async def delete_case(email_id: str) -> dict[str, Any]:
@@ -420,6 +457,22 @@ def _ground_truth_path() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     return Path.home() / "Downloads" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json"
+
+
+def _validate_export_reports(reports: list[dict[str, Any] | None], email_ids: list[str]) -> None:
+    invalid = [
+        email_id
+        for email_id, report in zip(email_ids, reports)
+        if report is None or report.get("status") != "OK" or report.get("category") != "BL_COMPARISON"
+    ]
+    if invalid:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Only OK Bill of Lading verification cases can be exported.",
+                "failed_email_ids": invalid,
+            },
+        )
 
 
 def _add_verifier_result(report: dict[str, Any]) -> None:
