@@ -133,10 +133,43 @@ export interface EvaluationResult {
   snapshots: EvaluationSnapshot[];
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// A hosted backend that has been idle (e.g. Render's free plan) can answer 502/503 or hang while it wakes up.
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = 25000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchWithRetry(input: string, init: RequestInit = {}, retries = 1, delayMs = 2000): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      if (res.status < 502 || attempt >= retries) return res;
+    } catch (error) {
+      if (attempt >= retries) throw error;
+    }
+    await sleep(delayMs);
+  }
+}
+
 export const api = {
+  async checkBackendWithRetry(attempts = 4, delayMs = 3000): Promise<boolean> {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (await api.checkBackend()) return true;
+      if (attempt < attempts - 1) await sleep(delayMs);
+    }
+    return false;
+  },
+
   async checkBackend(): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/cases`, { method: 'GET' });
+      const res = await fetchWithTimeout(`${API_BASE}/cases`, { method: 'GET' });
       if (!res.ok) return false;
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) return false;
@@ -216,7 +249,7 @@ export const api = {
 
   async getManagerReview(emailId: string): Promise<ManagerReview | null> {
     try {
-      const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}/manager-review`, {
+      const res = await fetchWithRetry(`${API_BASE}/cases/${encodeURIComponent(emailId)}/manager-review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

@@ -1,0 +1,52 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\User\\Documents\\multi-agentic-rag-health-care']
+INFO:     Uvicorn running on http://127.0.0.1:8090 (Press CTRL+C to quit)
+INFO:     Started reloader process [54636] using StatReload
+INFO:     Started server process [57224]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:6124 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3730 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3731 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3733 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3732 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6085 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3736 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6182 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6103 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6116 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6166 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6167 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6102 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6170 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6136 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6151 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6171 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11181 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11180 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11179 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11178 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11177 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11185 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11175 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6188 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6191 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11187 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6187 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6186 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14722 - "POST /cases/email_059/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14734 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14740 - "POST /cases/email_059/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14767 - "POST /cases/email_059/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13312 - "GET /cases HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13315 - "POST /cases/email_273/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13323 - "POST /cases/email_043/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:13331 - "POST /cases/email_296/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14789 - "POST /cases/email_520/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14796 - "POST /cases/email_515/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14807 - "POST /cases/email_510/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2852 - "POST /cases/email_505/manager-review HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'agents\shipping\api.py'. Reloading...
+ INFO:     127.0.0.1:5153 - "POST /cases/email_043/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5158 - "POST /cases/email_273/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5165 - "POST /cases/email_296/manager-review HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6288 - "POST /cases/email_043/manager-review HTTP/1.1" 200 OK

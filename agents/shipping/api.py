@@ -526,6 +526,127 @@ def _save_upload(
     return dataset_root
 
 
+# Every review reason gets a knowledge citation. Matches and non-comparison emails do not:
+# there is no decision for the reviewer to make, so a citation would only add noise.
+_CITED_REVIEW_REASONS = {
+    "ambiguous_field",
+    "unreadable",
+    "missing_value",
+    "missing_attachment",
+    "wrong_doc_type",
+}
+
+_FIELD_TERMS = {
+    "container_count": {"container", "containers", "package", "quantity"},
+    "notify_party": {"notify party", "notify-party", "notify"},
+    "shipper": {"shipper", "exporter", "legal entity"},
+    "consignee": {"consignee", "receiver", "importer"},
+    "port_of_loading": {"port mismatch", "port of loading", "loading port", "locode"},
+    "port_of_discharge": {"port mismatch", "port of discharge", "discharge port", "locode"},
+    "gross_weight_kg": {"gross weight", "gross wt", "kilograms", "kg", "mt", "lb"},
+}
+# Phrases from the knowledge file's own headings, so the section about this field ranks first.
+_FIELD_SECTION_TERMS = {
+    "container_count": {"container count mismatch", "different container quantities"},
+    "notify_party": {"notify party mismatch", "notify-party"},
+    "shipper": {"shipper, consignee, or party mismatch", "legal entity name"},
+    "consignee": {"shipper, consignee, or party mismatch", "legal entity name"},
+    "port_of_loading": {"port mismatch", "un/locode"},
+    "port_of_discharge": {"port mismatch", "un/locode"},
+    "gross_weight_kg": {"gross-weight mismatch", "normalize both gross weights"},
+}
+_REASON_TERMS = {
+    "unreadable": ({"ocr", "re-read", "unreadable", "low-confidence"}, {"ocr can confuse", "targeted re-read"}),
+    "ambiguous_field": ({"ocr", "legal entity", "ambiguous"}, {"do not silently correct", "ocr can confuse"}),
+    "missing_value": (
+        {"missing", "required field", "low-confidence"},
+        {"review routing", "missing, unreadable, or low-confidence value"},
+    ),
+    "missing_attachment": ({"missing", "clarification needed", "supplied evidence"}, {"review routing"}),
+    "wrong_doc_type": ({"clarification needed", "conflict", "supplied evidence"}, {"review routing"}),
+}
+
+
+def _guidance_applies(report: dict[str, Any], status: str, defects: list[str]) -> tuple[bool, str]:
+    """Decide whether this case gets knowledge citations, and say why not when it does not."""
+    if report.get("category", "BL_COMPARISON") != "BL_COMPARISON":
+        return False, "Knowledge guidance is only used for document-comparison emails."
+    if status == "MISMATCH" and defects:
+        return True, ""
+    if status == "NEEDS_REVIEW" and report.get("review_reason") in _CITED_REVIEW_REASONS:
+        return True, ""
+    if status == "OK":
+        return False, "The documents match, so no guidance is needed."
+    return False, "The next step for this case is clear without knowledge guidance."
+
+
+def _knowledge_sections(text: str) -> list[tuple[str, str]]:
+    """Split a retrieved chunk into headed paragraphs so one citation is one topic, not a chunk.
+
+    Returns (text to show, text to score). Only a section's first paragraph is scored together with
+    its heading, so a later paragraph on another subject does not borrow the heading's relevance.
+    """
+    sections: list[tuple[str, str]] = []
+    for part in re.split(r"(?m)^(?=#{2,6}\s)", text):
+        # A part without a heading is the tail of a section that started in the previous chunk
+        # and would read as a sentence cut in half, so only parts that begin at a heading are kept.
+        if not part.lstrip().startswith("#"):
+            continue
+        heading, _, body = part.strip().partition("\n")
+        heading = re.sub(r"#{1,6}\s*", "", heading).strip()
+        paragraphs = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n", body)]
+        for index, paragraph in enumerate(p for p in paragraphs if p):
+            shown = f"{heading} {paragraph}"
+            sections.append((shown, shown if index == 0 else paragraph))
+    return sections
+
+
+def _count_terms(text: str, terms: set[str]) -> int:
+    return sum(len(re.findall(rf"(?<!\w){re.escape(term)}(?!\w)", text)) for term in terms)
+
+
+def _select_citations(
+    results: list[dict[str, Any]],
+    terms: set[str],
+    preferred_terms: set[str],
+    limit: int = 2,
+) -> list[dict[str, Any]]:
+    """Pick the few knowledge sections that really answer this case, without repeats."""
+    scored: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in results:
+        for section, scored_text in _knowledge_sections(item.get("text", "")):
+            if len(section) < 40 or section in seen:
+                continue  # skip bare headings, and chunks stored more than once
+            seen.add(section)
+            lowered = scored_text.lower()
+            preferred = _count_terms(lowered, preferred_terms)
+            hits = _count_terms(lowered, terms)
+            if preferred == 0 and hits < 2:
+                continue  # only a passing mention of the topic
+            scored.append({
+                "preferred": preferred,
+                "hits": hits,
+                "text": section,
+                # Split on both separators: the source path may have been ingested on Windows.
+                "source": re.split(r"[\\/]", item.get("source") or "")[-1] or "knowledge base",
+                "chunk_index": item.get("chunk_index"),
+                "relevance": round(float(item.get("score") or 0), 3),
+            })
+    if any(entry["preferred"] for entry in scored):
+        scored = [entry for entry in scored if entry["preferred"]]
+    scored.sort(key=lambda e: (e["preferred"], e["hits"], e["relevance"]), reverse=True)
+    return [
+        {
+            "source": entry["source"],
+            "chunk_index": entry["chunk_index"],
+            "relevance": entry["relevance"],
+            "excerpt": entry["text"][:420].rstrip() + ("..." if len(entry["text"]) > 420 else ""),
+        }
+        for entry in scored[:limit]
+    ]
+
+
 async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, Any]:
     """Add RAG guidance to the saved deterministic report without recomputing it."""
     report = _read_json(dataset_root / "report.json", {})
@@ -539,54 +660,25 @@ async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, An
     }:
         route = "clarification_needed"
 
-    query = (
-        "shipping document verification guidance for "
-        f"status {status}, fields {', '.join(defects) or 'none'}, "
-        f"review reason {report.get('review_reason') or 'none'}"
-    )
-    retrieval = retrieve_knowledge(query, limit=10)
-    guidance_terms = {
-        "container_count": {"container", "containers", "package", "quantity"},
-        "notify_party": {"notify party", "notify-party", "notify"},
-        "shipper": {"shipper", "exporter", "legal entity"},
-        "consignee": {"consignee", "receiver", "importer"},
-        "port_of_loading": {"port mismatch", "port of loading", "loading port", "locode"},
-        "port_of_discharge": {"port mismatch", "port of discharge", "discharge port", "locode"},
-        "gross_weight_kg": {"gross weight", "gross wt", "kilograms", "kg", "mt", "lb"},
-    }
-    relevant_terms = {
-        term
-        for field in defects
-        for term in guidance_terms.get(field, {field.replace("_", " ")})
-    }
-    specific_terms = {
-        "container_count": {"container count mismatch", "different container quantities", "correct count"},
-        "notify_party": {"notify-party mismatch", "full notify-party", "different company or address"},
-        "shipper": {"shipper mismatch", "full legal entity name"},
-        "consignee": {"consignee mismatch", "full legal entity name"},
-        "port_of_loading": {"port mismatch", "port aliases", "different port"},
-        "port_of_discharge": {"port mismatch", "port aliases", "different port"},
-        "gross_weight_kg": {"gross-weight mismatch", "normalize both gross weights", "normalized values"},
-    }
-    preferred_terms = {
-        term
-        for field in defects
-        for term in specific_terms.get(field, set())
-    }
-    candidates = []
-    for item in retrieval.get("results", []):
-        raw_text = item.get("text", "")
-        if relevant_terms and not any(term in raw_text.lower() for term in relevant_terms):
-            continue
-        text = re.sub(r"#{1,6}\s*", "", raw_text)
-        text = re.sub(r"\s+", " ", text).strip()
-        score = sum(raw_text.lower().count(term) for term in preferred_terms)
-        if text:
-            candidates.append((score, text))
-    best_score = max((score for score, _ in candidates), default=0)
-    if best_score >= 2:
-        candidates = [item for item in candidates if item[0] == best_score]
-    field_guidance = {
+    reason = report.get("review_reason")
+    ambiguous_fields = list((report.get("routing_telemetry") or {}).get("ambiguous_fields") or [])
+    applies, skip_note = _guidance_applies(report, status, defects)
+    citations: list[dict[str, Any]] = []
+    if applies:
+        # The fields that triggered the review come first; a review for ambiguity is about those.
+        focus_fields = list(dict.fromkeys(
+            (ambiguous_fields + defects) if reason == "ambiguous_field" else (defects or ambiguous_fields)
+        ))
+        terms: set[str] = {t for f in focus_fields for t in _FIELD_TERMS.get(f, {f.replace("_", " ")})}
+        preferred: set[str] = {t for f in focus_fields for t in _FIELD_SECTION_TERMS.get(f, set())}
+        if status == "NEEDS_REVIEW":
+            reason_terms, reason_preferred = _REASON_TERMS.get(reason, (set(), set()))
+            terms |= reason_terms
+            preferred |= reason_preferred
+        topic = ", ".join(f.replace("_", " ") for f in focus_fields) or str(reason or status)
+        retrieval = retrieve_knowledge(f"shipping document {topic} guidance", limit=10)
+        citations = _select_citations(retrieval.get("results", []), terms, preferred)
+    field_rules = {
         "container_count": "Compare the number of containers and package descriptions on the SI and BL. Different container quantities are a real mismatch; confirm the correct count against the source documents before release.",
         "notify_party": "Compare the full notify-party name and address on the SI and BL. Formatting differences may be equivalent, but a different company or address requires confirmation before release.",
         "shipper": "Compare the complete shipper legal name, address, and country. Check OCR, abbreviations, trading names, and legal suffixes before confirming whether the entity mismatch is genuine.",
@@ -595,14 +687,6 @@ async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, An
         "port_of_discharge": "Compare the port name and UN/LOCODE on both documents. A different discharge port requires human review before release.",
         "gross_weight_kg": "Normalize both gross weights to kilograms and verify the units and evidence lines. A difference remaining after conversion is a real mismatch.",
     }
-    guidance = [field_guidance[field] for field in defects if field in field_guidance]
-    if not guidance:
-        for _, text in sorted(candidates, key=lambda item: item[0], reverse=True):
-            excerpt = text[:420].rstrip() + ("..." if len(text) > 420 else "")
-            if excerpt not in guidance:
-                guidance.append(excerpt)
-            if len(guidance) == 2:
-                break
     if status == "OK":
         action = "No further action is required unless a reviewer identifies new evidence."
     elif defects:
@@ -614,7 +698,13 @@ async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, An
         "route": route,
         "deterministic_status": status,
         "defects": defects,
-        "retrieved_guidance": guidance,
+        # Only text that was actually retrieved from Qdrant, with where it came from.
+        "guidance_applicable": applies,
+        "guidance_note": skip_note,
+        "retrieved_guidance": [citation["excerpt"] for citation in citations],
+        "citations": citations,
+        # Built-in rules per defect field: not retrieved, so they are kept apart from citations.
+        "field_guidance": [field_rules[field] for field in defects if field in field_rules],
         "recommended_next_action": action,
     }
 

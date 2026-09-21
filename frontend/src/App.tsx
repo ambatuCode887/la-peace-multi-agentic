@@ -42,7 +42,8 @@ export function App() {
     "summary" | "email" | "chat"
   >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
-  const [queueLoading, setQueueLoading] = useState<boolean>(false);
+  // Starts true: the first backend check may retry while a hosted backend wakes up.
+  const [queueLoading, setQueueLoading] = useState<boolean>(true);
   const [queueError, setQueueError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export function App() {
 
   // Initial backend health check and live queue hydration.
   useEffect(() => {
-    api.checkBackend().then((connected) => {
+    api.checkBackendWithRetry().then((connected) => {
       setBackendConnected(connected);
       if (connected) void refreshCases();
       else setQueueLoading(false);
@@ -347,7 +348,7 @@ export function App() {
                 {/* Side-by-Side Blueprint Diff Comparator */}
                 {queueLoading && (
                   <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-                    Loading live backend queue...
+                    Loading live backend inbox...
                   </div>
                 )}
                 {queueError && (
