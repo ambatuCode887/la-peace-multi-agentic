@@ -103,38 +103,43 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   const renderRoutingTelemetry = () => {
     if (!routingTelemetry) return null;
     return (
-      <div className="rounded-xl border border-slate-200/70 bg-white p-3 shadow-2xs dark:border-[#1a3d8e]/50 dark:bg-[#06163a]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="rounded-xl border border-slate-200/70 bg-white px-4 py-4 shadow-2xs dark:border-[#1a3d8e]/50 dark:bg-[#06163a]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center space-x-2">
-            <div className="rounded-md bg-[#eef3fc] p-1.5 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
-              <Gauge className="h-3.5 w-3.5" />
+            <div className="rounded-md bg-[#eef3fc] p-2 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
+              <Gauge className="h-4 w-4" />
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
+              <span className="text-sm font-bold text-slate-900 dark:text-white">
                 Cheap-First Routing:
               </span>{" "}
+<<<<<<< Updated upstream
               <span className="text-xs text-slate-600 dark:text-slate-300">
                 {routingTelemetry.resolvedByRules} rules ({routingTelemetry.ruleLatencyMs.toFixed(1)}ms)
                 {routingTelemetry.sentToLlm > 0
                   ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
                   : ""}
+=======
+              <span className="text-sm text-slate-600 dark:text-slate-300">
+                {routingSummary}
+>>>>>>> Stashed changes
               </span>
             </div>
           </div>
           <div className="flex items-center space-x-3 text-xs">
-            <span className="font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
-              ${routingTelemetry.estimatedCostUsd.toFixed(5)} cost
-            </span>
             <button
               type="button"
               onClick={() => setTelemetryOpen((prev) => !prev)}
-              className="text-[#345ec4] dark:text-[#8ea9f7] text-[11px] font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
+              className="text-[#345ec4] dark:text-[#8ea9f7] text-xs font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
             >
               <span>{telemetryOpen ? "Hide stats" : "Routing stats"}</span>
               <ChevronDown
                 className={`h-3 w-3 transition-transform ${telemetryOpen ? "rotate-180" : ""}`}
               />
             </button>
+            <span className="font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
+              ${routingTelemetry.estimatedCostUsd.toFixed(5)} cost
+            </span>
           </div>
         </div>
 

@@ -59,11 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
             placeholder="Search by case ID, vessel, shipper, or status..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-12 py-1.5 text-sm bg-slate-100/80 border border-slate-200/60 rounded-xl focus:outline-hidden focus:bg-white focus:border-[#345ec4] dark:bg-[#091f52]/50 dark:border-[#1a3d8e]/50 dark:text-slate-200 dark:focus:bg-[#05163a] dark:focus:border-[#5a82e2] transition-all"
+            className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-100/80 border border-slate-200/60 rounded-xl focus:outline-hidden focus:bg-white focus:border-[#345ec4] dark:bg-[#091f52]/50 dark:border-[#1a3d8e]/50 dark:text-slate-200 dark:focus:bg-[#05163a] dark:focus:border-[#5a82e2] transition-all"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 bg-white dark:bg-[#0d2766] border border-slate-200 dark:border-[#1a3d8e]/80 px-1.5 py-0.5 rounded shadow-2xs">
-            Ctrl K
-          </kbd>
         </div>
       </div>
 
