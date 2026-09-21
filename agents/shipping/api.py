@@ -238,6 +238,17 @@ def create_app(
         for email in emails:
             try:
                 report = _process_inbox_case(root, adapter, email, include_ai=include_ai)
+                if isinstance(store, MongoCaseStore):
+                    case_root = root / _safe_id(email.email_id)
+                    for reference in report.get("attachments", []):
+                        attachment_path = case_root / reference
+                        if attachment_path.is_file():
+                            store.save_attachment(
+                                email.email_id,
+                                Path(reference).name,
+                                attachment_path.read_bytes(),
+                                mimetypes.guess_type(attachment_path.name)[0],
+                            )
                 store.save_report(report)
                 results.append({
                     "email_id": email.email_id,
