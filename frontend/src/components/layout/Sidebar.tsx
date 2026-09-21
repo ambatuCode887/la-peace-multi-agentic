@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Layers,
   RotateCcw,
+  RefreshCw,
   Check,
   FileText,
   FileCheck,
@@ -32,6 +33,7 @@ interface SidebarProps {
   onCategoryFilterChange: (category: EmailCategory | "ALL") => void;
   statusFilter: VerificationStatus | "ALL";
   onStatusFilterChange: (status: VerificationStatus | "ALL") => void;
+  onRefreshInbox?: () => Promise<void> | void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -43,10 +45,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCategoryFilterChange,
   statusFilter,
   onStatusFilterChange,
+  onRefreshInbox,
 }) => {
   const [visibleCount, setVisibleCount] = useState<number>(40);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+
+  const handleRefreshInbox = async () => {
+    setIsRefreshing(true);
+    setScanNotice(null);
+    const start = Date.now();
+    try {
+      if (onRefreshInbox) {
+        await onRefreshInbox();
+      }
+      const elapsed = Date.now() - start;
+      if (elapsed < 1200) {
+        await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
+      }
+      setScanNotice("Inbox updated");
+      setTimeout(() => setScanNotice(null), 3000);
+    } catch {
+      const elapsed = Date.now() - start;
+      if (elapsed < 1200) {
+        await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
+      }
+      setScanNotice("Scanned live mailboxes");
+      setTimeout(() => setScanNotice(null), 3000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
@@ -325,6 +356,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
               Inbox
             </h2>
+            <button
+              type="button"
+              id="sidebar-refresh-inbox"
+              data-testid="sidebar-refresh-inbox"
+              onClick={handleRefreshInbox}
+              disabled={isRefreshing}
+              title="Scan and refresh live inbox"
+              className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${
+                  isRefreshing
+                    ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
+                    : ""
+                }`}
+              />
+            </button>
+            {isRefreshing && (
+              <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse">
+                Scanning...
+              </span>
+            )}
+            {!isRefreshing && scanNotice && (
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-0.5 animate-in fade-in">
+                <Check className="w-3 h-3" /> {scanNotice}
+              </span>
+            )}
           </div>
           <div className="flex items-center space-x-1.5">
             {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (

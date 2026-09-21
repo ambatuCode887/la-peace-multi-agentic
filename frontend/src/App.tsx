@@ -242,6 +242,7 @@ export function App() {
           onCategoryFilterChange={handleCategoryFilterChange}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
+          onRefreshInbox={refreshCases}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
