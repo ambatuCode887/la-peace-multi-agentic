@@ -10,9 +10,7 @@ import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
 import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
-import { ReviewPanel } from "./components/review/ReviewPanel";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
-import { EvaluationDashboard } from "./components/evaluation/EvaluationDashboard";
 import { ALL_CASES } from "./data/allCases";
 import {
   api,
@@ -36,10 +34,9 @@ export function App() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [operationsOpen, setOperationsOpen] = useState<boolean>(false);
-  const [evaluationOpen, setEvaluationOpen] = useState<boolean>(false);
   const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
-    "summary" | "email" | "chat"
+    "summary" | "review" | "email" | "chat"
   >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
   // Starts true: the first backend check may retry while a hosted backend wakes up.
@@ -205,67 +202,9 @@ export function App() {
     }
   };
 
-  const handleApproveCase = async () => {
-    if (backendConnected) {
-      try {
-        await api.submitReviewCorrection(currentCase.id, {
-          category: currentCase.category,
-          status: "OK",
-          has_defect: false,
-          defect_fields: [],
-          decision: "false_alarm",
-          note: "Approved by human operator after review. Clean document release.",
-        });
-      } catch (err) {
-        console.warn("Backend approval submission error:", err);
-      }
-    }
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === currentCase.id
-          ? {
-              ...c,
-              status: "PASS",
-              statusNote:
-                "Approved by human operator after review. Clean document submitted.",
-            }
-          : c,
-      ),
-    );
-    alert(
-      `Case #${currentCase.id} has been Approved and marked as CLEAN in the verification engine.`,
-    );
-  };
-
-  const handleManualOverride = async () => {
-    const reason = prompt("Enter justification for manual pass override:");
-    if (reason) {
-      if (backendConnected) {
-        try {
-          await api.submitReviewCorrection(currentCase.id, {
-            category: currentCase.category,
-            status: "OK",
-            has_defect: false,
-            defect_fields: [],
-            decision: "false_alarm",
-            note: `Manual override: ${reason}`,
-          });
-        } catch (err) {
-          console.warn("Backend manual override error:", err);
-        }
-      }
-      setCases((prev) =>
-        prev.map((c) =>
-          c.id === currentCase.id
-            ? {
-                ...c,
-                status: "PASS",
-                statusNote: `Manual override by operator: ${reason}`,
-              }
-            : c,
-        ),
-      );
-    }
+  const handleOpenReview = () => {
+    setDrawerOpen(true);
+    setActiveDrawerTab("review");
   };
 
   const handleOpenClarification = () => {
@@ -274,7 +213,7 @@ export function App() {
   };
 
   const handleSelectCase = (id: string) => {
-    setEvaluationOpen(false);
+    setOperationsOpen(false);
     setSelectedCaseId(id);
   };
 
@@ -289,8 +228,6 @@ export function App() {
         backendConnected={backendConnected}
         operationsOpen={operationsOpen}
         onToggleOperations={() => setOperationsOpen((open) => !open)}
-        evaluationOpen={evaluationOpen}
-        onToggleEvaluation={() => setEvaluationOpen((open) => !open)}
       />
 
       {/* Main 3-Zone Workspace */}
@@ -310,31 +247,28 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
-            {evaluationOpen ? (
-              <EvaluationDashboard
+            {operationsOpen ? (
+              <OperationsPanel
                 backendConnected={backendConnected}
-                onExit={() => setEvaluationOpen(false)}
+                currentCase={currentCase}
+                onVerified={(report) => {
+                  handleVerified(report);
+                  setOperationsOpen(false);
+                }}
+                onProcessInbox={handleProcessInbox}
+                onRefresh={refreshCases}
+                onRetry={handleRetryCase}
+                onDelete={handleDeleteCase}
+                onExit={() => setOperationsOpen(false)}
               />
             ) : (
               <>
-                {/* Operations: process inbox, upload a case, retry or delete */}
-                {operationsOpen && (
-                  <OperationsPanel
-                    backendConnected={backendConnected}
-                    currentCase={currentCase}
-                    onVerified={handleVerified}
-                    onProcessInbox={handleProcessInbox}
-                    onRefresh={refreshCases}
-                    onRetry={handleRetryCase}
-                    onDelete={handleDeleteCase}
-                  />
-                )}
-
                 {/* Conditional Discrepancy & Status Alert Banner */}
                 {currentCase && (
                   <DiscrepancyBanner
                     currentCase={currentCase}
                     onOpenClarification={handleOpenClarification}
+                    onOpenReview={handleOpenReview}
                   />
                 )}
 
@@ -365,15 +299,7 @@ export function App() {
                 {currentCase && (
                   <BlueprintComparator
                     currentCase={currentCase}
-                    onApprove={handleApproveCase}
-                    onDraftClarification={handleOpenClarification}
-                    onManualOverride={handleManualOverride}
-                  />
-                )}
-                {currentCase && (
-                  <ReviewPanel
-                    currentCase={currentCase}
-                    onSaved={handleReviewSaved}
+                    onManualOverride={handleOpenReview}
                   />
                 )}
               </>
@@ -381,7 +307,7 @@ export function App() {
           </div>
         </main>
 
-        {/* Zone 3: AI Assistant Intelligence Drawer (Right) */}
+        {/* Zone 3: AI Assistant & Operator Review Workspace (Right) */}
         {currentCase && (
           <CopilotDrawer
             currentCase={currentCase}
@@ -389,6 +315,7 @@ export function App() {
             onToggle={() => setDrawerOpen((prev) => !prev)}
             activeTab={activeDrawerTab}
             onTabChange={setActiveDrawerTab}
+            onReviewSaved={handleReviewSaved}
           />
         )}
       </div>

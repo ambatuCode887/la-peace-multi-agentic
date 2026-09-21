@@ -4,13 +4,12 @@ import {
   CheckCircle2,
   AlertCircle,
   AlertTriangle,
-  Send,
-  Check,
   ShieldAlert,
-  Compass,
   RefreshCw,
   Search,
   Gauge,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { API_BASE, api } from "../../services/api";
 import { formatMalaysiaTime } from "../../utils/formatTime";
@@ -18,20 +17,19 @@ import { OperationalEmailHub } from "./OperationalEmailHub";
 
 interface BlueprintComparatorProps {
   currentCase: ShippingCase;
-  onApprove: () => void;
-  onDraftClarification: () => void;
-  onManualOverride: () => void;
+  onApprove?: () => void;
+  onDraftClarification?: () => void;
+  onManualOverride?: () => void;
 }
 
 export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   currentCase,
-  onApprove,
-  onDraftClarification,
   onManualOverride,
 }) => {
   const [rereadMessage, setRereadMessage] = useState<string | null>(null);
   const [isRereading, setIsRereading] = useState<string | null>(null);
   const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(null);
+  const [telemetryOpen, setTelemetryOpen] = useState<boolean>(false);
   const securitySources = Array.from(
     new Set(
       currentCase.promptInjectionMatches?.map((match) => match.source) || [],
@@ -101,78 +99,85 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   const renderRoutingTelemetry = () => {
     if (!routingTelemetry) return null;
     return (
-      <section
-        className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs dark:border-[#1a3d8e]/60 dark:bg-[#06163a]"
-        aria-label="Verification routing telemetry"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-start gap-2.5">
-            <div className="rounded-lg bg-[#eef3fc] p-2 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
-              <Gauge className="h-4 w-4" />
+      <div className="rounded-xl border border-slate-200/70 bg-white p-3 shadow-2xs dark:border-[#1a3d8e]/50 dark:bg-[#06163a]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <div className="rounded-md bg-[#eef3fc] p-1.5 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
+              <Gauge className="h-3.5 w-3.5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Cheap-first verification routing
-              </h3>
-              <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-                Rules decide clear fields; only ambiguous fields receive
-                advisory diagnosis.
+              <span className="text-xs font-bold text-slate-900 dark:text-white">
+                Cheap-First Routing:
+              </span>{" "}
+              <span className="text-xs text-slate-600 dark:text-slate-300">
+                {routingTelemetry.resolvedByRules} rules ({routingTelemetry.ruleLatencyMs.toFixed(1)}ms)
+                {routingTelemetry.sentToLlm > 0
+                  ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
+                  : ""}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
+              ${routingTelemetry.estimatedCostUsd.toFixed(5)} cost
+            </span>
+            <button
+              type="button"
+              onClick={() => setTelemetryOpen((prev) => !prev)}
+              className="text-[#345ec4] dark:text-[#8ea9f7] text-[11px] font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
+            >
+              <span>{telemetryOpen ? "Hide stats" : "Routing stats"}</span>
+              <ChevronDown
+                className={`h-3 w-3 transition-transform ${telemetryOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {telemetryOpen && (
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-[#1a3d8e]/40 animate-in fade-in duration-150">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  Rule resolved
+                </div>
+                <div className="text-base font-bold text-emerald-900 dark:text-emerald-100">
+                  {routingTelemetry.resolvedByRules}
+                </div>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  LLM routed
+                </div>
+                <div className="text-base font-bold text-amber-900 dark:text-amber-100">
+                  {routingTelemetry.sentToLlm}
+                </div>
+              </div>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-[#091f52]/40">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                  LLM calls
+                </div>
+                <div className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  {routingTelemetry.llmCalls}
+                </div>
+              </div>
+              <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                  Full-doc baseline
+                </div>
+                <div className="text-base font-bold text-blue-900 dark:text-blue-100">
+                  ${routingTelemetry.fullDocumentCostUsd.toFixed(4)}
+                </div>
+              </div>
+            </div>
+            {routingTelemetry.scalabilitySummary && (
+              <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                {routingTelemetry.scalabilitySummary}
               </p>
-            </div>
+            )}
           </div>
-          <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
-            <div>
-              Estimated targeted cost:{" "}
-              <strong className="text-slate-800 dark:text-slate-200">
-                ${routingTelemetry.estimatedCostUsd.toFixed(5)}
-              </strong>
-            </div>
-            <div>
-              {routingTelemetry.ruleLatencyMs.toFixed(1)} ms rules ·{" "}
-              {routingTelemetry.llmLatencyMs.toFixed(1)} ms LLM
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-          <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              Rule resolved
-            </div>
-            <div className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
-              {routingTelemetry.resolvedByRules}
-            </div>
-          </div>
-          <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              LLM routed
-            </div>
-            <div className="text-lg font-bold text-amber-900 dark:text-amber-100">
-              {routingTelemetry.sentToLlm}
-            </div>
-          </div>
-          <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-[#091f52]/40">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-              LLM calls
-            </div>
-            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              {routingTelemetry.llmCalls}
-            </div>
-          </div>
-          <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              Full-doc baseline
-            </div>
-            <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
-              ${routingTelemetry.fullDocumentCostUsd.toFixed(4)}
-            </div>
-          </div>
-        </div>
-        {routingTelemetry.scalabilitySummary && (
-          <p className="mt-3 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-            {routingTelemetry.scalabilitySummary}
-          </p>
         )}
-      </section>
+      </div>
     );
   };
 
@@ -287,11 +292,15 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         role="button"
         tabIndex={0}
         aria-pressed={selectedFieldKey === field.key}
-        onClick={() => setSelectedFieldKey(field.key)}
+        onClick={() =>
+          setSelectedFieldKey((prev) => (prev === field.key ? null : field.key))
+        }
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            setSelectedFieldKey(field.key);
+            setSelectedFieldKey((prev) =>
+              prev === field.key ? null : field.key,
+            );
           }
         }}
         className={`grid grid-cols-2 gap-4 py-3.5 border-b border-slate-100 dark:border-[#1a3d8e]/40 items-center last:border-b-0 hover:bg-slate-50/50 dark:hover:bg-[#091f52]/20 px-2 rounded-lg transition-colors cursor-pointer ${selectedFieldKey === field.key ? "bg-[#eef3fc] ring-1 ring-[#345ec4]/40 dark:bg-[#091f52]/50" : ""}`}
@@ -413,8 +422,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
           </div>
           {sourceUrl && isVisualAttachment && evidence?.coordinates && (
             <div>
-              <strong>Bounding box:</strong> shown by the reported coordinates
-              above; page-local overlay support depends on source dimensions.
+              <strong>Bounding box:</strong> Spatial coordinates mapped to page layout.
             </div>
           )}
         </div>
@@ -439,29 +447,40 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   const renderEvidencePanel = () => {
     if (!selectedField) {
       return (
-        <div className="rounded-2xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/70 p-5 text-sm text-slate-500 dark:text-slate-400">
-          Select a field above to inspect the exact SI and BL source evidence.
+        <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 dark:border-[#1a3d8e]/40 dark:bg-[#06163a]/40 px-4 py-2.5 text-center text-xs text-slate-500 dark:text-slate-400">
+          <span>💡 <strong className="font-semibold text-slate-600 dark:text-slate-300">Tip:</strong> Click any comparison row above to inspect source document text, OCR bounding box coordinates, and reader confidence.</span>
         </div>
       );
     }
 
     return (
       <section
-        className="rounded-2xl border border-[#345ec4]/40 bg-white dark:bg-[#06163a] p-5 shadow-xs"
+        className="rounded-2xl border border-[#345ec4]/40 bg-white dark:bg-[#06163a] p-5 shadow-xs animate-in fade-in"
         aria-label={`Source evidence for ${selectedField.label}`}
       >
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <div className="text-[10px] uppercase tracking-wide font-bold text-[#345ec4]">
-              Selected field
+              Source Evidence Inspector
             </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {selectedField.label}
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <span>{selectedField.label}</span>
+              <span className="text-xs font-normal text-slate-400 font-mono">({selectedField.key})</span>
             </h3>
           </div>
-          <span className="text-xs text-slate-500 dark:text-slate-400">
-            Click another comparison row to switch
-          </span>
+          <div className="flex items-center space-x-3">
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              Click row again or close to dismiss
+            </span>
+            <button
+              onClick={() => setSelectedFieldKey(null)}
+              className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-[#091f52] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              title="Close evidence panel"
+              aria-label="Close evidence panel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {renderEvidenceSource(
@@ -483,83 +502,8 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     );
   };
 
-  const renderAIReviewSummary = () => {
-    const isExtractionConfidence =
-      currentCase.aiAnalysis.model === "Deterministic ETL extraction";
-
-    return (
-      <section
-        className="rounded-2xl border border-[#345ec4]/35 bg-white dark:bg-[#06163a] p-5 shadow-xs"
-        aria-label={
-          isExtractionConfidence
-            ? "Document extraction summary"
-            : "AI review summary"
-        }
-      >
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464] p-2 text-[#345ec4] dark:text-[#8ea9f7]">
-              <Compass className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
-                {isExtractionConfidence
-                  ? "Document extraction summary"
-                  : "AI review summary"}
-              </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Advisory analysis of this verification
-              </h3>
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {isExtractionConfidence
-                  ? "Based on deterministic field extraction from the source documents."
-                  : "Advisory only. The deterministic SI/BL comparison remains authoritative."}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-right">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                {isExtractionConfidence
-                  ? "Extraction confidence"
-                  : "AI confidence"}
-              </div>
-              <div className="text-lg font-bold text-[#1a3d8e] dark:text-[#8ea9f7]">
-                {currentCase.aiAnalysis.confidence !== undefined
-                  ? `${currentCase.aiAnalysis.confidence}%`
-                  : "Not provided"}
-              </div>
-            </div>
-            <div className="max-w-[140px] text-[10px] text-slate-500 dark:text-slate-400">
-              Model: {currentCase.aiAnalysis.model}
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div className="rounded-xl bg-slate-50 dark:bg-[#091f52]/35 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              What was found
-            </div>
-            <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-              {currentCase.aiAnalysis.summary}
-            </p>
-          </div>
-          <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464]/60 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
-              Recommended action
-            </div>
-            <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-              {currentCase.aiAnalysis.recommendation}
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  };
-
   return (
     <div className="flex flex-col space-y-6">
-      {securityWarning}
       {/* Toast Notice for Re-read */}
       {rereadMessage && (
         <div className="p-3 bg-[#eef3fc] dark:bg-[#052464] border border-[#345ec4]/40 text-[#1a3d8e] dark:text-[#8ea9f7] rounded-xl text-xs flex items-center space-x-2 animate-in fade-in">
@@ -568,8 +512,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         </div>
       )}
 
-      {renderAIReviewSummary()}
-      {renderRoutingTelemetry()}
       {renderOcrAlert()}
 
       {/* Shipment Header Details */}
@@ -645,43 +587,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       </div>
 
       {renderEvidencePanel()}
-
-      {/* Operational 1-Click Action Bar */}
-      <div className="bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 p-4 shadow-xs flex items-center justify-between">
-        <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
-          <Compass className="w-4 h-4 text-[#345ec4]" />
-          <span>
-            Operational decisions grounded in multi-agent verification
-            reasoning.
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={onManualOverride}
-            className="px-4 py-2 rounded-xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 dark:border-amber-900/60 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-          >
-            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span>Manual Override</span>
-          </button>
-
-          <button
-            onClick={onDraftClarification}
-            className="px-4 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-          >
-            <Send className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-            <span>Clarification Email</span>
-          </button>
-
-          <button
-            onClick={onApprove}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white text-xs font-semibold shadow-md shadow-[#345ec4]/25 flex items-center space-x-1.5 transition-all cursor-pointer border border-[#5a82e2]/30"
-          >
-            <Check className="w-4 h-4" />
-            <span>Approve & Mark Clean</span>
-          </button>
-        </div>
-      </div>
+      {renderRoutingTelemetry()}
     </div>
   );
 };
