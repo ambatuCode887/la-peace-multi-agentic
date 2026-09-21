@@ -1,0 +1,98 @@
+@startuml 03_real_world_innovations_matrix
+skinparam backgroundColor #FFFFFF
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI", -apple-system, Arial, sans-serif
+skinparam defaultFontColor #0F172A
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 8
+
+' Flow & borders
+skinparam ArrowColor #2563EB
+skinparam ArrowFontColor #0F172A
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1.5
+
+skinparam package {
+    BorderColor #64748B
+    BorderThickness 1.5
+    BackgroundColor #F8FAFC
+    FontColor #1E3A8A
+    FontStyle bold
+    FontSize 13
+}
+
+skinparam card {
+    BorderThickness 1.2
+    FontColor #0F172A
+    FontSize 12
+}
+
+title <size:18><b>La Peace SDOC: Real-World Maritime Innovation Matrix</b></size>\n<size:12><color:#475569>Four Strategic Pillars Solving the Gap Between Synthetic Hackathon Code and Enterprise Operations</color></size>\n
+
+' ==================== PILLAR 1 ====================
+package "Pillar 1: Port & Geographic Intelligence" as P1 {
+    card "<b>Operational Challenge</b>\n* Carriers print UN codes ('MYPKG')\n* Shippers write aliases ('Port Klang')" as P1_Challenge #FEF2F2;line:DC2626
+    
+    card "<b>Naive Baseline Flaw</b>\n* Literal string equality fails\n* Generates 85% false alarms" as P1_Baseline #FFFBEB;line:D97706
+    
+    card "<b>La Peace SDOC Innovation</b>\n* UN/LOCODE Vector RAG Engine\n* Multi-terminal fuzzy alias resolver" as P1_SDOC #F0FDF4;line:059669
+    
+    card "<b>Averis Business ROI</b>\n* <b>Eliminates 85% of false alarms</b>\n* Prevents unnecessary customs holds" as P1_ROI #EFF6FF;line:2563EB
+
+    P1_Challenge -down-> P1_Baseline : exposes
+    P1_Baseline -down-> P1_SDOC : solved by
+    P1_SDOC -down-> P1_ROI : delivers
+}
+
+' ==================== PILLAR 2 ====================
+package "Pillar 2: Scale Physics & Tare Tolerance" as P2 {
+    card "<b>Operational Challenge</b>\n* Tare weight (2,200 kg) omitted\n* Natural cargo moisture loss (±0.5%)" as P2_Challenge #FEF2F2;line:DC2626
+    
+    card "<b>Naive Baseline Flaw</b>\n* Strict integer check (W1 == W2)\n* Flags every normal weighbridge shift" as P2_Baseline #FFFBEB;line:D97706
+    
+    card "<b>La Peace SDOC Innovation</b>\n* MT / LBS -> KG auto-converter\n* Dynamic ±0.5% scale tare tolerance" as P2_SDOC #F0FDF4;line:059669
+    
+    card "<b>Averis Business ROI</b>\n* <b>Catches true cargo theft / loss</b>\n* Ignores normal container scale drift" as P2_ROI #EFF6FF;line:2563EB
+
+    P2_Challenge -down-> P2_Baseline : exposes
+    P2_Baseline -down-> P2_SDOC : solved by
+    P2_SDOC -down-> P2_ROI : delivers
+}
+
+' ==================== PILLAR 3 ====================
+package "Pillar 3: Legal Entity & Multi-Lingual Corridors" as P3 {
+    card "<b>Operational Challenge</b>\n* Suffix variance ('PTE LTD' vs 'LIMITED')\n* Trilingual documents (ASEAN & China)" as P3_Challenge #FEF2F2;line:DC2626
+    
+    card "<b>Naive Baseline Flaw</b>\n* English-only regex crashes on Chinese\n* Minor punctuation triggers rejection" as P3_Baseline #FFFBEB;line:D97706
+    
+    card "<b>La Peace SDOC Innovation</b>\n* Token-Sort Fuzzy Entity Normalizer\n* Trilingual Header & Stamp OCR Parser" as P3_SDOC #F0FDF4;line:059669
+    
+    card "<b>Averis Business ROI</b>\n* <b>Protects Letters of Credit (UCP 600)</b>\n* Smooth cross-border trade in SE Asia" as P3_ROI #EFF6FF;line:2563EB
+
+    P3_Challenge -down-> P3_Baseline : exposes
+    P3_Baseline -down-> P3_SDOC : solved by
+    P3_SDOC -down-> P3_ROI : delivers
+}
+
+' ==================== PILLAR 4 ====================
+package "Pillar 4: Security Defense & 1-Click Remediation" as P4 {
+    card "<b>Operational Challenge</b>\n* Forwarders paste prompt injections\n* Carrier email drafting takes 15 mins" as P4_Challenge #FEF2F2;line:DC2626
+    
+    card "<b>Naive Baseline Flaw</b>\n* Unsanitized LLM prompt hijack risk\n* Manual clerk emails outside system" as P4_Baseline #FFFBEB;line:D97706
+    
+    card "<b>La Peace SDOC Innovation</b>\n* Pre-ingestion prompt defense scanner\n* 1-Click AI Maritime Dispute Drafter" as P4_SDOC #F0FDF4;line:059669
+    
+    card "<b>Averis Business ROI</b>\n* <b>Drafting: 15 min -> 30 sec</b>\n* SOX-compliant immutable audit trail" as P4_ROI #EFF6FF;line:2563EB
+
+    P4_Challenge -down-> P4_Baseline : exposes
+    P4_Baseline -down-> P4_SDOC : solved by
+    P4_SDOC -down-> P4_ROI : delivers
+}
+
+' 2x2 Matrix Layout Alignment
+P1 -[hidden]right-> P2
+P1 -[hidden]down-> P3
+P3 -[hidden]right-> P4
+
+@enduml

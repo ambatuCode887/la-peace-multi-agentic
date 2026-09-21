@@ -1,0 +1,137 @@
+@startuml 04_human_in_the_loop_state_machine
+skinparam backgroundColor #FFFFFF
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI", -apple-system, Arial, sans-serif
+skinparam defaultFontColor #0F172A
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 8
+
+' Transition Arrows
+skinparam ArrowColor #2563EB
+skinparam ArrowFontColor #0F172A
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1.5
+
+' State styling
+skinparam state {
+    BorderColor #334155
+    BorderThickness 1.5
+    BackgroundColor #FFFFFF
+    FontColor #0F172A
+    FontSize 12
+    FontStyle bold
+    AttributeFontColor #1E293B
+    AttributeFontSize 11
+    AttributeFontStyle normal
+}
+
+title <size:18><b>La Peace SDOC: Human-in-the-Loop Case Lifecycle State Machine</b></size>\n<size:12><color:#475569>Auditable Transition Paths from Automated Ingestion to Operator Review and Final Release</color></size>\n
+
+[*] --> Ingested : <color:#0F172A><b>1. Incoming Shipping Record</b></color>
+
+state Ingested #F1F5F9;line:475569 {
+    [*] --> ClassifyingIntent
+    ClassifyingIntent : Categorize: Comparison / Invoice / Chase / Spam
+    ClassifyingIntent --> NonComparisonQueue : Non-Comparison Intent
+    ClassifyingIntent --> ValidationQueue : BL_COMPARISON Intent
+}
+
+state NonComparisonQueue #EFF6FF;line:2563EB {
+    NonComparisonQueue : Assess SLA Urgency & Operational Risk
+    NonComparisonQueue : Generate Point-Form AI Executive Summary
+    NonComparisonQueue --> Archived : Operator Acknowledged
+}
+
+state ValidationQueue #EEF2FF;line:4F46E5 {
+    [*] --> IngestionCheck
+    IngestionCheck : Validate SI & BL Attachments
+    IngestionCheck --> VerificationRunning : Both Documents Present
+    IngestionCheck --> MissingDocHold : Missing Attachment / Unreadable
+}
+
+state VerificationRunning #E0E7FF;line:4338CA {
+    VerificationRunning : 1. Anti-Injection Security Filter
+    VerificationRunning : 2. Dual-Reader Consensus Extraction
+    VerificationRunning : 3. Deterministic Port & Tare Tolerance
+    VerificationRunning : 4. Evaluate Agreement & Confidence
+}
+
+' Automated Verdict Transitions
+VerificationRunning --> CleanPass : <color:#15803D><b>All 7 Fields Match (High Confidence)</b></color>
+VerificationRunning --> DiscrepancyFlagged : <color:#B91C1C><b>Mismatch Exceeds Tolerance</b></color>
+VerificationRunning --> AmbiguityFlagged : <color:#B45309><b>Low OCR Agreement / Skew Blur</b></color>
+VerificationRunning --> SecurityHold : <color:#991B1B><b>Prompt Injection Attempt Detected</b></color>
+
+state CleanPass #DCFCE7;line:15803D;text:14532D {
+    CleanPass : <b>Status: PASS (Clean Match)</b>
+    CleanPass : All 7 legal fields verified against SI truth
+    CleanPass : Eligible for immediate automated carrier release
+}
+
+state SecurityHold #FEE2E2;line:991B1B;text:7F1D1D {
+    SecurityHold : <b>Status: SECURITY_HOLD</b>
+    SecurityHold : Prompt injection token detected in remarks
+    SecurityHold : Automated submission locked pending compliance review
+}
+
+state DiscrepancyFlagged #FEE2E2;line:B91C1C;text:7F1D1D {
+    DiscrepancyFlagged : <b>Status: MISMATCH</b>
+    DiscrepancyFlagged : Financial demurrage liability calculated ($/day)
+    DiscrepancyFlagged : Incoterms & carrier SOP guidance retrieved
+}
+
+state AmbiguityFlagged #FEF3C7;line:B45309;text:78350F {
+    AmbiguityFlagged : <b>Status: NEEDS_REVIEW</b>
+    AmbiguityFlagged : Conflicting reader values or blurry character glyphs
+    AmbiguityFlagged : Requires operator confirmation
+}
+
+' Operator Control Tower
+state "<b>Operator Control Tower Workspace</b> (Human-in-the-Loop)" as OperatorWorkspace #F8FAFC;line:1E3A8A {
+    state "<b>1. Evidence Inspection</b>\nSide-by-side snippet diff & PDF viewer" as Inspect #FFFFFF;line:64748B
+    state "<b>2. AI Correction Guidance</b>\nPreview recommended values from SI" as AISuggest #FFFFFF;line:64748B
+    state "<b>3. One-Click Maritime Notice</b>\nAuto-draft formal carrier dispute letter" as CarrierNotice #FFFFFF;line:64748B
+
+    Inspect -right-> AISuggest : validates
+    AISuggest -right-> CarrierNotice : informs
+}
+
+DiscrepancyFlagged --> OperatorWorkspace : <color:#0F172A><b>Operator Opens Case</b></color>
+AmbiguityFlagged --> OperatorWorkspace : <color:#0F172A><b>Operator Opens Case</b></color>
+SecurityHold --> OperatorWorkspace : <color:#0F172A><b>Compliance Officer Inspects</b></color>
+
+OperatorWorkspace --> ResolutionDecision : <color:#0F172A><b>Operator Submits Review</b></color>
+
+state ResolutionDecision <<choice>> #FFFFFF;line:1E3A8A
+
+ResolutionDecision --> ReleasedOK : <color:#15803D><b>Verdict: "accept" / "false_alarm"</b>\n(Variance within acceptable operational limit)</color>
+ResolutionDecision --> ConfirmedDefect : <color:#B91C1C><b>Verdict: "confirm_mismatch"</b>\n(Held from release; carrier disputed)</color>
+ResolutionDecision --> CarrierDispatched : <color:#B45309><b>Verdict: "request_clarification"</b>\n(Amended draft requested from carrier)</color>
+
+state ReleasedOK #DCFCE7;line:15803D;text:14532D {
+    ReleasedOK : <b>Status: OK (Finalized & Released)</b>
+    ReleasedOK : Cryptographic SHA-256 Audit Hash Recorded
+    ReleasedOK : Document Export Eligible (CSV / JSON / PDF)
+}
+
+state ConfirmedDefect #FEE2E2;line:B91C1C;text:7F1D1D {
+    ConfirmedDefect : <b>Status: MISMATCH (Confirmed Defect)</b>
+    ConfirmedDefect : Escalated to Supply Chain Operations Manager
+    ConfirmedDefect : Prevents premature container loading at terminal
+}
+
+state CarrierDispatched #FEF3C7;line:B45309;text:78350F {
+    CarrierDispatched : <b>Status: AWAITING_CARRIER_AMENDMENT</b>
+    CarrierDispatched : Formal legal amendment notice sent to carrier
+    CarrierDispatched : Demurrage SLA countdown timer active
+}
+
+CleanPass --> ReleasedOK : <color:#15803D><b>Auto / Operator Sign-Off</b></color>
+CarrierDispatched --> Ingested : <color:#0F172A><b>Carrier Sends Corrected BL Draft v2</b></color>
+
+ReleasedOK --> [*]
+ConfirmedDefect --> [*]
+Archived --> [*]
+
+@enduml

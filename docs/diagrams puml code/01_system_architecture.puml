@@ -1,0 +1,125 @@
+@startuml 01_system_architecture
+skinparam backgroundColor #FFFFFF
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI", -apple-system, Arial, sans-serif
+skinparam defaultFontColor #0F172A
+skinparam defaultFontSize 12
+skinparam roundcorner 8
+skinparam shadowing false
+skinparam linetype ortho
+
+' Global borders and arrows
+skinparam ArrowColor #2563EB
+skinparam ArrowFontColor #0F172A
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1.5
+
+' Component and Package styling
+skinparam package {
+    BorderColor #94A3B8
+    BorderThickness 1.2
+    FontColor #1E3A8A
+    FontStyle bold
+    FontSize 13
+}
+
+skinparam component {
+    BorderColor #64748B
+    BorderThickness 1.2
+    BackgroundColor #FFFFFF
+    FontColor #0F172A
+}
+
+skinparam database {
+    BorderColor #047857
+    BorderThickness 1.5
+    BackgroundColor #F0FDF4
+    FontColor #064E3B
+    FontStyle bold
+}
+
+skinparam cloud {
+    BorderColor #2563EB
+    BorderThickness 1.5
+    BackgroundColor #EFF6FF
+    FontColor #1E3A8A
+    FontStyle bold
+}
+
+skinparam actor {
+    BorderColor #1E293B
+    BackgroundColor #F1F5F9
+    FontColor #0F172A
+    FontStyle bold
+}
+
+title <size:18><b>La Peace SDOC: End-to-End System & Cloud Architecture</b></size>\n<size:12><color:#475569>Multi-Agent Autonomous Shipping Document Verification & Triage Platform (Monash x Averis Hackathon 2026)</color></size>\n
+
+' ==================== EXTERNAL ACTORS ====================
+actor "<b>Enterprise Logistics Operator</b>\n(Desktop & Mobile On-Call View)" as Operator
+actor "<b>Shipping Carrier Operations</b>\n(Maersk, MSC, CMA CGM, ONE)" as Carrier
+
+' ==================== PRESENTATION LAYER ====================
+package "Presentation Layer (Vercel Global Edge Network)" as ClientTier #F8FAFC {
+    component "<b>React 19 Dashboard & Control Room</b> (Vite 6, Tailwind CSS)\nURL: https://la-peace-multi-agentic-five.vercel.app" as SPA #FFFFFF {
+        [<b>Case Inbox & Triage Hub</b>\nUrgency & Demurrage Scoring] as Dashboard #F1F5F9
+        [<b>Dual Blueprint Comparator</b>\nInteractive Line-Item Diff Matrix] as Comparator #F1F5F9
+        [<b>Evidence Inspector</b>\nSide-by-Side PDF & Highlight Stream] as EvidenceUI #F1F5F9
+        [<b>1-Click Maritime Notice Drafter</b>\nAuto-generates Carrier Dispute Letters] as EmailHub #F1F5F9
+    }
+}
+
+' ==================== APPLICATION LAYER ====================
+package "Application & Orchestration Layer (Render Cloud Microservices)" as AppTier #F8FAFC {
+    component "<b>FastAPI Gateway & Security Layer</b> (Python 3.11)\nURL: https://la-peace-backend.onrender.com" as Gateway #FFFFFF {
+        [<b>Inbound Sanitizer & Prompt Defense</b>\nStrips Injection Tokens & Sanitizes Text] as Sanitizer #FEF2F2
+        [<b>Case Lifecycle Manager</b>\nCoordinates State Transitions & Audit Trails] as CaseManager #F1F5F9
+        [<b>Export Engine</b>\nCSV, JSON & Cryptographic Certificates] as Exporter #F1F5F9
+    }
+
+    package "Multi-Agent Verification Pipeline" as AgentPipeline #EEF2FF {
+        component "<b>1. Ingestion & Triage Agent</b>\nClassifies Email Intent & Extracts Metadata" as TriageAgent #FFFFFF
+        component "<b>2. Dual-Reader Extractor</b>\nPrimary Regex ETL + Gemini 2.5 Flash Multimodal Vision" as DualReaderAgent #FFFFFF
+        component "<b>3. Deterministic Normalizer & Tolerance Engine</b>\nUN/LOCODE Resolution + ±0.5% Tare Tolerance Filter" as ComparatorAgent #FFFFFF
+        component "<b>4. RAG Domain & Policy Agent</b>\nIncoterms 2020 & UCP 600 Banking Compliance" as RAGAgent #FFFFFF
+    }
+}
+
+' ==================== PERSISTENCE & AI SERVICES ====================
+package "Persistence & Foundation AI Tier" as CloudDataTier #F8FAFC {
+    database "<b>MongoDB Atlas Cloud Cluster</b>\n* Case Dossiers & JSON Schemas\n* Cryptographic Audit Logs (SHA-256)\n* Document Attachments (PDF/DOCX/Images)" as MongoDB
+    database "<b>Qdrant Vector Cloud Engine</b>\n* Incoterms 2020 & SOP Registry\n* UN/LOCODE Maritime Port Directory\n* Historical Discrepancy Precedents" as Qdrant
+    cloud "<b>Google Gemini 2.5 Flash / Lite</b>\n* Multimodal Vision OCR & Table Alignment\n* Schema-Constrained Structured Extraction\n* Analytical Explanations & Carrier Drafts" as Gemini
+}
+
+' ==================== RELATIONSHIPS & DATAFLOW ====================
+Operator --> SPA : <b>1. HTTPS (Port 443)</b>\nDesktop Multi-Pane / Mobile Drawer
+SPA --> Gateway : <b>2. REST API Requests</b>\n(/cases, /verify, /review)
+
+Gateway --> Sanitizer : <b>3. Sanitize Payload</b>
+Sanitizer --> CaseManager : Clean Context
+
+CaseManager --> TriageAgent : <b>4. Dispatch Ingestion</b>
+TriageAgent --> DualReaderAgent : Document Streams (SI vs BL)
+DualReaderAgent --> ComparatorAgent : Structured Fields + Confidence Scores
+ComparatorAgent --> RAGAgent : Ambiguity / Discrepancy Context
+
+RAGAgent <--> Qdrant : Vector Similarity Search (HNSW Cosine)
+DualReaderAgent <--> Gemini : Vision OCR & Structured JSON Extraction
+RAGAgent <--> Gemini : Multi-Turn Semantic Reasoning
+
+CaseManager <--> MongoDB : Read/Write Case States & Audit Trails
+CaseManager --> Exporter : Generate Signed Verification Dossier
+
+EmailHub --> Gateway : <b>5. Trigger Notice Dispatch</b>
+Gateway ..> Carrier : <b>6. SMTP / API Carrier Dispute Notice</b>
+
+legend bottom
+    <color:#1E3A8A><b>Architecture Summary:</b></color>
+    * <b>Frontend:</b> React 19, Vite, Tailwind CSS (Hosted on Vercel Global Edge)
+    * <b>Backend API:</b> Asynchronous Python 3.11, FastAPI, Uvicorn ASGI (Hosted on Render Cloud)
+    * <b>Data Stores:</b> MongoDB Atlas (Document Store & Audit Trail) + Qdrant Cloud (Vector Store)
+    * <b>Foundation Model:</b> Google Gemini 2.5 Flash via official Google GenAI SDK
+endlegend
+
+@enduml

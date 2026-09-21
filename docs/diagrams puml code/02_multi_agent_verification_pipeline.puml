@@ -1,0 +1,133 @@
+@startuml 02_multi_agent_verification_pipeline
+skinparam backgroundColor #FFFFFF
+skinparam handwritten false
+skinparam defaultFontName "Segoe UI", -apple-system, Arial, sans-serif
+skinparam defaultFontColor #0F172A
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam roundcorner 8
+
+' Flow styling
+skinparam ArrowColor #2563EB
+skinparam ArrowFontColor #0F172A
+skinparam ArrowFontSize 11
+skinparam ArrowThickness 1.5
+
+skinparam activity {
+    BorderColor #475569
+    BorderThickness 1.2
+    BackgroundColor #FFFFFF
+    FontColor #0F172A
+    FontSize 12
+}
+
+skinparam partition {
+    BorderColor #94A3B8
+    BorderThickness 1.5
+    BackgroundColor #F8FAFC
+    FontColor #1E3A8A
+    FontStyle bold
+    FontSize 13
+}
+
+skinparam note {
+    BorderColor #D97706
+    BackgroundColor #FFFBEB
+    FontColor #78350F
+    FontSize 11
+}
+
+skinparam condition {
+    BorderColor #2563EB
+    BackgroundColor #EFF6FF
+    FontColor #1E3A8A
+    FontStyle bold
+    FontSize 11
+}
+
+title <size:18><b>La Peace SDOC: Multi-Agent Dual-Reader Verification Pipeline</b></size>\n<size:12><color:#475569>Vertical Orchestration Architecture: Ingestion, Consensus OCR, Domain Logic, and HITL Resolution</color></size>\n
+
+start
+
+' ==================== STAGE 1 ====================
+partition "Stage 1: Document Ingestion & Intent Triage" {
+    :<b>Receive Shipping Email Record</b>\n(Sender, Subject, Body, Timestamp, MIME Attachments);
+
+    :<b>Agent 1: Ingestion & Intent Triage Agent</b>\nClassifies Email into 1 of 5 Business Categories;
+
+    if (Category == BL_COMPARISON?) then (No)
+        :Route to <b>Operational Email Hub</b>\n* Calculates SLA Urgency\n* Generates AI Executive Summary\n* Queues for General Operator Response; <<#EFF6FF>>
+        stop
+    else (Yes: Comparison Case)
+        :Identify & Validate Linked Attachments\n<b>Shipping Instruction (SI)</b> & <b>Draft Bill of Lading (BL)</b>;
+    endif
+}
+
+' ==================== STAGE 2 ====================
+partition "Stage 2: Security Sanitization & Prompt Defense" {
+    :<b>Security Guardrail Agent</b>\nScans body and attachment text for adversarial prompt injection\n(e.g., "IGNORE INSTRUCTIONS", role spoofing, hidden delimiters);
+
+    if (Security Injection Detected?) then (Yes)
+        :Flag <b>Security Hold</b> on Automated Pipeline\nIsolate payload and alert Compliance Officer; <<#FEE2E2>>
+    else (Clean Payload)
+    endif
+
+    :Decode & Normalize Multi-Format Attachments\n(PDF Text, Scanned PDF, DOCX, XLSX, Images);
+}
+
+' ==================== STAGE 3 ====================
+partition "Stage 3: Dual-Reader Consensus Extraction" {
+    fork
+        :<b>Reader A: Primary Extraction Engine</b>\nDeterministic Regex & Positional Layout ETL\nParses 7 Core Operational Fields;
+    fork again
+        :<b>Reader B: Fallback Multimodal Vision</b>\nGemini 2.5 Flash Vision OCR Engine\nExtracts Tables & Handwritten Stamp Annotations;
+    end fork
+
+    :<b>Cross-Reader Agreement Evaluation</b>\nCalculate field-by-field character similarity;
+
+    note right
+        <b>Confidence Scoring Rules:</b>
+        * Agreement >= 98%: <b>HIGH_CONFIDENCE</b>
+        * Agreement < 98%: <b>FLAGGED_AMBIGUITY</b>
+        * Character substitution: <b>OCR_DISTORTION</b>
+    end note
+
+    if (Severe OCR Distortion on Seals / Numbers?) then (Yes)
+        :Mark Field as <b>AMBIGUOUS (Needs Human Verification)</b>;
+    else (Clean Extraction)
+    endif
+}
+
+' ==================== STAGE 4 ====================
+partition "Stage 4: Deterministic Normalization & Tolerance Engine" {
+    :<b>Agent 2: Deterministic Normalization Engine</b>\nApplies Maritime Domain Normalization Rules;
+
+    :<b>1. UN/LOCODE Fuzzy Port Normalization</b>\nMap aliases to UN/ECE standard (e.g. "Port Klang" -> MYPKG);
+
+    :<b>2. Corporate Entity Suffix Stripping</b>\nToken-sort normalization (e.g. "SDN BHD", "PTE LTD", "INC");
+
+    :<b>3. Metric Weight Conversion & Dynamic Tolerance</b>\nConvert all units to KG; apply ±0.5% scale tare tolerance;
+}
+
+' ==================== STAGE 5 ====================
+partition "Stage 5: Verification Evaluation & Resolution" {
+    :<b>Cross-Compare All 7 Operational Fields:</b>\n1. Shipper Entity  |  2. Consignee Entity  |  3. Notify Party\n4. Port of Loading (POL)  |  5. Port of Discharge (POD)\n6. Container Count (ISO 6346)  |  7. Gross Weight (kg);
+
+    if (All 7 Fields Match within Tolerance?) then (Yes: Clean Match)
+        :Assign Status: <b>PASS (Clean Match)</b>\n* Mark eligible for automated carrier submission\n* Generate Cryptographic Certificate of Verification; <<#F0FDF4>>
+        stop
+    else (No: Discrepancy Found)
+        :Assign Status: <b>MISMATCH (Discrepancy Flagged)</b>; <<#FEF2F2>>
+
+        :<b>Agent 3: Demurrage Risk Engine</b>\nCalculate delay liability ($/day) based on error severity;
+
+        :<b>Agent 4: RAG Guidance & Policy Agent</b>\nRetrieve Incoterms 2020 & carrier SOP rules from Qdrant;
+
+        :Formulate Plain-Language Discrepancy Summary\nand AI-Suggested Corrective Actions;
+
+        :<b>Human-in-the-Loop Control Room Workspace</b>\n* Side-by-side evidence snippet viewer with confidence score\n* Operator Action: Accept / Confirm Discrepancy / 1-Click Notice\n* Persist Final Resolution & Audit Signature (SHA-256 to MongoDB); <<#FEF3C7>>
+        stop
+    endif
+}
+
+@enduml
