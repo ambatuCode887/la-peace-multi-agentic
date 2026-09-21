@@ -11,7 +11,6 @@ import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
-import { EvaluationDashboard } from "./components/evaluation/EvaluationDashboard";
 import { ALL_CASES } from "./data/allCases";
 import {
   api,
@@ -35,7 +34,6 @@ export function App() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [operationsOpen, setOperationsOpen] = useState<boolean>(false);
-  const [evaluationOpen, setEvaluationOpen] = useState<boolean>(false);
   const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "review" | "email" | "chat"
@@ -214,7 +212,7 @@ export function App() {
   };
 
   const handleSelectCase = (id: string) => {
-    setEvaluationOpen(false);
+    setOperationsOpen(false);
     setSelectedCaseId(id);
   };
 
@@ -229,8 +227,6 @@ export function App() {
         backendConnected={backendConnected}
         operationsOpen={operationsOpen}
         onToggleOperations={() => setOperationsOpen((open) => !open)}
-        evaluationOpen={evaluationOpen}
-        onToggleEvaluation={() => setEvaluationOpen((open) => !open)}
       />
 
       {/* Main 3-Zone Workspace */}
@@ -250,26 +246,22 @@ export function App() {
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div className="max-w-4xl mx-auto">
-            {evaluationOpen ? (
-              <EvaluationDashboard
+            {operationsOpen ? (
+              <OperationsPanel
                 backendConnected={backendConnected}
-                onExit={() => setEvaluationOpen(false)}
+                currentCase={currentCase}
+                onVerified={(report) => {
+                  handleVerified(report);
+                  setOperationsOpen(false);
+                }}
+                onProcessInbox={handleProcessInbox}
+                onRefresh={refreshCases}
+                onRetry={handleRetryCase}
+                onDelete={handleDeleteCase}
+                onExit={() => setOperationsOpen(false)}
               />
             ) : (
               <>
-                {/* Operations: process inbox, upload a case, retry or delete */}
-                {operationsOpen && (
-                  <OperationsPanel
-                    backendConnected={backendConnected}
-                    currentCase={currentCase}
-                    onVerified={handleVerified}
-                    onProcessInbox={handleProcessInbox}
-                    onRefresh={refreshCases}
-                    onRetry={handleRetryCase}
-                    onDelete={handleDeleteCase}
-                  />
-                )}
-
                 {/* Conditional Discrepancy & Status Alert Banner */}
                 {currentCase && (
                   <DiscrepancyBanner

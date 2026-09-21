@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Trash2,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 
 interface OperationsPanelProps {
@@ -19,6 +20,7 @@ interface OperationsPanelProps {
   onRefresh: () => Promise<void>;
   onRetry: (emailId: string) => Promise<void>;
   onDelete: (emailId: string) => Promise<void>;
+  onExit?: () => void;
 }
 
 export function OperationsPanel({
@@ -29,6 +31,7 @@ export function OperationsPanel({
   onRefresh,
   onRetry,
   onDelete,
+  onExit,
 }: OperationsPanelProps) {
   const [emailId, setEmailId] = useState("");
   const [sender, setSender] = useState("");
@@ -144,6 +147,15 @@ export function OperationsPanel({
                 <Trash2 className="h-3.5 w-3.5" /> Delete selected
               </button>
             </>
+          )}
+          {onExit && (
+            <button
+              type="button"
+              onClick={onExit}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-[#1a3d8e] bg-slate-50 dark:bg-[#091f52] px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-[#0c2a72] transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to Verification
+            </button>
           )}
         </div>
       </div>

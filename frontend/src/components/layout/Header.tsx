@@ -3,7 +3,6 @@ import {
   Sun,
   Moon,
   Inbox,
-  BarChart3,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 
@@ -15,8 +14,6 @@ interface HeaderProps {
   backendConnected?: boolean;
   operationsOpen?: boolean;
   onToggleOperations?: () => void;
-  evaluationOpen?: boolean;
-  onToggleEvaluation?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,8 +23,6 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   operationsOpen = false,
   onToggleOperations,
-  evaluationOpen = false,
-  onToggleEvaluation,
 }) => {
   return (
     <header className="h-16 border-b border-slate-200/80 bg-white/95 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 transition-colors">
@@ -91,24 +86,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Inbox className="w-4 h-4" />
             <span>Operations</span>
-          </button>
-        )}
-
-        {onToggleEvaluation && (
-          <button
-            id="evaluation-toggle"
-            data-testid="evaluation-toggle"
-            onClick={onToggleEvaluation}
-            aria-pressed={evaluationOpen}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
-              evaluationOpen
-                ? "bg-[#1a3d8e] border-[#1a3d8e] text-white"
-                : "border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:text-slate-300 dark:hover:bg-[#0a1e4d]"
-            }`}
-            title="View benchmark precision, recall, and disagreements"
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>Evaluation</span>
           </button>
         )}
 
