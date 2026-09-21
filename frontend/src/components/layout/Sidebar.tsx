@@ -549,10 +549,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={c.id}
                 data-case-id={c.id}
                 onClick={() => onSelectCase(c.id)}
-                className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] ${
+                className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-300 dark:border-b-[#1a3d8e] ${
                   isSelected
-                    ? "bg-[#eef3fc] border-l-4 border-[#345ec4] dark:bg-[#091f52]/60 dark:border-[#5a82e2]"
-                    : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-transparent"
+                    ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
+                    : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
                 }`}
                 >
                 {/* Header Line: ID, Category Badge, Timestamp */}

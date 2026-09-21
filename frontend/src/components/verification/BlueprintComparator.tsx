@@ -10,9 +10,12 @@ import {
   Gauge,
   ChevronDown,
   X,
+  Mail,
+  Clock,
 } from "lucide-react";
 import { API_BASE, api } from "../../services/api";
 import { formatMalaysiaTime } from "../../utils/formatTime";
+import { formatSubject } from "../../utils/formatSubject";
 import { OperationalEmailHub } from "./OperationalEmailHub";
 
 interface BlueprintComparatorProps {
@@ -90,6 +93,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     }
   };
 
+  const subject = formatSubject(currentCase.subject);
   const routingTelemetry = currentCase.routingTelemetry;
   const ocrAlerts =
     currentCase.ocrDistortionAnalysis?.filter(
@@ -303,24 +307,26 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             );
           }
         }}
-        className={`grid grid-cols-2 gap-4 py-3.5 border-b border-slate-100 dark:border-[#1a3d8e]/40 items-center last:border-b-0 hover:bg-slate-50/50 dark:hover:bg-[#091f52]/20 px-2 rounded-lg transition-colors cursor-pointer ${selectedFieldKey === field.key ? "bg-[#eef3fc] ring-1 ring-[#345ec4]/40 dark:bg-[#091f52]/50" : ""}`}
+        className={`group grid grid-cols-2 items-stretch border-b border-slate-200 dark:border-[#1a3d8e]/60 last:border-b-0 overflow-hidden transition-colors cursor-pointer ${selectedFieldKey === field.key ? "bg-[#eef3fc] ring-1 ring-inset ring-[#345ec4]/50 dark:bg-[#091f52]/60" : ""}`}
       >
-        {/* Left Side: SI Blueprint */}
-        <div className="pr-4">
-          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+        {/* Left Side: SI Blueprint, a tinted band so the source of truth stands apart from the draft BL */}
+        <div className="flex flex-col justify-center border-l-[3px] border-[#345ec4] bg-[#e9f0fd] py-3.5 pl-3 pr-4 dark:border-[#5a82e2] dark:bg-[#0d2f7a]/70">
+          <div className="text-[11px] uppercase tracking-wider font-bold text-[#345ec4] dark:text-[#8ea9f7] mb-0.5">
             <span>{field.label}</span>
             <span className="ml-2 inline-block normal-case tracking-normal">
               {resolutionBadge}
             </span>
           </div>
-          <div className="font-mono text-sm text-slate-700 dark:text-slate-300 font-medium">
+          <div className="font-mono text-sm text-slate-900 dark:text-white font-semibold">
             {field.siValue}
           </div>
         </div>
 
         {/* Right Side: BL Draft */}
-        <div className="pl-4 border-l border-slate-100 dark:border-[#1a3d8e]/40">
-          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+        <div
+          className={`flex flex-col justify-center border-l border-slate-200 py-3.5 pl-4 pr-2 transition-colors dark:border-[#1a3d8e]/60 ${selectedFieldKey === field.key ? "" : "bg-slate-50 group-hover:bg-slate-100 dark:bg-white/[0.05] dark:group-hover:bg-white/[0.09]"}`}
+        >
+          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
             Incoming Draft BL Value
           </div>
           {blContent}
@@ -517,22 +523,55 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       {/* Shipment Header Details */}
       <div className="bg-white dark:bg-[#06163a] rounded-2xl border border-slate-200/80 dark:border-[#1a3d8e]/60 p-5 shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-[#1a3d8e]/60">
-          <div>
-            <div className="flex items-center space-x-2.5">
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
+          <div className="min-w-0 flex-1 basis-[420px]">
+            <div className="flex items-start gap-2.5">
+              <span className="mt-0.5 shrink-0 text-base font-mono font-bold px-3 py-1 rounded-xl bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
                 {currentCase.id}
               </span>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                {currentCase.subject}
-              </h2>
+              <div className="min-w-0">
+                <h2
+                  className="text-lg font-bold leading-snug text-slate-900 dark:text-white"
+                  title={currentCase.subject}
+                >
+                  {subject.isReply && (
+                    <span className="mr-2 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      Reply
+                    </span>
+                  )}
+                  {subject.title}
+                </h2>
+                {subject.references.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {subject.references.map((reference, index) => (
+                      <span
+                        key={`${reference}-${index}`}
+                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-600 dark:border-[#1a3d8e]/60 dark:bg-white/[0.05] dark:text-slate-300"
+                      >
+                        {reference}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Sender:{" "}
-              <span className="font-mono text-slate-700 dark:text-slate-300">
-                {currentCase.sender}
-              </span>{" "}
-              • Ingested: {formatMalaysiaTime(currentCase.timestamp)}
-            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 shrink-0" />
+                <span>Sender:</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300">
+                  {currentCase.sender}
+                </span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Ingested{" "}
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    {formatMalaysiaTime(currentCase.timestamp)}
+                  </span>
+                </span>
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4 text-xs font-mono">
@@ -560,18 +599,18 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         </div>
 
         {/* Side-by-Side Blueprint Diff Card */}
-        <div className="mt-4">
-          <div className="grid grid-cols-2 gap-4 pb-3 mb-2 border-b border-slate-200/80 dark:border-[#1a3d8e]/60 font-semibold text-xs text-slate-500">
-            <div className="flex items-center space-x-2">
-              <span className="px-2 py-0.5 rounded bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] text-[10px] font-bold border border-[#345ec4]/30">
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-[#1a3d8e]/60">
+          <div className="grid grid-cols-2 border-b-2 border-slate-300 dark:border-[#5a82e2]/50 font-semibold text-xs text-slate-500">
+            <div className="flex items-center space-x-2 border-l-[3px] border-[#345ec4] bg-[#dbe6fb] py-3 pl-3 pr-4 dark:border-[#5a82e2] dark:bg-[#10388c]/70">
+              <span className="px-2 py-0.5 rounded bg-white text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] text-[10px] font-bold border border-[#345ec4]/40 dark:border-[#5a82e2]/50">
                 SI BLUEPRINT
               </span>
-              <span className="font-bold text-slate-700 dark:text-slate-300">
+              <span className="font-bold text-slate-800 dark:text-slate-100">
                 Shipping Instruction (Source of Truth)
               </span>
             </div>
-            <div className="flex items-center space-x-2 pl-4 border-l border-slate-100 dark:border-[#1a3d8e]/40">
-              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 text-[10px] font-bold">
+            <div className="flex items-center space-x-2 border-l border-slate-200 bg-slate-100 py-3 pl-4 dark:border-[#1a3d8e]/60 dark:bg-white/[0.09]">
+              <span className="px-2 py-0.5 rounded border border-slate-300 bg-white text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 text-[10px] font-bold">
                 DRAFT BL
               </span>
               <span className="font-bold text-slate-700 dark:text-slate-300">
@@ -580,7 +619,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+          <div>
             {currentCase.fields.map(renderFieldDiff)}
           </div>
         </div>
