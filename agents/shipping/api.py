@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import re
 import shutil
@@ -13,7 +14,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from .tool import inspect_shipping_email
 from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
 from .ui import dashboard_page
@@ -35,7 +36,7 @@ from agents.eval.shipping import (
 )
 from .verification import COMPARE_FIELDS, values_match
 from agents.config import env
-from agents.storage import CaseStore, FilesystemCaseStore, get_case_store
+from agents.storage import CaseStore, FilesystemCaseStore, MongoCaseStore, get_case_store
 from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -87,15 +88,24 @@ def create_app(
         return {"ok": True, "report": report}
 
     @app.get("/cases/{email_id}/attachments/{attachment_path:path}")
-    async def case_attachment(email_id: str, attachment_path: str) -> FileResponse:
+    async def case_attachment(email_id: str, attachment_path: str) -> Response:
         attachment_root = (root / _safe_id(email_id) / "attachments").resolve()
         relative_path = Path(attachment_path)
         if relative_path.parts and relative_path.parts[0] == "attachments":
             relative_path = Path(*relative_path.parts[1:])
         candidate = (attachment_root / relative_path).resolve()
-        if attachment_root not in candidate.parents or not candidate.is_file():
-            raise HTTPException(status_code=404, detail="Attachment not found")
-        return FileResponse(candidate)
+        if attachment_root in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+        if isinstance(store, MongoCaseStore):
+            stored = store.get_attachment(email_id, relative_path.name)
+            if stored is not None:
+                content, content_type = stored
+                return Response(
+                    content=content,
+                    media_type=content_type or mimetypes.guess_type(relative_path.name)[0] or "application/octet-stream",
+                    headers={"Content-Disposition": f'inline; filename="{relative_path.name}"'},
+                )
+        raise HTTPException(status_code=404, detail="Attachment not found")
 
     @app.delete("/cases/{email_id}")
     async def delete_case(email_id: str) -> dict[str, Any]:
@@ -302,6 +312,16 @@ def create_app(
             report["ai_analysis"] = {"available": False, "reason": str(error)}
         report_path = dataset_root / "report.json"
         report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        if isinstance(store, MongoCaseStore):
+            for reference in report.get("attachments", []):
+                attachment_path = dataset_root / reference
+                if attachment_path.is_file():
+                    store.save_attachment(
+                        email_id,
+                        Path(reference).name,
+                        attachment_path.read_bytes(),
+                        mimetypes.guess_type(attachment_path.name)[0],
+                    )
         store.save_report(report)
         return {"ok": True, "report": report, "report_path": str(report_path)}
 
