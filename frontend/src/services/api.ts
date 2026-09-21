@@ -334,6 +334,19 @@ const FIELD_LABELS: Record<string, string> = {
   gross_weight_kg: 'Gross Weight (KG)',
 };
 
+function deriveExtractionConfidence(report: BackendReport): number | undefined {
+  const documents = [report.documents?.si, report.documents?.bl].filter(Boolean);
+  const scores = documents.flatMap((document) =>
+    Object.values(document?.confidence || {}).map((level) =>
+      level === 'high' ? 1 : level === 'medium' ? 0.7 : 0,
+    ),
+  );
+  if (scores.length === 0) return undefined;
+  return Math.round(
+    (scores.reduce((total: number, score: number) => total + score, 0) / scores.length) * 100,
+  );
+}
+
 export function mapReportToShippingCase(
   report: BackendReport,
   existing?: ShippingCase,
@@ -444,6 +457,7 @@ export function mapReportToShippingCase(
     existing?.aiAnalysis?.recommendation ||
     (status === 'PASS' ? 'Auto-approve clean document.' : 'Send clarification to carrier.');
   let confidence = existing?.aiAnalysis?.confidence;
+  let confidenceModel = report.ai_analysis?.provider || existing?.aiAnalysis?.model;
 
   if (report.ai_analysis?.text) {
     try {
@@ -462,6 +476,10 @@ export function mapReportToShippingCase(
     } catch {
       summary = report.ai_analysis.text.slice(0, 200);
     }
+  }
+  if (confidence === undefined) {
+    confidence = deriveExtractionConfidence(report);
+    if (confidence !== undefined) confidenceModel = 'Deterministic ETL extraction';
   }
 
   return {
@@ -488,7 +506,7 @@ export function mapReportToShippingCase(
         managerReview?.recommended_next_action ||
         existing?.aiAnalysis?.carrierRule ||
         'Incoterms CFR standard document compliance.',
-      model: report.ai_analysis?.provider || existing?.aiAnalysis?.model || 'Gemini 3 Flash',
+      model: confidenceModel || 'Unavailable',
     },
     managerReview: managerReview || existing?.managerReview || undefined,
     verifier: report.verifier,
@@ -546,8 +564,7 @@ export function mapSummaryToShippingCase(
     pol: existing?.pol || 'N/A',
     pod: existing?.pod || 'N/A',
     fields: existing?.fields || [],
-    aiAnalysis: existing?.aiAnalysis || {
-      confidence: 0,
+    aiAnalysis: {
       summary: 'AI review summary is available after opening the case detail.',
       recommendation: 'Open the case to inspect the deterministic result.',
       model: 'Unavailable',

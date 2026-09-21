@@ -482,65 +482,79 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     );
   };
 
-  const renderAIReviewSummary = () => (
-    <section
-      className="rounded-2xl border border-[#345ec4]/35 bg-white dark:bg-[#06163a] p-5 shadow-xs"
-      aria-label="AI review summary"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464] p-2 text-[#345ec4] dark:text-[#8ea9f7]">
-            <Compass className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
-              AI review summary
+  const renderAIReviewSummary = () => {
+    const isExtractionConfidence =
+      currentCase.aiAnalysis.model === "Deterministic ETL extraction";
+
+    return (
+      <section
+        className="rounded-2xl border border-[#345ec4]/35 bg-white dark:bg-[#06163a] p-5 shadow-xs"
+        aria-label={
+          isExtractionConfidence
+            ? "Document extraction summary"
+            : "AI review summary"
+        }
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464] p-2 text-[#345ec4] dark:text-[#8ea9f7]">
+              <Compass className="h-5 w-5" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Advisory analysis of this verification
-            </h3>
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-              Advisory only. The deterministic SI/BL comparison remains
-              authoritative.
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
+                {isExtractionConfidence
+                  ? "Document extraction summary"
+                  : "AI review summary"}
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Advisory analysis of this verification
+              </h3>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {isExtractionConfidence
+                  ? "Based on deterministic field extraction from the source documents."
+                  : "Advisory only. The deterministic SI/BL comparison remains authoritative."}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-right">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                {isExtractionConfidence
+                  ? "Extraction confidence"
+                  : "AI confidence"}
+              </div>
+              <div className="text-lg font-bold text-[#1a3d8e] dark:text-[#8ea9f7]">
+                {currentCase.aiAnalysis.confidence !== undefined
+                  ? `${currentCase.aiAnalysis.confidence}%`
+                  : "Not provided"}
+              </div>
+            </div>
+            <div className="max-w-[140px] text-[10px] text-slate-500 dark:text-slate-400">
+              Model: {currentCase.aiAnalysis.model}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="rounded-xl bg-slate-50 dark:bg-[#091f52]/35 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              What was found
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {currentCase.aiAnalysis.summary}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464]/60 p-3">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
+              Recommended action
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              {currentCase.aiAnalysis.recommendation}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 text-right">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Confidence
-            </div>
-            <div className="text-lg font-bold text-[#1a3d8e] dark:text-[#8ea9f7]">
-              {currentCase.aiAnalysis.confidence !== undefined
-                ? `${currentCase.aiAnalysis.confidence}%`
-                : "Not provided"}
-            </div>
-          </div>
-          <div className="max-w-[140px] text-[10px] text-slate-500 dark:text-slate-400">
-            Model: {currentCase.aiAnalysis.model}
-          </div>
-        </div>
-      </div>
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-xl bg-slate-50 dark:bg-[#091f52]/35 p-3">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            What was found
-          </div>
-          <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-            {currentCase.aiAnalysis.summary}
-          </p>
-        </div>
-        <div className="rounded-xl bg-[#eef3fc] dark:bg-[#052464]/60 p-3">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-[#345ec4] dark:text-[#8ea9f7]">
-            Recommended action
-          </div>
-          <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-            {currentCase.aiAnalysis.recommendation}
-          </p>
-        </div>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   return (
     <div className="flex flex-col space-y-6">
