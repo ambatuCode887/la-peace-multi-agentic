@@ -7,8 +7,6 @@ import {
   ShieldAlert,
   RefreshCw,
   Search,
-  Gauge,
-  ChevronDown,
   X,
   Mail,
   Clock,
@@ -32,7 +30,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   const [rereadMessage, setRereadMessage] = useState<string | null>(null);
   const [isRereading, setIsRereading] = useState<string | null>(null);
   const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(null);
-  const [telemetryOpen, setTelemetryOpen] = useState<boolean>(false);
   const securitySources = Array.from(
     new Set(
       currentCase.promptInjectionMatches?.map((match) => match.source) || [],
@@ -94,98 +91,10 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   };
 
   const subject = formatSubject(currentCase.subject);
-  const routingTelemetry = currentCase.routingTelemetry;
   const ocrAlerts =
     currentCase.ocrDistortionAnalysis?.filter(
       (analysis) => analysis.is_ocr_distortion,
     ) || [];
-
-  const renderRoutingTelemetry = () => {
-    if (!routingTelemetry) return null;
-    const routingSummary = `${routingTelemetry.resolvedByRules} rules (${routingTelemetry.ruleLatencyMs.toFixed(1)}ms)${
-      routingTelemetry.sentToLlm > 0
-        ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
-        : ""
-    }`;
-    return (
-      <div className="rounded-xl border border-slate-200/70 bg-white p-3 shadow-2xs dark:border-[#1a3d8e]/50 dark:bg-[#06163a]">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <div className="rounded-md bg-[#eef3fc] p-1.5 text-[#345ec4] dark:bg-[#052464] dark:text-[#8ea9f7]">
-              <Gauge className="h-3.5 w-3.5" />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                Cheap-First Routing:
-              </span>{" "}
-              <span className="text-xs text-slate-600 dark:text-slate-300">
-                {routingSummary}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center space-x-3 text-xs">
-            <span className="font-mono text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
-              ${routingTelemetry.estimatedCostUsd.toFixed(5)} cost
-            </span>
-            <button
-              type="button"
-              onClick={() => setTelemetryOpen((prev) => !prev)}
-              className="text-[#345ec4] dark:text-[#8ea9f7] text-[11px] font-semibold hover:underline flex items-center space-x-1 cursor-pointer"
-            >
-              <span>{telemetryOpen ? "Hide stats" : "Routing stats"}</span>
-              <ChevronDown
-                className={`h-3 w-3 transition-transform ${telemetryOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {telemetryOpen && (
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-[#1a3d8e]/40 animate-in fade-in duration-150">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              <div className="rounded-lg bg-emerald-50 px-3 py-2 dark:bg-emerald-950/30">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                  Rule resolved
-                </div>
-                <div className="text-base font-bold text-emerald-900 dark:text-emerald-100">
-                  {routingTelemetry.resolvedByRules}
-                </div>
-              </div>
-              <div className="rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/30">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                  LLM routed
-                </div>
-                <div className="text-base font-bold text-amber-900 dark:text-amber-100">
-                  {routingTelemetry.sentToLlm}
-                </div>
-              </div>
-              <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-[#091f52]/40">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                  LLM calls
-                </div>
-                <div className="text-base font-bold text-slate-900 dark:text-slate-100">
-                  {routingTelemetry.llmCalls}
-                </div>
-              </div>
-              <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                  Full-doc baseline
-                </div>
-                <div className="text-base font-bold text-blue-900 dark:text-blue-100">
-                  ${routingTelemetry.fullDocumentCostUsd.toFixed(4)}
-                </div>
-              </div>
-            </div>
-            {routingTelemetry.scalabilitySummary && (
-              <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                {routingTelemetry.scalabilitySummary}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const renderOcrAlert = () => {
     if (ocrAlerts.length === 0) return null;
@@ -217,20 +126,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   };
 
   const renderFieldDiff = (field: FieldComparison) => {
-    const resolutionBadge =
-      field.resolutionSource === "llm" ? (
-        <span className="rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-          LLM ambiguity check
-        </span>
-      ) : field.resolutionSource === "human" ? (
-        <span className="rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
-          Human review required
-        </span>
-      ) : (
-        <span className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
-          Rule checked
-        </span>
-      );
     const hasSiValue =
       field.siValue !== null &&
       field.siValue !== undefined &&
@@ -344,7 +239,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             <span className="rounded-md bg-[#345ec4]/15 px-2 py-0.5 text-xs font-extrabold uppercase tracking-wide text-[#1a3d8e] dark:bg-[#5a82e2]/25 dark:text-[#b4c5fa]">
               {field.label}
             </span>
-            {resolutionBadge}
             {!hasSiValue && missingValueLabel && (
               <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
                 <AlertTriangle className="h-3 w-3" aria-hidden="true" />
@@ -665,7 +559,6 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
       </div>
 
       {renderEvidencePanel()}
-      {renderRoutingTelemetry()}
     </div>
   );
 };

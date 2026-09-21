@@ -4,6 +4,7 @@ import type {
   VerificationStatus,
   EmailCategory,
 } from "../../types/shipping";
+import { api, type ExportFormat } from "../../services/api";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -62,6 +63,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
     "success",
   );
+  const [selectedExportIds, setSelectedExportIds] = useState<string[]>([]);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
+  const [exporting, setExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const scanNoticeTimeoutRef = useRef<number | null>(null);
 
   const scheduleScanNoticeClear = () => {
@@ -151,6 +156,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (collapsed) {
+      setTypeDropdownOpen(false);
+      setStatusDropdownOpen(false);
+    }
+  }, [collapsed]);
 
   // Category counts across total dataset
   const blCount = safeAll.filter((c) => c.category === "BL_COMPARISON").length;
@@ -376,6 +388,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const visibleCases = cases.slice(0, visibleCount);
+  const okCases = safeAll.filter(
+    (c) => c.category === "BL_COMPARISON" && c.status === "PASS",
+  );
+  const selectedOkIds = selectedExportIds.filter((id) =>
+    okCases.some((c) => c.id === id),
+  );
+
+  const toggleExportSelection = (caseItem: ShippingCase) => {
+    if (caseItem.category !== "BL_COMPARISON" || caseItem.status !== "PASS")
+      return;
+    setSelectedExportIds((current) =>
+      current.includes(caseItem.id)
+        ? current.filter((id) => id !== caseItem.id)
+        : [...current, caseItem.id],
+    );
+  };
+
+  const exportSelected = async () => {
+    if (selectedOkIds.length === 0) return;
+    setExporting(true);
+    setExportNotice(null);
+    try {
+      await api.downloadBatchExport(selectedOkIds, exportFormat);
+      setExportNotice(
+        `Exported ${selectedOkIds.length} Draft BL${selectedOkIds.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setExportNotice(
+        error instanceof Error ? error.message : "Draft BL export failed.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Collapsed: a slim rail with just the way back. The hooks above keep running, so the filters
   // and how far the list was scrolled/expanded are still there when the inbox is opened again.
@@ -486,184 +532,237 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* The two filters sit side by side to save vertical space for the inbox list */}
         <div className="grid grid-cols-2 gap-2">
-        {/* 1. Email Type Dropdown Button Selector */}
-        <div className="relative min-w-0" ref={typeDropdownRef}>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-            <span>Email Type</span>
-            <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
-              {safeAll.length} total
-            </span>
-          </label>
-
-          <button
-            id="category-dropdown-btn"
-            data-testid="category-dropdown-btn"
-            onClick={() => {
-              setTypeDropdownOpen(!typeDropdownOpen);
-              setStatusDropdownOpen(false);
-            }}
-            className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-              typeDropdownOpen
-                ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
-                : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
-            }`}
-          >
-            <div className="flex items-center space-x-2 truncate">
-              <currentCategoryObj.icon
-                className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
-              />
-              <span className="truncate">{currentCategoryObj.shortLabel}</span>
-            </div>
-            <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-              <ChevronDown
-                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                  typeDropdownOpen ? "rotate-180" : ""
-                }`}
-              />
-            </div>
-          </button>
-
-          {/* Email Type Dropdown Menu */}
-          {typeDropdownOpen && (
-            <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-              {categoryOptions.map((opt) => {
-                const isSelected = categoryFilter === opt.value;
-                const IconComponent = opt.icon;
-                return (
-                  <button
-                    key={opt.value}
-                    data-testid={`category-option-${opt.value}`}
-                    onClick={() => {
-                      onCategoryFilterChange(opt.value);
-                      setTypeDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                      isSelected
-                        ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2 truncate">
-                      <IconComponent
-                        className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
-                      />
-                      <span className="truncate">{opt.label}</span>
-                    </div>
-                    <div className="flex items-center space-x-2 shrink-0 ml-2">
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
-                        {opt.count}
-                      </span>
-                      {isSelected && (
-                        <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* 2. Verification Status Dropdown Button Selector */}
-        <div className="relative min-w-0" ref={statusDropdownRef}>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-            <span>Status</span>
-            {!isStatusApplicable && (
-              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
-                BL Verify only
+          {/* 1. Email Type Dropdown Button Selector */}
+          <div className="relative min-w-0" ref={typeDropdownRef}>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
+              <span>Email Type</span>
+              <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
+                {safeAll.length} total
               </span>
-            )}
-          </label>
+            </label>
 
-          {isStatusApplicable ? (
             <button
-              id="status-dropdown-btn"
-              data-testid="status-dropdown-btn"
+              id="category-dropdown-btn"
+              data-testid="category-dropdown-btn"
               onClick={() => {
-                setStatusDropdownOpen(!statusDropdownOpen);
-                setTypeDropdownOpen(false);
+                setTypeDropdownOpen(!typeDropdownOpen);
+                setStatusDropdownOpen(false);
               }}
               className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                statusDropdownOpen
+                typeDropdownOpen
                   ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
                   : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
               }`}
             >
               <div className="flex items-center space-x-2 truncate">
-                <span
-                  className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
+                <currentCategoryObj.icon
+                  className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
                 />
-                <span className="truncate">{currentStatusObj.label}</span>
+                <span className="truncate">
+                  {currentCategoryObj.shortLabel}
+                </span>
               </div>
               <div className="flex items-center space-x-1.5 shrink-0 ml-2">
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                    statusDropdownOpen ? "rotate-180" : ""
+                    typeDropdownOpen ? "rotate-180" : ""
                   }`}
                 />
               </div>
             </button>
-          ) : (
-            // Disabled state when category is non-BL (status does not apply)
-            <button
-              id="status-dropdown-btn"
-              disabled
-              className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-              title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                <span className="truncate">
-                  Default
-                </span>
-              </div>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
-                N/A
-              </span>
-            </button>
-          )}
 
-          {/* Status Dropdown Menu (only renders when applicable) */}
-          {isStatusApplicable && statusDropdownOpen && (
-            <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-              {statusOptions.map((opt) => {
-                const isSelected = statusFilter === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    data-testid={`status-option-${opt.value}`}
-                    onClick={() => {
-                      onStatusFilterChange(opt.value);
-                      setStatusDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                      isSelected
-                        ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+            {/* Email Type Dropdown Menu */}
+            {typeDropdownOpen && (
+              <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                {categoryOptions.map((opt) => {
+                  const isSelected = categoryFilter === opt.value;
+                  const IconComponent = opt.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      data-testid={`category-option-${opt.value}`}
+                      onClick={() => {
+                        onCategoryFilterChange(opt.value);
+                        setTypeDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected
+                          ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 truncate">
+                        <IconComponent
+                          className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
+                        />
+                        <span className="truncate">{opt.label}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 shrink-0 ml-2">
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
+                          {opt.count}
+                        </span>
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Verification Status Dropdown Button Selector */}
+          <div className="relative min-w-0" ref={statusDropdownRef}>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
+              <span>Status</span>
+              {!isStatusApplicable && (
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
+                  BL Verify only
+                </span>
+              )}
+            </label>
+
+            {isStatusApplicable ? (
+              <button
+                id="status-dropdown-btn"
+                data-testid="status-dropdown-btn"
+                onClick={() => {
+                  setStatusDropdownOpen(!statusDropdownOpen);
+                  setTypeDropdownOpen(false);
+                }}
+                className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                  statusDropdownOpen
+                    ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
+                    : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
+                }`}
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <span
+                    className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
+                  />
+                  <span className="truncate">{currentStatusObj.label}</span>
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0 ml-2">
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                      statusDropdownOpen ? "rotate-180" : ""
                     }`}
-                  >
-                    <div className="flex items-center space-x-2 truncate">
-                      <span
-                        className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
-                      />
-                      <span className="truncate">{opt.label}</span>
-                    </div>
-                    <div className="flex items-center space-x-2 shrink-0 ml-2">
-                      <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
-                      >
-                        {opt.count}
-                      </span>
-                      {isSelected && (
-                        <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                  />
+                </div>
+              </button>
+            ) : (
+              // Disabled state when category is non-BL (status does not apply)
+              <button
+                id="status-dropdown-btn"
+                disabled
+                className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+                  <span className="truncate">Default</span>
+                </div>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
+                  N/A
+                </span>
+              </button>
+            )}
+
+            {/* Status Dropdown Menu (only renders when applicable) */}
+            {isStatusApplicable && statusDropdownOpen && (
+              <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                {statusOptions.map((opt) => {
+                  const isSelected = statusFilter === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      data-testid={`status-option-${opt.value}`}
+                      onClick={() => {
+                        onStatusFilterChange(opt.value);
+                        setStatusDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected
+                          ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 truncate">
+                        <span
+                          className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
+                        />
+                        <span className="truncate">{opt.label}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 shrink-0 ml-2">
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
+                        >
+                          {opt.count}
+                        </span>
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+        <div className="border-t border-slate-100 pt-2.5 dark:border-[#1a3d8e]/40">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              {selectedOkIds.length} OK selected
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
+                className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7]"
+              >
+                Select all OK
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedExportIds([])}
+                className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400"
+              >
+                Clear selection
+              </button>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-1.5">
+            <select
+              value={exportFormat}
+              onChange={(event) =>
+                setExportFormat(event.target.value as ExportFormat)
+              }
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200"
+              aria-label="Batch export format"
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => void exportSelected()}
+              disabled={selectedOkIds.length === 0 || exporting}
+              className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {exporting ? "Exporting..." : "Export BL Draft"}
+            </button>
+          </div>
+          {exportNotice && (
+            <p
+              className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400"
+              role="status"
+            >
+              {exportNotice}
+            </p>
+          )}
         </div>
       </div>
 
@@ -686,7 +785,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
                     : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
                 }`}
-                >
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedOkIds.includes(c.id)}
+                  disabled={
+                    c.category !== "BL_COMPARISON" || c.status !== "PASS"
+                  }
+                  onChange={() => toggleExportSelection(c)}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`Select ${c.id} for Draft BL export`}
+                  className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30"
+                />
                 {/* Header Line: ID, Category Badge, Timestamp */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 shrink-0">

@@ -122,7 +122,8 @@ export function OperationsPanel({
             Process shipping documents
           </h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Upload shipping document packages for automated verification or trigger inbox batch synchronization.
+            Upload shipping document packages for automated verification or
+            trigger inbox batch synchronization.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -131,9 +132,7 @@ export function OperationsPanel({
             onClick={handleRefreshAction}
             disabled={busy !== null}
             aria-label={
-              backendConnected
-                ? "Refresh inbox"
-                : "Run demo inbox refresh"
+              backendConnected ? "Refresh inbox" : "Run demo inbox refresh"
             }
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-[#1a3d8e]/60 dark:text-slate-200 dark:hover:bg-[#091f52] cursor-pointer"
           >
@@ -142,7 +141,7 @@ export function OperationsPanel({
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
             )}{" "}
-            {backendConnected ? "Refresh inbox" : "Refresh inbox demo"}
+            {backendConnected ? "Sync from database" : "Refresh inbox demo"}
           </button>
           <button
             type="button"
@@ -207,10 +206,15 @@ export function OperationsPanel({
                 Live Mailbox Ingestion Architecture (Demo Simulation Mode)
               </p>
               <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                In production deployment, this system continuously connects to live enterprise email servers (IMAP / Docker Mailbox), automatically ingesting incoming shipping correspondence, parsing MIME attachments, and triggering the multi-agent OCR verification pipeline.
+                In production deployment, this system continuously connects to
+                live enterprise email servers (IMAP / Docker Mailbox),
+                automatically ingesting incoming shipping correspondence,
+                parsing MIME attachments, and triggering the multi-agent OCR
+                verification pipeline.
               </p>
               <p className="text-[11px] font-medium text-[#345ec4] dark:text-[#8ea9f7]">
-                💡 Click <strong>"Process inbox"</strong> above to demo the live mailbox scanning and triage sequence.
+                💡 Click <strong>"Process inbox"</strong> above to demo the live
+                mailbox scanning and triage sequence.
               </p>
             </div>
           </div>
