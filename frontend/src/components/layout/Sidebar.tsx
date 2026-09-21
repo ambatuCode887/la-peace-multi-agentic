@@ -75,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleRefreshInbox = async () => {
+    if (!onRefreshInbox) return;
     setIsRefreshing(true);
     setScanNotice(null);
     const start = Date.now();
@@ -417,7 +418,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               id="sidebar-refresh-inbox"
               data-testid="sidebar-refresh-inbox"
               onClick={handleRefreshInbox}
-              disabled={isRefreshing}
+              disabled={isRefreshing || !onRefreshInbox}
+              aria-label="Scan and refresh live inbox"
               title="Scan and refresh live inbox"
               className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
             >

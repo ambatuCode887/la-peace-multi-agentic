@@ -102,6 +102,11 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 
   const renderRoutingTelemetry = () => {
     if (!routingTelemetry) return null;
+    const routingSummary = `${routingTelemetry.resolvedByRules} rules (${routingTelemetry.ruleLatencyMs.toFixed(1)}ms)${
+      routingTelemetry.sentToLlm > 0
+        ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
+        : ""
+    }`;
     return (
       <div className="rounded-xl border border-slate-200/70 bg-white p-3 shadow-2xs dark:border-[#1a3d8e]/50 dark:bg-[#06163a]">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -114,11 +119,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
                 Cheap-First Routing:
               </span>{" "}
               <span className="text-xs text-slate-600 dark:text-slate-300">
-                {routingTelemetry.resolvedByRules} rules (
-                {routingTelemetry.ruleLatencyMs.toFixed(1)}ms)
-                {routingTelemetry.sentToLlm > 0
-                  ? ` · ${routingTelemetry.sentToLlm} LLM (${routingTelemetry.llmLatencyMs.toFixed(1)}ms)`
-                  : ""}
+                {routingSummary}
               </span>
             </div>
           </div>
