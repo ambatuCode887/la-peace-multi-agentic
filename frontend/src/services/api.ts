@@ -455,7 +455,11 @@ export function mapReportToShippingCase(
           blValue: blVal,
           match: !isDefect,
           varianceNote,
-          status: isDefect ? 'mismatch' : resolution?.source === 'llm' ? 'review' : 'match',
+          status: isDefect
+            ? 'mismatch'
+            : resolution?.source === 'llm' || resolution?.source === 'human'
+              ? 'review'
+              : 'match',
           resolutionSource: resolution?.source,
           resolutionReason: resolution?.reason,
           distortionNote: ocrAnalysis?.is_ocr_distortion ? ocrAnalysis.explanation : undefined,

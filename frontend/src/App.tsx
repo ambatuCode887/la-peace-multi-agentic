@@ -258,6 +258,7 @@ export function App() {
           onCategoryFilterChange={handleCategoryFilterChange}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
+          onRefreshInbox={refreshCases}
           collapsed={inboxCollapsed}
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
         />
