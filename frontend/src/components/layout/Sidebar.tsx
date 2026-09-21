@@ -21,6 +21,8 @@ import {
   Receipt,
   Mail,
   ShieldAlert,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 
@@ -34,6 +36,9 @@ interface SidebarProps {
   statusFilter: VerificationStatus | "ALL";
   onStatusFilterChange: (status: VerificationStatus | "ALL") => void;
   onRefreshInbox?: () => Promise<void> | void;
+  /** When true, the inbox shrinks to a slim rail so the case gets the full width. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,6 +51,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   statusFilter,
   onStatusFilterChange,
   onRefreshInbox,
+  collapsed = false,
+  onToggleCollapsed,
 }) => {
   const [visibleCount, setVisibleCount] = useState<number>(40);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
@@ -345,6 +352,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const visibleCases = cases.slice(0, visibleCount);
 
+  // Collapsed: a slim rail with just the way back. The hooks above keep running, so the filters
+  // and how far the list was scrolled/expanded are still there when the inbox is opened again.
+  if (collapsed) {
+    return (
+      <aside className="w-12 shrink-0 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col items-center gap-3 py-3 h-[calc(100vh-4rem)] transition-colors select-none">
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="p-2 rounded-lg text-[#345ec4] dark:text-[#8ea9f7] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+          title="Show inbox"
+          aria-label="Show inbox"
+          data-testid="expand-inbox"
+        >
+          <PanelLeftOpen className="w-5 h-5" />
+        </button>
+        <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] border border-[#345ec4]/30">
+          {cases.length}
+        </span>
+        <span className="text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 [writing-mode:vertical-rl] rotate-180">
+          Inbox
+        </span>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-84 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-[calc(100vh-4rem)] shadow-xs transition-colors select-none">
       {/* Queue Header with Two Clean Dropdown Selectors */}
@@ -402,11 +434,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-semibold border border-[#345ec4]/30">
               {cases.length} of {safeAll.length}
             </span>
+            {onToggleCollapsed && (
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                title="Hide inbox"
+                aria-label="Hide inbox"
+                data-testid="collapse-inbox"
+              >
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
+        {/* The two filters sit side by side to save vertical space for the inbox list */}
+        <div className="grid grid-cols-2 gap-2">
         {/* 1. Email Type Dropdown Button Selector */}
-        <div className="relative" ref={typeDropdownRef}>
+        <div className="relative min-w-0" ref={typeDropdownRef}>
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
             <span>Email Type</span>
             <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
@@ -421,7 +467,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               setTypeDropdownOpen(!typeDropdownOpen);
               setStatusDropdownOpen(false);
             }}
-            className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+            className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
               typeDropdownOpen
                 ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
                 : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
@@ -431,12 +477,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <currentCategoryObj.icon
                 className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
               />
-              <span className="truncate">{currentCategoryObj.label}</span>
+              <span className="truncate">{currentCategoryObj.shortLabel}</span>
             </div>
             <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7]">
-                {currentCategoryObj.count}
-              </span>
               <ChevronDown
                 className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
                   typeDropdownOpen ? "rotate-180" : ""
@@ -447,7 +490,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Email Type Dropdown Menu */}
           {typeDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
               {categoryOptions.map((opt) => {
                 const isSelected = categoryFilter === opt.value;
                 const IconComponent = opt.icon;
@@ -487,9 +530,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* 2. Verification Status Dropdown Button Selector */}
-        <div className="relative" ref={statusDropdownRef}>
+        <div className="relative min-w-0" ref={statusDropdownRef}>
           <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-            <span>Verification Status</span>
+            <span>Status</span>
             {!isStatusApplicable && (
               <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
                 BL Verify only
@@ -505,7 +548,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setStatusDropdownOpen(!statusDropdownOpen);
                 setTypeDropdownOpen(false);
               }}
-              className={`w-full px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+              className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
                 statusDropdownOpen
                   ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
                   : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
@@ -518,11 +561,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="truncate">{currentStatusObj.label}</span>
               </div>
               <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-                <span
-                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${currentStatusObj.badgeBg}`}
-                >
-                  {currentStatusObj.count}
-                </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
                     statusDropdownOpen ? "rotate-180" : ""
@@ -535,13 +573,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               id="status-dropdown-btn"
               disabled
-              className="w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+              className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
               title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
             >
               <div className="flex items-center space-x-2 truncate">
                 <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
                 <span className="truncate">
-                  Default (All {casesInScope.length})
+                  Default
                 </span>
               </div>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
@@ -552,7 +590,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Status Dropdown Menu (only renders when applicable) */}
           {isStatusApplicable && statusDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
               {statusOptions.map((opt) => {
                 const isSelected = statusFilter === opt.value;
                 return (
@@ -591,6 +629,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {/* Scrollable Cases List */}
@@ -616,7 +655,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {/* Header Line: ID, Category Badge, Timestamp */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2 shrink-0">
-                    <span className="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+                    <span className="text-[15px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
                       {c.id}
                     </span>
                     {getCategoryBadge(c.category)}
@@ -640,7 +679,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Subject Preview */}
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 leading-snug">
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 line-clamp-1 leading-snug">
                   {c.subject}
                 </p>
               </button>

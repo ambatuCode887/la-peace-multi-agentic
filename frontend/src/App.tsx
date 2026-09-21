@@ -42,6 +42,22 @@ export function App() {
   // Starts true: the first backend check may retry while a hosted backend wakes up.
   const [queueLoading, setQueueLoading] = useState<boolean>(true);
   const [queueError, setQueueError] = useState<string | null>(null);
+  // Remembered between visits; storage can be unavailable (private windows), so it is best effort.
+  const [inboxCollapsed, setInboxCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("inboxCollapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("inboxCollapsed", inboxCollapsed ? "1" : "0");
+    } catch {
+      // not remembered, still works
+    }
+  }, [inboxCollapsed]);
 
   useEffect(() => {
     if (darkMode) {
@@ -243,11 +259,15 @@ export function App() {
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
           onRefreshInbox={refreshCases}
+          collapsed={inboxCollapsed}
+          onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
-          <div className="max-w-4xl mx-auto">
+          <div
+            className={`mx-auto transition-[max-width] duration-200 ${inboxCollapsed ? "max-w-6xl" : "max-w-4xl"}`}
+          >
             {operationsOpen ? (
               <OperationsPanel
                 backendConnected={backendConnected}

@@ -2,7 +2,6 @@ import type { ShippingCase } from "../../types/shipping";
 import {
   AlertCircle,
   AlertTriangle,
-  CheckCircle2,
   Info,
   ArrowRight,
 } from "lucide-react";
@@ -143,20 +142,9 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
       );
     }
 
-    // Clean pass: Sleek, compact status bar
-    return (
-      <div className="mb-4 px-4 py-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-900/50 flex items-center justify-between shadow-2xs animate-in fade-in">
-        <div className="flex items-center space-x-2.5">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <div className="text-xs text-emerald-800 dark:text-emerald-200">
-            <span className="font-bold">Clean Verification:</span> All {currentCase.fields.length} extracted fields match the Shipping Instruction source of truth.
-          </div>
-        </div>
-        <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/60 px-2.5 py-1 rounded-lg shrink-0">
-          Ready for Auto-Submission
-        </span>
-      </div>
-    );
+    // Clean pass: nothing for the reviewer to decide, so no bar here.
+    // The comparison header shows a small "all fields match" pill instead.
+    return null;
   }
 
   // 4. Default / Informational
