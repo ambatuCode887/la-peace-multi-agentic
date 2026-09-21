@@ -152,19 +152,7 @@ Open the Vite URL shown in the second terminal, normally `http://localhost:5173`
 
 ## Architecture at a glance
 
-```mermaid
-flowchart LR
-		A[Inbox JSON or upload] --> B[Classifier]
-		B --> C[Document readers and OCR]
-		C --> D[Field normalization]
-		D --> E[Deterministic SI vs BL comparison]
-		E --> F{Final status}
-		F -->|OK| G[Verified Draft BL export]
-		F -->|Mismatch or review| H[Evidence and human review]
-		H --> I[Optional AI or RAG guidance]
-		I --> J[Explicit operator decision]
-		J --> G
-```
+![La Peace SDOC system architecture](docs/images/system-architecture.svg)
 
 ### Cloud provider decision
 

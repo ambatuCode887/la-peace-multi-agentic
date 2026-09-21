@@ -35,10 +35,18 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={onToggleMobileInbox}
-              aria-label={mobileInboxOpen ? "Close inbox navigation" : "Open inbox navigation"}
+              aria-label={
+                mobileInboxOpen
+                  ? "Close inbox navigation"
+                  : "Open inbox navigation"
+              }
               className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#091f52] md:hidden cursor-pointer"
             >
-              {mobileInboxOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileInboxOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
             </button>
           )}
 
@@ -49,14 +57,11 @@ export const Header: React.FC<HeaderProps> = ({
             style={{ imageRendering: "pixelated" }}
           />
           <div>
-            <div className="flex items-center space-x-1.5 sm:space-x-2">
+            <div className="flex items-center">
               <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">
                 La Peace{" "}
                 <span className="text-[#345ec4] dark:text-[#5a82e2]">SDOC</span>
               </h1>
-              <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 sm:px-2 py-0.5 rounded-full bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
-                Multi-Agent
-              </span>
             </div>
             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
               Multi-Agentic AI Document Verification

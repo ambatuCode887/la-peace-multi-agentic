@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title description">
+  <title id="title">La Peace SDOC system architecture</title>
+  <desc id="description">React frontend communicates with FastAPI shipping verification services. The backend persists cases in MongoDB Atlas, retrieves optional guidance from Qdrant, and uses Gemini for optional explanations. Vercel hosts the frontend and Render hosts the backend in production.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3451b2"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f9fc; }
+      .title { fill: #17223b; font: 700 31px Arial, sans-serif; }
+      .subtitle { fill: #54627d; font: 16px Arial, sans-serif; }
+      .zone { fill: #ffffff; stroke: #c9d4e6; stroke-width: 2; }
+      .zone-title { fill: #3451b2; font: 700 18px Arial, sans-serif; letter-spacing: 1px; }
+      .card { fill: #ffffff; stroke: #aebfda; stroke-width: 2; }
+      .card-blue { fill: #eaf1ff; stroke: #5275ca; stroke-width: 2; }
+      .card-green { fill: #eaf8f0; stroke: #4a9b77; stroke-width: 2; }
+      .card-gold { fill: #fff7df; stroke: #bb8a24; stroke-width: 2; }
+      .card-title { fill: #17223b; font: 700 18px Arial, sans-serif; }
+      .card-text { fill: #40506c; font: 14px Arial, sans-serif; }
+      .small { fill: #65738c; font: 13px Arial, sans-serif; }
+      .arrow { fill: none; stroke: #3451b2; stroke-width: 3; marker-end: url(#arrow); }
+      .arrow-dashed { fill: none; stroke: #8c6a1a; stroke-width: 3; stroke-dasharray: 8 6; marker-end: url(#arrow); }
+      .label { fill: #3451b2; font: 700 13px Arial, sans-serif; }
+    </style>
+  </defs>
+  <rect class="bg" width="1440" height="900"/>
+  <text x="60" y="62" class="title">La Peace SDOC: Multi-Agent Shipping Verification</text>
+  <text x="60" y="92" class="subtitle">Deterministic SI/BL verification with optional retrieval, AI assistance, and human approval</text>
+
+  <rect x="55" y="135" width="355" height="690" rx="8" class="zone"/>
+  <text x="82" y="173" class="zone-title">USER &amp; PRESENTATION LAYER</text>
+  <rect x="82" y="205" width="300" height="120" rx="6" class="card-blue"/>
+  <text x="106" y="240" class="card-title">React + TypeScript Workspace</text>
+  <text x="106" y="268" class="card-text">Inbox, comparison, evidence, review</text>
+  <text x="106" y="291" class="card-text">Chat, AI previews, CSV/JSON/PDF exports</text>
+  <rect x="82" y="370" width="300" height="95" rx="6" class="card"/>
+  <text x="106" y="406" class="card-title">Vite API Proxy (local)</text>
+  <text x="106" y="433" class="card-text">/api to FastAPI on port 8090</text>
+  <rect x="82" y="510" width="300" height="95" rx="6" class="card"/>
+  <text x="106" y="546" class="card-title">Vercel (production)</text>
+  <text x="106" y="573" class="card-text">Static frontend hosting</text>
+  <rect x="82" y="650" width="300" height="120" rx="6" class="card-gold"/>
+  <text x="106" y="686" class="card-title">Operator</text>
+  <text x="106" y="714" class="card-text">Uploads documents and reviews evidence</text>
+  <text x="106" y="737" class="card-text">Approves corrections explicitly</text>
+
+  <rect x="495" y="135" width="470" height="690" rx="8" class="zone"/>
+  <text x="522" y="173" class="zone-title">VERIFICATION &amp; ORCHESTRATION LAYER</text>
+  <rect x="522" y="205" width="416" height="85" rx="6" class="card-blue"/>
+  <text x="546" y="239" class="card-title">FastAPI Shipping API</text>
+  <text x="546" y="265" class="card-text">Cases, uploads, retries, exports, review and chat endpoints</text>
+  <rect x="522" y="335" width="196" height="190" rx="6" class="card"/>
+  <text x="546" y="370" class="card-title">Deterministic Core</text>
+  <text x="546" y="400" class="card-text">Email classifier</text>
+  <text x="546" y="425" class="card-text">Readers + OCR</text>
+  <text x="546" y="450" class="card-text">Field extraction</text>
+  <text x="546" y="475" class="card-text">Normalization</text>
+  <text x="546" y="500" class="card-text">SI vs BL comparison</text>
+  <rect x="742" y="335" width="196" height="190" rx="6" class="card"/>
+  <text x="766" y="370" class="card-title">Decision Workflow</text>
+  <text x="766" y="400" class="card-text">OK / MISMATCH</text>
+  <text x="766" y="425" class="card-text">NEEDS_REVIEW</text>
+  <text x="766" y="450" class="card-text">Evidence and audit trail</text>
+  <text x="766" y="475" class="card-text">Human review decisions</text>
+  <text x="766" y="500" class="card-text">Verified BL exports</text>
+  <rect x="522" y="570" width="416" height="120" rx="6" class="card-green"/>
+  <text x="546" y="606" class="card-title">Multi-Agent Assistance (advisory only)</text>
+  <text x="546" y="634" class="card-text">Shipping review manager, retrieval agent, publisher and summary agents</text>
+  <text x="546" y="660" class="card-text">Cannot silently override deterministic verdicts</text>
+  <rect x="522" y="735" width="416" height="50" rx="6" class="card"/>
+  <text x="546" y="766" class="card-text">Render (production): containerized FastAPI backend</text>
+
+  <rect x="1050" y="135" width="335" height="690" rx="8" class="zone"/>
+  <text x="1077" y="173" class="zone-title">DATA &amp; OPTIONAL AI SERVICES</text>
+  <rect x="1077" y="205" width="280" height="115" rx="6" class="card-green"/>
+  <text x="1101" y="240" class="card-title">MongoDB Atlas</text>
+  <text x="1101" y="268" class="card-text">Case reports and review history</text>
+  <text x="1101" y="291" class="card-text">Attachment persistence</text>
+  <rect x="1077" y="365" width="280" height="115" rx="6" class="card-green"/>
+  <text x="1101" y="400" class="card-title">Qdrant Vector Store</text>
+  <text x="1101" y="428" class="card-text">Knowledge chunks and embeddings</text>
+  <text x="1101" y="451" class="card-text">Retrieval-backed guidance</text>
+  <rect x="1077" y="525" width="280" height="115" rx="6" class="card-gold"/>
+  <text x="1101" y="560" class="card-title">Google Gemini</text>
+  <text x="1101" y="588" class="card-text">Explanations and correction previews</text>
+  <text x="1101" y="611" class="card-text">Embedding provider</text>
+  <rect x="1077" y="685" width="280" height="85" rx="6" class="card"/>
+  <text x="1101" y="721" class="card-title">Dataset / Upload Storage</text>
+  <text x="1101" y="748" class="card-text">Inbox JSON and SI/BL attachments</text>
+
+  <path d="M 382 265 L 522 265" class="arrow"/>
+  <text x="422" y="247" class="label">HTTPS / REST</text>
+  <path d="M 382 697 L 495 697" class="arrow"/>
+  <text x="404" y="680" class="label">review actions</text>
+  <path d="M 718 290 L 718 335" class="arrow"/>
+  <path d="M 620 525 L 620 570" class="arrow"/>
+  <path d="M 938 247 L 1077 247" class="arrow"/>
+  <text x="966" y="228" class="label">reports</text>
+  <path d="M 938 430 L 1077 430" class="arrow-dashed"/>
+  <text x="976" y="410" class="label">retrieve</text>
+  <path d="M 938 610 L 1077 585" class="arrow-dashed"/>
+  <text x="978" y="635" class="label">explain</text>
+  <path d="M 938 745 L 1077 745" class="arrow"/>
+  <text x="965" y="727" class="label">read files</text>
+  <text x="60" y="865" class="small">Solid arrows show required workflow traffic. Dashed arrows show optional RAG or AI assistance.</text>
+</svg>
