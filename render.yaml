@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: la-peace-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /cases
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: shipping
+      - key: SHIPPING_DATA_ROOT
+        value: /app/data_v2
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: multi_agentic_rag
+      - key: GOOGLE_API_KEY
+        sync: false
