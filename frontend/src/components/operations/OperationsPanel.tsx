@@ -73,7 +73,7 @@ export function OperationsPanel({
       void run("process", async () => {
         await new Promise((resolve) => setTimeout(resolve, 1500));
         setMessage(
-          "Live Mailbox Scan Demo: Successfully polled incoming enterprise mailbox. Scanned 520 shipment messages and synchronized multi-agent verification queue.",
+          "Live Mailbox Scan Demo: Successfully polled the incoming enterprise mailbox and synchronized the multi-agent verification queue.",
         );
       });
     }
@@ -86,7 +86,7 @@ export function OperationsPanel({
       void run("refresh", async () => {
         await new Promise((resolve) => setTimeout(resolve, 600));
         setMessage(
-          "Queue Refreshed: Displaying all 520 verified operational shipment records.",
+          "Queue refreshed: displaying the latest verified operational shipment records.",
         );
       });
     }

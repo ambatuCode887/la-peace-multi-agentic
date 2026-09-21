@@ -62,6 +62,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
     "success",
   );
+  const scanNoticeTimeoutRef = useRef<number | null>(null);
+
+  const scheduleScanNoticeClear = () => {
+    if (scanNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(scanNoticeTimeoutRef.current);
+    }
+    scanNoticeTimeoutRef.current = window.setTimeout(() => {
+      setScanNotice(null);
+      scanNoticeTimeoutRef.current = null;
+    }, 3000);
+  };
 
   const handleRefreshInbox = async () => {
     setIsRefreshing(true);
@@ -77,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       setScanNoticeTone("success");
       setScanNotice("Inbox updated");
-      setTimeout(() => setScanNotice(null), 3000);
+      scheduleScanNoticeClear();
     } catch {
       const elapsed = Date.now() - start;
       if (elapsed < 1200) {
@@ -85,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       setScanNoticeTone("error");
       setScanNotice("Inbox refresh failed");
-      setTimeout(() => setScanNotice(null), 3000);
+      scheduleScanNoticeClear();
     } finally {
       setIsRefreshing(false);
     }
@@ -118,6 +129,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (scanNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(scanNoticeTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Close on Escape key
@@ -419,7 +438,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span
                 className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
               >
-                <Check className="w-3 h-3" /> {scanNotice}
+                {scanNoticeTone === "success" ? (
+                  <Check className="w-3 h-3" />
+                ) : (
+                  <AlertTriangle className="w-3 h-3" />
+                )}{" "}
+                {scanNotice}
               </span>
             )}
           </div>
