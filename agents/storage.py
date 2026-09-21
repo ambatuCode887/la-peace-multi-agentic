@@ -27,6 +27,12 @@ class CaseStore:
     def delete_case(self, email_id: str) -> bool:
         raise NotImplementedError
 
+    def save_attachment(self, email_id: str, name: str, content: bytes, content_type: str | None = None) -> None:
+        return None
+
+    def get_attachment(self, email_id: str, name: str) -> tuple[bytes, str | None] | None:
+        return None
+
 class FilesystemCaseStore(CaseStore):
     def __init__(self, root: Path):
         self.root = Path(root).expanduser().resolve()
@@ -93,6 +99,7 @@ class MongoCaseStore(CaseStore):
         self.database = self.client[database]
         self.collection = self.database[collection_name]
         self.collection.create_index("email_id", unique=True)
+        self.attachment_collection = self.database[f"{collection_name}_attachments"]
 
     def list_cases(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
@@ -139,7 +146,33 @@ class MongoCaseStore(CaseStore):
 
     def delete_case(self, email_id: str) -> bool:
         result = self.collection.delete_one({"email_id": email_id})
+        self.attachment_collection.delete_many({"email_id": email_id})
         return result.deleted_count == 1
+
+    def save_attachment(
+        self,
+        email_id: str,
+        name: str,
+        content: bytes,
+        content_type: str | None = None,
+    ) -> None:
+        self.attachment_collection.replace_one(
+            {"email_id": email_id, "name": name},
+            {
+                "email_id": email_id,
+                "name": name,
+                "content": content,
+                "content_type": content_type,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            upsert=True,
+        )
+
+    def get_attachment(self, email_id: str, name: str) -> tuple[bytes, str | None] | None:
+        document = self.attachment_collection.find_one({"email_id": email_id, "name": name})
+        if not document:
+            return None
+        return bytes(document.get("content", b"")), document.get("content_type")
 
 def get_case_store(
     root: str | Path,
