@@ -128,6 +128,7 @@ def create_app(
             review = {
                 "available": False,
                 "route": "human_review",
+                "reason": str(error),
                 "deterministic_status": report.get("status"),
                 "defects": report.get("defect_fields", []),
                 "retrieved_guidance": [],

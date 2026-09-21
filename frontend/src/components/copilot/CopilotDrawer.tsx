@@ -295,6 +295,18 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               </div>
             )}
 
+          {currentCase.managerReview &&
+            (!currentCase.managerReview.available ||
+              !currentCase.managerReview.retrieved_guidance?.length) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="font-bold">RAG guidance unavailable</div>
+                <div className="mt-1">
+                  {currentCase.managerReview.reason ||
+                    "No matching knowledge chunks were returned from Qdrant."}
+                </div>
+              </div>
+            )}
+
           {/* Verifier Rulings */}
           {currentCase.verifier?.rulings &&
             currentCase.verifier.rulings.length > 0 && (

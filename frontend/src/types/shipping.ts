@@ -70,6 +70,7 @@ export interface AIAnalysis {
 
 export interface ManagerReview {
   available: boolean;
+  reason?: string;
   route?: string;
   deterministic_status?: string;
   defects?: string[];
