@@ -10,7 +10,6 @@ import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
 import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
-import { ReviewPanel } from "./components/review/ReviewPanel";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
 import { EvaluationDashboard } from "./components/evaluation/EvaluationDashboard";
 import { ALL_CASES } from "./data/allCases";
@@ -39,7 +38,7 @@ export function App() {
   const [evaluationOpen, setEvaluationOpen] = useState<boolean>(false);
   const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
-    "summary" | "email" | "chat"
+    "summary" | "review" | "email" | "chat"
   >("summary");
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
   const [queueLoading, setQueueLoading] = useState<boolean>(false);
@@ -204,67 +203,9 @@ export function App() {
     }
   };
 
-  const handleApproveCase = async () => {
-    if (backendConnected) {
-      try {
-        await api.submitReviewCorrection(currentCase.id, {
-          category: currentCase.category,
-          status: "OK",
-          has_defect: false,
-          defect_fields: [],
-          decision: "false_alarm",
-          note: "Approved by human operator after review. Clean document release.",
-        });
-      } catch (err) {
-        console.warn("Backend approval submission error:", err);
-      }
-    }
-    setCases((prev) =>
-      prev.map((c) =>
-        c.id === currentCase.id
-          ? {
-              ...c,
-              status: "PASS",
-              statusNote:
-                "Approved by human operator after review. Clean document submitted.",
-            }
-          : c,
-      ),
-    );
-    alert(
-      `Case #${currentCase.id} has been Approved and marked as CLEAN in the verification engine.`,
-    );
-  };
-
-  const handleManualOverride = async () => {
-    const reason = prompt("Enter justification for manual pass override:");
-    if (reason) {
-      if (backendConnected) {
-        try {
-          await api.submitReviewCorrection(currentCase.id, {
-            category: currentCase.category,
-            status: "OK",
-            has_defect: false,
-            defect_fields: [],
-            decision: "false_alarm",
-            note: `Manual override: ${reason}`,
-          });
-        } catch (err) {
-          console.warn("Backend manual override error:", err);
-        }
-      }
-      setCases((prev) =>
-        prev.map((c) =>
-          c.id === currentCase.id
-            ? {
-                ...c,
-                status: "PASS",
-                statusNote: `Manual override by operator: ${reason}`,
-              }
-            : c,
-        ),
-      );
-    }
+  const handleOpenReview = () => {
+    setDrawerOpen(true);
+    setActiveDrawerTab("review");
   };
 
   const handleOpenClarification = () => {
@@ -334,6 +275,7 @@ export function App() {
                   <DiscrepancyBanner
                     currentCase={currentCase}
                     onOpenClarification={handleOpenClarification}
+                    onOpenReview={handleOpenReview}
                   />
                 )}
 
@@ -364,15 +306,7 @@ export function App() {
                 {currentCase && (
                   <BlueprintComparator
                     currentCase={currentCase}
-                    onApprove={handleApproveCase}
-                    onDraftClarification={handleOpenClarification}
-                    onManualOverride={handleManualOverride}
-                  />
-                )}
-                {currentCase && (
-                  <ReviewPanel
-                    currentCase={currentCase}
-                    onSaved={handleReviewSaved}
+                    onManualOverride={handleOpenReview}
                   />
                 )}
               </>
@@ -380,7 +314,7 @@ export function App() {
           </div>
         </main>
 
-        {/* Zone 3: AI Assistant Intelligence Drawer (Right) */}
+        {/* Zone 3: AI Assistant & Operator Review Workspace (Right) */}
         {currentCase && (
           <CopilotDrawer
             currentCase={currentCase}
@@ -388,6 +322,7 @@ export function App() {
             onToggle={() => setDrawerOpen((prev) => !prev)}
             activeTab={activeDrawerTab}
             onTabChange={setActiveDrawerTab}
+            onReviewSaved={handleReviewSaved}
           />
         )}
       </div>

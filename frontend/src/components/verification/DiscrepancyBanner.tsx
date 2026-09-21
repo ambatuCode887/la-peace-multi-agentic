@@ -10,11 +10,13 @@ import {
 interface DiscrepancyBannerProps {
   currentCase: ShippingCase;
   onOpenClarification: () => void;
+  onOpenReview?: () => void;
 }
 
 export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
   currentCase,
   onOpenClarification,
+  onOpenReview,
 }) => {
   if (currentCase.category !== "BL_COMPARISON") {
     return null;
@@ -54,13 +56,23 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onOpenClarification}
-          className="ml-4 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs shrink-0 flex items-center space-x-1.5 transition-colors"
-        >
-          <span>Draft Clarification</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
+        <div className="ml-4 flex items-center space-x-2 shrink-0">
+          {onOpenReview && (
+            <button
+              onClick={onOpenReview}
+              className="px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-800 dark:text-rose-200 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              Review & Resolve
+            </button>
+          )}
+          <button
+            onClick={onOpenClarification}
+            className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+          >
+            <span>Draft Clarification</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     );
   }
@@ -89,9 +101,19 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </div>
         </div>
 
-        <span className="ml-4 px-3 py-1 rounded-lg bg-amber-200/70 text-amber-900 dark:bg-amber-900 dark:text-amber-200 text-xs font-medium shrink-0">
-          Pending Operator Confirmation
-        </span>
+        {onOpenReview ? (
+          <button
+            onClick={onOpenReview}
+            className="ml-4 px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs shrink-0 flex items-center space-x-1.5 transition-colors cursor-pointer"
+          >
+            <span>Confirm & Review</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <span className="ml-4 px-3 py-1 rounded-lg bg-amber-200/70 text-amber-900 dark:bg-amber-900 dark:text-amber-200 text-xs font-medium shrink-0">
+            Pending Operator Confirmation
+          </span>
+        )}
       </div>
     );
   }
@@ -115,9 +137,19 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
             </div>
           </div>
 
-          <span className="ml-4 px-3 py-1 rounded-lg bg-amber-200/70 text-amber-900 dark:bg-amber-900 dark:text-amber-200 text-xs font-medium shrink-0">
-            Hold Auto-Submission
-          </span>
+          {onOpenReview ? (
+            <button
+              onClick={onOpenReview}
+              className="ml-4 px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs shrink-0 flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <span>Inspect Review</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <span className="ml-4 px-3 py-1 rounded-lg bg-amber-200/70 text-amber-900 dark:bg-amber-900 dark:text-amber-200 text-xs font-medium shrink-0">
+              Hold Auto-Submission
+            </span>
+          )}
         </div>
       );
     }

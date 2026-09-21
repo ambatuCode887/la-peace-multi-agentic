@@ -8,17 +8,19 @@ import {
   ShieldAlert,
   Loader2,
   CheckCircle2,
-  BrainCircuit,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
+import type { BackendReport } from "../../services/api";
 import { api } from "../../services/api";
+import { ReviewPanel } from "../review/ReviewPanel";
 
 interface CopilotDrawerProps {
   currentCase: ShippingCase;
   isOpen: boolean;
   onToggle: () => void;
-  activeTab: "summary" | "email" | "chat";
-  onTabChange: (tab: "summary" | "email" | "chat") => void;
+  activeTab: "summary" | "review" | "email" | "chat";
+  onTabChange: (tab: "summary" | "review" | "email" | "chat") => void;
+  onReviewSaved?: (report: BackendReport) => void;
 }
 
 export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
@@ -27,6 +29,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   onToggle,
   activeTab,
   onTabChange,
+  onReviewSaved,
 }) => {
   const vesselTag =
     currentCase.vessel && currentCase.vessel !== "N/A"
@@ -45,11 +48,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [inputMessage, setInputMessage] = useState("");
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // Email draft state
-  const [draftTo, setDraftTo] = useState(currentCase.sender);
-  const [draftSubject, setDraftSubject] = useState(
-    `Clarification Required: ${currentCase.subject}`,
-  );
+  // Auto-fill and dynamic draft generation for email tab
+  const [draftTo, setDraftTo] = useState("");
+  const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<
@@ -61,21 +62,44 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     if (activeTab === "email") {
       setIsDraftLoading(true);
       setDispatchStatus("idle");
+
+      // Request dynamic email generation from backend live preview
       api
         .previewAction(currentCase.id, "draft_correction_email", {
           requested_correction:
             "Please confirm the correct SI and draft BL values as detailed below.",
         })
         .then((preview) => {
-          if (preview.to) setDraftTo(preview.to);
-          if (preview.subject) setDraftSubject(preview.subject);
-          if (preview.body) setDraftBody(preview.body);
+          setDraftTo(preview.to || currentCase.sender);
+          setDraftSubject(
+            preview.subject ||
+              `Clarification Required: ${currentCase.subject} (Case #${currentCase.id})`,
+          );
+          setDraftBody(preview.body || "");
         })
         .catch(() => {
+          // Robust client-side fallback template using live case fields
+          const mismatched = currentCase.fields.filter(
+            (f) => f.status === "mismatch",
+          );
+          const discrepancyBullets =
+            mismatched.length > 0
+              ? mismatched
+                  .map(
+                    (f) =>
+                      `• ${f.label}: SI records "${f.siValue}" vs Draft BL records "${f.blValue}"${
+                        f.varianceNote ? ` (${f.varianceNote})` : ""
+                      }`,
+                  )
+                  .join("\n")
+              : `• Status: ${currentCase.statusNote || "Verification discrepancy identified"}`;
+
           setDraftTo(currentCase.sender);
-          setDraftSubject(`Clarification Required: ${currentCase.subject}`);
+          setDraftSubject(
+            `Clarification Required: ${currentCase.subject} (Case #${currentCase.id})`,
+          );
           setDraftBody(
-            `Dear Forwarder / Carrier Operations,\n\nWe have completed multi-agent document verification for Case #${currentCase.id}${vesselTag}.\n\nStatus: ${currentCase.status}\nNote: ${currentCase.statusNote}\n\nPlease confirm the correct values.\n\nRegards,\nLa Peace Operations Desk`,
+            `Dear Forwarder / Carrier Operations,\n\nWe have completed automated multi-agent document verification for shipment case #${currentCase.id}${vesselTag}.\n\nDuring verification, the following discrepancy was detected:\n${discrepancyBullets}\n\nPlease review and advise with the amended Draft Bill of Lading or confirmation.\n\nRegards,\nLa Peace Verification Desk`,
           );
         })
         .finally(() => setIsDraftLoading(false));
@@ -86,6 +110,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     currentCase.subject,
     currentCase.status,
     currentCase.statusNote,
+    currentCase.fields,
     vesselTag,
     activeTab,
   ]);
@@ -113,12 +138,12 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     } catch {
       // Graceful fallback to multi-agent knowledge logic if backend AI is temporarily offline
       const qLower = query.toLowerCase();
-      const mismatched = currentCase.fields.filter((f) => f.status === "mismatch");
-      const matchedCount = currentCase.fields.filter((f) => f.status === "match").length;
-      const vesselStr =
-        currentCase.vessel && currentCase.vessel !== "N/A"
-          ? currentCase.vessel
-          : currentCase.subject;
+      const mismatched = currentCase.fields.filter(
+        (f) => f.status === "mismatch",
+      );
+      const matchedCount = currentCase.fields.filter(
+        (f) => f.status === "match",
+      ).length;
 
       let reply = "";
       if (
@@ -139,36 +164,20 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         } else {
           reply = `Verification Status for ${currentCase.id}: All ${matchedCount} verified fields match between the SI source and Draft BL. No discrepancies found.`;
         }
-      } else if (qLower.includes("weight") || qLower.includes("gross")) {
-        const weightField = currentCase.fields.find(
-          (f) => f.key === "gross_weight_kg",
-        );
-        if (weightField) {
-          reply = `Gross Weight Analysis: SI records "${weightField.siValue}", while Draft BL records "${weightField.blValue}". Status: ${
-            weightField.status === "match"
-              ? "Exact Match"
-              : `Discrepancy (${weightField.varianceNote || "exceeds threshold"})`
-          }.`;
-        } else {
-          reply = `Gross Weight: No gross weight field extracted for this document. Please inspect source attachments manually.`;
-        }
-      } else if (
-        qLower.includes("recommend") ||
-        qLower.includes("action") ||
-        qLower.includes("next")
-      ) {
-        reply = `Recommended Next Action for ${currentCase.id}: ${
-          currentCase.aiAnalysis.recommendation ||
-          "Review the deterministic comparison and confirm fields."
-        }`;
-      } else {
-        reply = `Case Analysis for ${currentCase.id} (${vesselStr}): ${
-          currentCase.aiAnalysis.summary
-        } ${
+      } else if (qLower.includes("recommend") || qLower.includes("action")) {
+        reply = `Operational Recommendation: ${
+          currentCase.managerReview?.recommended_next_action ||
           currentCase.aiAnalysis.recommendation
-            ? `Recommended action: ${currentCase.aiAnalysis.recommendation}`
-            : ""
         }`;
+      } else if (qLower.includes("route") || qLower.includes("pol") || qLower.includes("pod")) {
+        reply = `Routing info for Case ${currentCase.id}: Loading at ${currentCase.pol}, Discharging at ${currentCase.pod}. Vessel: ${currentCase.vessel} (Voyage ${currentCase.voyageNumber}).`;
+      } else if (qLower.includes("guidance") || qLower.includes("rule")) {
+        const ragNotes = currentCase.managerReview?.retrieved_guidance?.join(" ") || "";
+        reply = ragNotes
+          ? `Authoritative Shipping Guidance: ${ragNotes}`
+          : `Standard practice requires all Bill of Lading values to match the approved Shipping Instruction exactly before document release.`;
+      } else {
+        reply = `Multi-Agent Analysis for ${currentCase.id}: Verified status is ${currentCase.status}. ${currentCase.aiAnalysis.summary}`;
       }
 
       setMessages((prev) => [
@@ -217,13 +226,13 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           className="w-5 h-5 object-contain drop-shadow"
           style={{ imageRendering: "pixelated" }}
         />
-        <span className="text-xs font-bold">Open AI Assistant</span>
+        <span className="text-xs font-bold">Open Review & AI Workspace</span>
       </button>
     );
   }
 
   return (
-    <aside className="w-96 border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-[calc(100vh-4rem)] shadow-lg select-none">
+    <aside className="w-96 xl:w-[420px] border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-[calc(100vh-4rem)] shadow-lg select-none">
       {/* Drawer Header */}
       <div className="p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25">
         <div className="flex items-center space-x-2.5">
@@ -235,13 +244,13 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           />
           <div>
             <h3 className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
-              <span>AI Assistant</span>
+              <span>AI & Review Workspace</span>
               <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
                 Active
               </span>
             </h3>
             <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-medium">
-              Multi-Agentic Verification Agent
+              Multi-Agent Verification & Review
             </span>
           </div>
         </div>
@@ -255,7 +264,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="grid grid-cols-3 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-xs font-semibold">
+      <div className="grid grid-cols-4 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-[11px] font-semibold">
         <button
           onClick={() => onTabChange("summary")}
           className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
@@ -267,6 +276,16 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           Analysis
         </button>
         <button
+          onClick={() => onTabChange("review")}
+          className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
+            activeTab === "review"
+              ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
+              : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
+          }`}
+        >
+          Review
+        </button>
+        <button
           onClick={() => onTabChange("email")}
           className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
             activeTab === "email"
@@ -274,7 +293,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
           }`}
         >
-          Email Draft
+          Email
         </button>
         <button
           onClick={() => onTabChange("chat")}
@@ -284,7 +303,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
           }`}
         >
-          Assistant Q&A
+          Q&A
         </button>
       </div>
 
@@ -311,17 +330,6 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                 style={{ width: `${currentCase.aiAnalysis.confidence ?? 0}%` }}
               ></div>
             </div>
-          </div>
-
-          {/* AI Analysis Summary */}
-          <div>
-            <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center space-x-1.5">
-              <BrainCircuit className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-              <span>Multi-Agent Verification Summary</span>
-            </h4>
-            <p className="text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-[#091f52]/30 p-3 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40">
-              {currentCase.aiAnalysis.summary}
-            </p>
           </div>
 
           {/* Real RAG Knowledge Citations from backend manager review */}
@@ -414,7 +422,20 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         </div>
       )}
 
-      {/* Tab 2: Outbound Clarification Email Draft (Live Action Preview) */}
+      {/* Tab: Human Operator Review & Ground-Truth Corrections */}
+      {activeTab === "review" && (
+        <div className="flex-1 overflow-y-auto p-4 select-text">
+          <ReviewPanel
+            currentCase={currentCase}
+            onSaved={(report) => {
+              if (onReviewSaved) onReviewSaved(report);
+            }}
+            onSwitchToEmail={() => onTabChange("email")}
+          />
+        </div>
+      )}
+
+      {/* Tab: Outbound Clarification Email Draft (Live Action Preview) */}
       {activeTab === "email" && (
         <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs select-text">
           <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
