@@ -154,6 +154,16 @@ Open the Vite URL shown in the second terminal, normally `http://localhost:5173`
 
 ![La Peace SDOC system architecture](docs/images/system-architecture.svg)
 
+### Multi-agent verification pipeline
+
+![Multi-agent verification pipeline](docs/images/02_multi_agent_verification_pipeline.png)
+
+### Human-in-the-loop case lifecycle
+
+![Human-in-the-loop case lifecycle](docs/images/04_human_in_the_loop_state_machine.png)
+
+For clearly look of the Human-in-the-loop can find it at /docs/images
+
 ### Cloud provider decision
 
 The deployment stack is **Vercel + Render + MongoDB Atlas**: Vercel hosts the React frontend, Render hosts the FastAPI backend, and MongoDB Atlas stores reports and attachments. **Google ADK/Gemini** provide optional agent and LLM capabilities, while **Qdrant** provides optional retrieval-backed guidance. The code also supports Ollama for local model execution.
