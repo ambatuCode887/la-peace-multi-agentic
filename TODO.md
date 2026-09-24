@@ -149,3 +149,5 @@ These improvements are prioritized to make the demo distinctive beyond a standar
 - update the Open Review & Ai workspace -- draft email
 - Operations tab - how we gonna improve it
 - dashboard so we can easily categorise stuff instead of stuffing everything all at once
+
+- add a archive to store old ass email so that it wont piles up on the dashboard when the user load up, add it's own supportive AI to help search the archive.
