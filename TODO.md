@@ -146,3 +146,6 @@ These improvements are prioritized to make the demo distinctive beyond a standar
 - Edit Extracted Ground-Truth Values drop down should be opened by default
 - For general inquiries AI summary below email body
 - Email category should not be drop down
+- update the Open Review & Ai workspace -- draft email
+- Operations tab - how we gonna improve it
+- dashboard so we can easily categorise stuff instead of stuffing everything all at once
