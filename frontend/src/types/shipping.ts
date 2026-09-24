@@ -138,6 +138,7 @@ export interface ShippingCase {
   pol: string;
   pod: string;
   fields: FieldComparison[];
+  attachments?: string[];
   aiAnalysis: AIAnalysis;
   managerReview?: ManagerReview;
   verifier?: VerifierResult;

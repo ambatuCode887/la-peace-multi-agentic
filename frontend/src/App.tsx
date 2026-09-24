@@ -97,7 +97,7 @@ export function App() {
             const urlParam = new URLSearchParams(window.location.search).get(
               "case",
             );
-            if (urlParam && summaries.some((s) => s.email_id === urlParam)) {
+            if (urlParam) {
               return urlParam;
             }
           } catch {}
@@ -151,11 +151,15 @@ export function App() {
       void api
         .getCaseDetail(selectedCaseId)
         .then((report) => {
-          setCases((prev) =>
-            prev.map((c) =>
-              c.id === selectedCaseId ? mapReportToShippingCase(report, c) : c,
-            ),
-          );
+          setCases((prev) => {
+            const exists = prev.some((c) => c.id === selectedCaseId);
+            if (exists) {
+              return prev.map((c) =>
+                c.id === selectedCaseId ? mapReportToShippingCase(report, c) : c,
+              );
+            }
+            return [mapReportToShippingCase(report), ...prev];
+          });
         })
         .catch(() => undefined);
 
@@ -341,8 +345,10 @@ export function App() {
                   />
                 )}
 
-                {/* Keep the source email visible for every category so AI summaries remain auditable. */}
-                {currentCase && <EmailMessage currentCase={currentCase} />}
+                {/* For BL_COMPARISON cases, keep the collapsible source email visible above the diff table. For non-BL inquiries, OperationalEmailHub displays the full Gmail-style email viewer. */}
+                {currentCase && currentCase.category === "BL_COMPARISON" && (
+                  <EmailMessage currentCase={currentCase} />
+                )}
 
                 {/* Side-by-Side Blueprint Diff Comparator */}
                 {queueError && (
