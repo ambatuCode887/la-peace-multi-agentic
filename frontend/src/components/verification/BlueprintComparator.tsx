@@ -282,6 +282,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   );
   const renderEvidenceSource = (
     label: string,
+    attachmentSide: "SI" | "BL",
     evidence: FieldComparison["siEvidence"],
     primaryValue: string,
     alternateReadings: FieldComparison["siAlternateReadings"],
@@ -289,7 +290,12 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
   ) => {
     const sourceText =
       evidence?.source_text?.trim() || "No source text available.";
-    const attachmentPath = evidence?.attachment
+    const fallbackAttachment = currentCase.attachments?.find((attachment) => {
+      const filename = attachment.split(/[\\/]/).pop() || attachment;
+      return new RegExp(`(?:^|[^a-z])${attachmentSide}(?:[^a-z]|$)`, "i").test(filename);
+    });
+    const attachment = evidence?.attachment || fallbackAttachment;
+    const attachmentPath = attachment
       ?.replace(/^\/+/, "")
       .split("/")
       .map((part) => encodeURIComponent(part))
@@ -297,9 +303,9 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
     const sourceUrl = attachmentPath
       ? `${API_BASE}/cases/${encodeURIComponent(currentCase.id)}/attachments/${attachmentPath}`
       : null;
-    const isVisualAttachment = /\.(pdf|png|jpe?g|webp)$/i.test(
-      evidence?.attachment || "",
-    );
+    const isVisualAttachment = /\.(pdf|png|jpe?g|webp)$/i.test(attachment || "");
+    const pageLabel = evidence ? evidence.page ?? "Text fallback" : "Not extracted";
+    const formatLabel = evidence?.method || (fallbackAttachment ? "Preview only" : "Unknown");
     const readerWarning =
       agreement === "disagree" || agreement === "unavailable";
 
@@ -344,6 +350,11 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             )}
           </div>
         )}
+        {!evidence?.attachment && fallbackAttachment && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            Attachment preview only; extracted source evidence is unavailable.
+          </div>
+        )}
         <div>
           <div className="text-[10px] uppercase tracking-wide font-bold text-slate-400 mb-1">
             Source text
@@ -354,11 +365,11 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         </div>
         <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
           <div>
-            <strong>Attachment:</strong> {evidence?.attachment || "Unknown"}
+            <strong>Attachment:</strong> {attachment || "Unknown"}
           </div>
           <div>
-            <strong>Page:</strong> {evidence?.page ?? "Text fallback"} ·{" "}
-            <strong>Format:</strong> {evidence?.method || "Unknown"}
+            <strong>Page:</strong> {pageLabel} ·{" "}
+            <strong>Format:</strong> {formatLabel}
           </div>
         </div>
         <div className="text-[11px] text-slate-600 dark:text-slate-300">
@@ -438,6 +449,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {renderEvidenceSource(
             "SI · Source of truth",
+            "SI",
             selectedField.siEvidence,
             selectedField.siValue,
             selectedField.siAlternateReadings,
@@ -445,6 +457,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
           )}
           {renderEvidenceSource(
             "BL · Incoming draft",
+            "BL",
             selectedField.blEvidence,
             selectedField.blValue,
             selectedField.blAlternateReadings,

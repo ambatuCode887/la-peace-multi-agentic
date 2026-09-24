@@ -38,8 +38,6 @@ interface SidebarProps {
   statusFilter: VerificationStatus | "ALL";
   onStatusFilterChange: (status: VerificationStatus | "ALL") => void;
   onRefreshInbox?: () => Promise<void> | void;
-  onLoadMore?: () => Promise<void> | void;
-  hasMoreCases?: boolean;
   /** When true, the inbox shrinks to a slim rail so the case gets the full width. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -57,14 +55,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   statusFilter,
   onStatusFilterChange,
   onRefreshInbox,
-  onLoadMore,
-  hasMoreCases = false,
   collapsed = false,
   onToggleCollapsed,
   mobileOpen = false,
   onCloseMobile,
 }) => {
-  const [loadingMore, setLoadingMore] = useState(false);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -868,30 +863,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })
           )}
 
-          {/* Load More Button */}
-          {hasMoreCases && (
-            <div className="p-3 text-center">
-              <button
-                onClick={async () => {
-                  if (!onLoadMore || loadingMore) return;
-                  setLoadingMore(true);
-                  try {
-                    await onLoadMore();
-                  } finally {
-                    setLoadingMore(false);
-                  }
-                }}
-                disabled={loadingMore}
-                className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
-              >
-                <span>{loadingMore ? "Loading..." : "Load more cases"}</span>
-                {!loadingMore && <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-              <span className="text-[10px] text-slate-400 block mt-1">
-                Showing {cases.length} loaded cases
-              </span>
-            </div>
-          )}
         </div>
       </aside>
     </>
