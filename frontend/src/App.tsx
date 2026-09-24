@@ -11,6 +11,7 @@ import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { OperationsPanel } from "./components/operations/OperationsPanel";
+import { SentEmailViewer } from "./components/verification/SentEmailViewer";
 import { ALL_CASES } from "./data/allCases";
 import {
   api,
@@ -18,6 +19,7 @@ import {
   mapSummaryToShippingCase,
 } from "./services/api";
 import type { BackendReport } from "./services/api";
+import { outboxService, type DispatchedEmail } from "./services/outboxService";
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
@@ -28,6 +30,22 @@ export function App() {
     } catch {}
     return ALL_CASES[0]?.id || "email_001";
   });
+  const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT">("INBOX");
+  const [selectedSentEmail, setSelectedSentEmail] = useState<DispatchedEmail | null>(() => {
+    const list = outboxService.getSentEmails();
+    return list.length > 0 ? list[0] : null;
+  });
+
+  useEffect(() => {
+    return outboxService.subscribe(() => {
+      const list = outboxService.getSentEmails();
+      setSelectedSentEmail((curr) => {
+        if (!curr && list.length > 0) return list[0];
+        const stillExists = list.find((item) => item.id === curr?.id);
+        return stillExists || (list.length > 0 ? list[0] : null);
+      });
+    });
+  }, []);
   const [categoryFilter, setCategoryFilter] = useState<EmailCategory | "ALL">(
     "ALL",
   );
@@ -266,6 +284,7 @@ export function App() {
   };
 
   const handleSelectCase = (id: string) => {
+    setActiveMailboxFolder("INBOX");
     setOperationsOpen(false);
     setSelectedCaseId(id);
     setMobileInboxOpen(false);
@@ -295,7 +314,10 @@ export function App() {
           selectedCaseId={currentCase?.id || ""}
           onSelectCase={handleSelectCase}
           categoryFilter={categoryFilter}
-          onCategoryFilterChange={handleCategoryFilterChange}
+          onCategoryFilterChange={(cat) => {
+            setActiveMailboxFolder("INBOX");
+            handleCategoryFilterChange(cat);
+          }}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
           onRefreshInbox={refreshCases}
@@ -305,6 +327,13 @@ export function App() {
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
           mobileOpen={mobileInboxOpen}
           onCloseMobile={() => setMobileInboxOpen(false)}
+          activeMailboxFolder={activeMailboxFolder}
+          onMailboxFolderChange={setActiveMailboxFolder}
+          selectedSentId={selectedSentEmail?.id || null}
+          onSelectSent={(email) => {
+            setSelectedSentEmail(email);
+            setActiveMailboxFolder("SENT");
+          }}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
@@ -312,7 +341,22 @@ export function App() {
           <div
             className={`mx-auto transition-[max-width] duration-200 ${inboxCollapsed ? "max-w-6xl" : "max-w-4xl"}`}
           >
-            {operationsOpen ? (
+            {activeMailboxFolder === "SENT" ? (
+              selectedSentEmail ? (
+                <SentEmailViewer
+                  email={selectedSentEmail}
+                  onNavigateToCase={(caseId) => {
+                    setActiveMailboxFolder("INBOX");
+                    handleSelectCase(caseId);
+                  }}
+                  onBackToInbox={() => setActiveMailboxFolder("INBOX")}
+                />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
+                  No sent messages recorded yet.
+                </div>
+              )
+            ) : operationsOpen ? (
               <OperationsPanel
                 backendConnected={backendConnected}
                 currentCase={currentCase}

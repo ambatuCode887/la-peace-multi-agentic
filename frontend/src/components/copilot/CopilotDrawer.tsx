@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ShippingCase } from "../../types/shipping";
 import {
   Send,
@@ -9,10 +9,15 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Paperclip,
+  FileText,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 import type { BackendReport } from "../../services/api";
-import { api } from "../../services/api";
+import { api, API_BASE } from "../../services/api";
+import { outboxService, type SentAttachment } from "../../services/outboxService";
 import { ReviewPanel } from "../review/ReviewPanel";
 
 /**
@@ -65,11 +70,65 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
+  const [draftAttachments, setDraftAttachments] = useState<SentAttachment[]>([]);
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<
     "idle" | "sending" | "sent" | "failed"
   >("idle");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Dynamic auto-resizing of email body textarea (min 160px, max 300px)
+  useEffect(() => {
+    if (bodyTextareaRef.current) {
+      bodyTextareaRef.current.style.height = "auto";
+      const scrollHeight = bodyTextareaRef.current.scrollHeight;
+      const targetHeight = Math.min(Math.max(scrollHeight, 160), 300);
+      bodyTextareaRef.current.style.height = `${targetHeight}px`;
+    }
+  }, [draftBody, activeTab]);
+
+  const handleAttachCaseDocuments = () => {
+    if (!currentCase.attachments || currentCase.attachments.length === 0) return;
+    const newAtts: SentAttachment[] = currentCase.attachments.map((attPath) => {
+      const filename = attPath.split("/").pop() || attPath;
+      const parts = filename.split(".");
+      const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : "txt";
+      return {
+        filename,
+        size: 38400,
+        ext,
+        url: `${API_BASE}/cases/${encodeURIComponent(currentCase.id)}/attachments/${attPath.replace(/^\/+/, "")}`,
+      };
+    });
+    setDraftAttachments((prev) => {
+      const existingNames = new Set(prev.map((a) => a.filename));
+      const toAdd = newAtts.filter((a) => !existingNames.has(a.filename));
+      return [...prev, ...toAdd];
+    });
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newAtts: SentAttachment[] = Array.from(files).map((f) => {
+      const parts = f.name.split(".");
+      const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : "bin";
+      return {
+        filename: f.name,
+        size: f.size,
+        ext,
+      };
+    });
+    setDraftAttachments((prev) => [...prev, ...newAtts]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleRemoveAttachment = (indexToRemove: number) => {
+    setDraftAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
 
   // Reset or fetch email draft preview when case changes or email tab opens
   useEffect(() => {
@@ -279,9 +338,21 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   };
 
   const handleDispatchEmail = async () => {
+    if (!draftTo.trim() || !draftSubject.trim()) return;
     setDispatchStatus("sending");
     setDispatchFeedback(null);
     try {
+      // 1. Persist to outbox store
+      outboxService.saveSentEmail({
+        caseId: currentCase.id,
+        to: draftTo.trim() || currentCase.sender,
+        subject: draftSubject.trim(),
+        body: draftBody,
+        attachments: draftAttachments,
+        vessel: currentCase.vessel !== "N/A" ? currentCase.vessel : currentCase.subject,
+      });
+
+      // 2. Submit case review correction to backend audit log
       await api.submitReviewCorrection(currentCase.id, {
         category: currentCase.category,
         status: "NEEDS_REVIEW",
@@ -293,23 +364,24 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         decision: "request_clarification",
         note: draftSubject,
       });
+
       setDispatchStatus("sent");
       setDispatchFeedback(
-        `Clarification email dispatched to ${draftTo || currentCase.sender} and recorded in audit log.`,
+        `Email sent to ${draftTo || currentCase.sender} and recorded in Sent mailbox & audit log.`,
       );
       setTimeout(() => {
         setDispatchStatus("idle");
         setDispatchFeedback(null);
-      }, 6000);
+      }, 5000);
     } catch {
       setDispatchStatus("failed");
       setDispatchFeedback(
-        `Clarification email could not be dispatched to ${draftTo || currentCase.sender}.`,
+        `Failed to send email to ${draftTo || currentCase.sender}.`,
       );
       setTimeout(() => {
         setDispatchStatus("idle");
         setDispatchFeedback(null);
-      }, 6000);
+      }, 5000);
     }
   };
 
@@ -394,6 +466,8 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           Review
         </button>
         <button
+          type="button"
+          data-testid="copilot-tab-email"
           onClick={() => onTabChange("email")}
           className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
             activeTab === "email"
@@ -597,62 +671,153 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
             )}
           </div>
 
-          <div className="p-3 bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200 dark:border-[#1a3d8e]/50 rounded-xl space-y-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileInputChange}
+            multiple
+            className="hidden"
+          />
+
+          <div className="p-3.5 bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200 dark:border-[#1a3d8e]/50 rounded-2xl space-y-3 shadow-xs">
+            {/* TO Input Field */}
             <div>
-              <span className="text-slate-400 block text-[10px]">TO</span>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                To:
+              </label>
               <input
                 type="text"
                 value={draftTo}
                 onChange={(e) => setDraftTo(e.target.value)}
-                className="w-full bg-transparent font-mono font-semibold text-slate-800 dark:text-slate-200 focus:outline-hidden"
+                placeholder="recipient@carrier.com"
+                className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-mono font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
               />
             </div>
+
+            {/* SUBJECT Input Field */}
             <div>
-              <span className="text-slate-400 block text-[10px]">SUBJECT</span>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                Subject:
+              </label>
               <input
                 type="text"
                 value={draftSubject}
                 onChange={(e) => setDraftSubject(e.target.value)}
-                className="w-full bg-transparent font-semibold text-slate-800 dark:text-slate-200 focus:outline-hidden"
+                placeholder="Discrepancy Clarification Required..."
+                className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
               />
             </div>
-            <div className="pt-2 border-t border-slate-200 dark:border-[#1a3d8e]/50">
-              <span className="text-slate-400 block text-[10px] mb-1">
-                BODY
-              </span>
+
+            {/* BODY Dynamic Textarea */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Message Body:
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  Auto-resizes as you type
+                </span>
+              </div>
               <textarea
-                rows={11}
+                ref={bodyTextareaRef}
                 value={draftBody}
                 onChange={(e) => setDraftBody(e.target.value)}
-                className="w-full p-2.5 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-lg text-xs font-mono text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-[#345ec4]"
+                rows={6}
+                placeholder="Draft message content..."
+                className="w-full p-3 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-sans leading-relaxed text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all resize-none overflow-y-auto"
+                style={{ minHeight: "160px", maxHeight: "280px" }}
               />
+            </div>
+
+            {/* ATTACHMENTS Section */}
+            <div className="pt-2 border-t border-slate-200/80 dark:border-[#1a3d8e]/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
+                  <Paperclip className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2]" />
+                  <span>Attachments ({draftAttachments.length})</span>
+                </span>
+
+                <div className="flex items-center space-x-1.5">
+                  {currentCase.attachments && currentCase.attachments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAttachCaseDocuments}
+                      className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1a3d8e] dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60 hover:bg-blue-100 transition-colors cursor-pointer"
+                      title="Attach original case shipping documents"
+                    >
+                      <FileText className="w-3 h-3" />
+                      <span>Attach Case Docs</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 hover:bg-slate-300 dark:bg-[#0c2966] dark:hover:bg-[#133e99] text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Attach Files</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Render Attached Chips */}
+              {draftAttachments.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {draftAttachments.map((att, idx) => (
+                    <div
+                      key={`${att.filename}-${idx}`}
+                      className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#06163a] border border-slate-200 dark:border-[#1a3d8e]/60 shadow-2xs group text-[11px]"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black uppercase bg-slate-100 text-slate-700 dark:bg-[#091f52] dark:text-slate-300">
+                          {att.ext}
+                        </span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                          {att.filename}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          ({att.size < 1024 ? `${att.size}B` : `${Math.round(att.size / 1024)}KB`})
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(idx)}
+                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                        title="Remove attachment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <button
             onClick={handleDispatchEmail}
-            disabled={dispatchStatus === "sending"}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-1.5 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
+            disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim()}
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-2 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
           >
             {dispatchStatus === "sending" ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Dispatching Clarification...</span>
+                <span>Sending Email...</span>
               </>
             ) : dispatchStatus === "sent" ? (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Dispatched & Recorded in Submission!</span>
+                <span>Email Sent & Logged!</span>
               </>
             ) : dispatchStatus === "failed" ? (
               <>
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-                <span>Dispatch Failed</span>
+                <span>Failed to Send Email</span>
               </>
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>Dispatch Clarification to Carrier</span>
+                <span>Send Email</span>
               </>
             )}
           </button>
