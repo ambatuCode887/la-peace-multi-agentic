@@ -130,3 +130,19 @@ These improvements are prioritized to make the demo distinctive beyond a standar
 ### how to handle edge case if SI is the missing value?
 
 - make a pop out email draft if SI is missing.
+
+### btw face two of hackathon
+
+- jack make the end to end email
+- when the scanning of PDF make sure it will shows the result of the VLLM actually in use
+-
+
+### UI updates
+
+- shows the correction documentation for version control
+- CHANGE THE ENTIRE UI/UX
+- alot of testing
+
+- Edit Extracted Ground-Truth Values drop down should be opened by default
+- For general inquiries AI summary below email body
+- Email category should not be drop down
