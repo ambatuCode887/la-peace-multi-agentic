@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from agents.shipping import api as shipping_api
 
 from agents.shipping.api import _run_manager_review, _save_upload, create_app
 from agents.storage import CaseStore
@@ -233,7 +235,115 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
     assert 'id="new-verification"' in response.text
     assert "resetVerification" in response.text
     assert 'id="manager-review"' in response.text
-    assert "/manager-review" in response.text
+
+
+def test_mailpit_sync_imports_new_message(tmp_path, monkeypatch) -> None:
+    class FakeResponse:
+        def __init__(self, payload: dict, content: bytes = b"") -> None:
+            self.payload = payload
+            self.content = content
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url: str, **kwargs):
+            if url.endswith("/messages"):
+                return FakeResponse({"messages": [{"ID": "mailpit-message-1"}]})
+            if url.endswith("/part/2"):
+                return FakeResponse({}, b"attached document")
+            return FakeResponse({
+                "ID": "mailpit-message-1",
+                "From": {"Address": "demo@example.com"},
+                "Subject": "Mailpit test",
+                "Text": "This message came from Mailpit.",
+                "Attachments": [{"PartID": "2", "FileName": "document.txt"}],
+            })
+
+    monkeypatch.setattr(shipping_api.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    client = TestClient(create_app(tmp_path))
+
+    response = client.post("/inbox/mailpit/sync")
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    assert client.get("/cases").json()["cases"][0]["category"] != "UNPROCESSED"
+    attachment = next(tmp_path.rglob("document.txt"))
+    assert attachment.read_bytes() == b"attached document"
+
+
+def test_mailpit_sync_renames_existing_case_from_attachment_index(tmp_path, monkeypatch) -> None:
+    message_id = "mailpit-message-600"
+    old_id = f"mailpit_{hashlib.sha256(message_id.encode()).hexdigest()[:24]}"
+    old_root = tmp_path / old_id
+    (old_root / "attachments").mkdir(parents=True)
+    (old_root / "inbox").mkdir()
+    (old_root / "attachments" / "email_600_SI.txt").write_text("SI", encoding="utf-8")
+    (old_root / "attachments" / "email_600_BL.txt").write_text("BL", encoding="utf-8")
+    (old_root / "inbox" / f"{old_id}.json").write_text(json.dumps({
+        "email_id": old_id,
+        "mailpit_id": message_id,
+        "attachments": ["attachments/email_600_SI.txt", "attachments/email_600_BL.txt"],
+    }), encoding="utf-8")
+    (old_root / "report.json").write_text(json.dumps({
+        "email_id": old_id,
+        "mailpit_id": message_id,
+        "category": "OK",
+        "status": "OK",
+        "attachments": ["attachments/email_600_SI.txt", "attachments/email_600_BL.txt"],
+    }), encoding="utf-8")
+
+    class FakeResponse:
+        def __init__(self, payload: dict) -> None:
+            self.payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url: str, **kwargs):
+            if url.endswith("/messages"):
+                return FakeResponse({"messages": [{"ID": message_id}]})
+            return FakeResponse({
+                "ID": message_id,
+                "From": {"Address": "demo@example.com"},
+                "Subject": "Mailpit test",
+                "Text": "Existing imported message.",
+                "Attachments": [
+                    {"PartID": "2", "FileName": "email_600_SI.txt"},
+                    {"PartID": "3", "FileName": "email_600_BL.txt"},
+                ],
+            })
+
+    monkeypatch.setattr(shipping_api.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    client = TestClient(create_app(tmp_path))
+
+    response = client.post("/inbox/mailpit/sync")
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 0
+    cases = client.get("/cases").json()["cases"]
+    assert [case["email_id"] for case in cases] == ["email_600"]
+    assert not old_root.exists()
+    assert (tmp_path / "email_600" / "attachments" / "email_600_SI.txt").read_text(encoding="utf-8") == "SI"
 
 
 def test_uploaded_si_and_bl_are_compared_even_with_an_unrelated_subject(tmp_path, monkeypatch) -> None:

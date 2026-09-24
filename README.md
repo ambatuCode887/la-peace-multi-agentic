@@ -62,6 +62,22 @@ npm run dev
 
 Open the Vite URL, normally `http://localhost:5173`. The frontend uses `/api` locally; set `VITE_API_BASE_URL` when connecting it to another backend.
 
+### Local-only email demo with Mailpit
+
+For a fully local demo without CloudMailin or Cloudflare, run Mailpit:
+
+```powershell
+docker run --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Open the Mailpit inbox at `http://localhost:8025`. Send test messages through SMTP at `127.0.0.1:1025`; the application polls Mailpit's API and imports new messages automatically. The backend uses `MAILPIT_URL=http://127.0.0.1:8025` by default.
+
+Example local test message:
+
+```powershell
+python -c "import smtplib; from email.message import EmailMessage; m=EmailMessage(); m['From']='demo@example.com'; m['To']='inbox@example.com'; m['Subject']='Live inbox test'; m.set_content('This message was captured by Mailpit.'); s=smtplib.SMTP('127.0.0.1',1025); s.send_message(m); s.quit()"
+```
+
 ### Production deployment
 
 1. **Prepare the dataset:** place the supplied challenge data in the repository as `data_v2/inbox/*.json` and `data_v2/attachments/*` before building the image. The Dockerfile copies this directory to `/app/data_v2`; the current repository includes only the expected empty directories because the challenge dataset is not committed.

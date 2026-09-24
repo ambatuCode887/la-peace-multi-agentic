@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import mimetypes
 import os
 import re
@@ -12,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import httpx
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from .exports import render_export
@@ -84,6 +86,73 @@ def create_app(
             "page_size": page_size,
             "has_more": len(cases) == page_size,
         }
+
+    @app.post("/inbox/mailpit/sync")
+    async def sync_mailpit(background_tasks: BackgroundTasks) -> dict[str, Any]:
+        base_url = env("MAILPIT_URL", "http://127.0.0.1:8025").rstrip("/")
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.get(f"{base_url}/api/v1/messages", params={"limit": 50})
+                response.raise_for_status()
+                summaries = response.json().get("messages", [])
+                imported = 0
+                for summary in summaries:
+                    message_id = str(summary.get("ID") or summary.get("id") or "")
+                    if not message_id:
+                        continue
+                    detail_response = await client.get(f"{base_url}/api/v1/message/{message_id}")
+                    detail_response.raise_for_status()
+                    message = detail_response.json()
+                    email_id = _mailpit_email_id(message_id, message)
+                    if store.get_case(email_id) is not None:
+                        continue
+                    hashed_id = f"mailpit_{hashlib.sha256(message_id.encode()).hexdigest()[:24]}"
+                    if hashed_id != email_id and _rename_mailpit_case(
+                        root, store, hashed_id, email_id, message_id
+                    ):
+                        continue
+                    attachment_data: list[tuple[str, bytes]] = []
+                    for attachment in message.get("Attachments", []):
+                        part_id = str(attachment.get("PartID") or "")
+                        filename = str(attachment.get("FileName") or f"attachment_{part_id}")
+                        if not part_id:
+                            continue
+                        part_response = await client.get(
+                            f"{base_url}/api/v1/message/{message_id}/part/{part_id}"
+                        )
+                        part_response.raise_for_status()
+                        attachment_data.append((filename, part_response.content))
+                    dataset_root = _save_mailpit_message(root, email_id, message, attachment_data)
+                    sender = _mailpit_address(message.get("From"))
+                    subject = str(message.get("Subject") or "(No subject)")
+                    body = str(message.get("Text") or message.get("text") or "")
+                    placeholder = {
+                        "email_id": email_id,
+                        "sender": sender,
+                        "subject": subject,
+                        "body": body,
+                        "attachments": [
+                            f"attachments/{path.name}"
+                            for path in (dataset_root / "attachments").glob("*")
+                        ],
+                        "category": "UNPROCESSED",
+                        "status": "UNPROCESSED",
+                        "review_reason": "processing",
+                        "source": "mailpit",
+                        "mailpit_id": message_id,
+                    }
+                    store.save_report(placeholder)
+                    background_tasks.add_task(
+                        _process_received_case,
+                        store,
+                        dataset_root,
+                        email_id,
+                        env("MAILPIT_INCLUDE_AI", "false").lower() == "true",
+                    )
+                    imported += 1
+        except (httpx.HTTPError, ValueError) as error:
+            raise HTTPException(status_code=502, detail=f"Could not read Mailpit: {error}") from error
+        return {"ok": True, "imported": imported}
 
     @app.get("/cases/{email_id}")
     def case_detail(email_id: str) -> dict[str, Any]:
@@ -648,6 +717,133 @@ def _save_upload(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"
     )
     return dataset_root
+
+
+def _mailpit_address(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("Address") or value.get("address") or value.get("Name") or "")
+    return str(value or "")
+
+
+def _mailpit_email_id(message_id: str, message: dict[str, Any]) -> str:
+    for attachment in message.get("Attachments", []):
+        filename = str(attachment.get("FileName") or "")
+        match = re.match(r"^(email_\d+)(?:_|\.)", filename, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return f"mailpit_{hashlib.sha256(message_id.encode()).hexdigest()[:24]}"
+
+
+def _rename_mailpit_case(
+    root: Path,
+    store: CaseStore,
+    old_id: str,
+    new_id: str,
+    message_id: str,
+) -> bool:
+    report = store.get_case(old_id)
+    if report is None:
+        return False
+
+    old_root = root / _safe_id(old_id)
+    new_root = root / _safe_id(new_id)
+    if new_root.exists():
+        return False
+
+    inbox_path = old_root / "inbox" / f"{old_id}.json"
+    inbox_record: dict[str, Any] = {}
+    if inbox_path.is_file():
+        inbox_record = json.loads(inbox_path.read_text(encoding="utf-8"))
+    if inbox_record.get("mailpit_id") != message_id:
+        return False
+
+    if isinstance(store, MongoCaseStore):
+        for attachment in report.get("attachments", []):
+            name = Path(str(attachment)).name
+            stored = store.get_attachment(old_id, name)
+            if stored is not None:
+                content, content_type = stored
+                store.save_attachment(new_id, name, content, content_type)
+
+    if old_root.is_dir():
+        old_root.rename(new_root)
+        inbox_path = new_root / "inbox" / f"{old_id}.json"
+        if inbox_path.is_file():
+            inbox_record["email_id"] = new_id
+            (inbox_path.parent / f"{new_id}.json").write_text(
+                json.dumps(inbox_record, indent=2) + "\n", encoding="utf-8"
+            )
+            inbox_path.unlink()
+
+    report["email_id"] = new_id
+    store.save_report(report)
+    if isinstance(store, MongoCaseStore):
+        store.delete_case(old_id)
+    return True
+
+
+def _save_mailpit_message(
+    root: Path,
+    email_id: str,
+    message: dict[str, Any],
+    attachments: list[tuple[str, bytes]] | None = None,
+) -> Path:
+    dataset_root = root / _safe_id(email_id)
+    inbox_dir = dataset_root / "inbox"
+    attachments_dir = dataset_root / "attachments"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    attachments_dir.mkdir(parents=True, exist_ok=True)
+    for filename, content in attachments or []:
+        (attachments_dir / _safe_filename(filename)).write_bytes(content)
+    record = {
+        "email_id": email_id,
+        "from": _mailpit_address(message.get("From")),
+        "subject": str(message.get("Subject") or "(No subject)"),
+        "body": str(message.get("Text") or message.get("text") or ""),
+        "attachments": [
+            f"attachments/{path.name}" for path in attachments_dir.glob("*")
+        ],
+        "source": "mailpit",
+        "mailpit_id": message.get("ID") or message.get("id"),
+    }
+    (inbox_dir / f"{email_id}.json").write_text(
+        json.dumps(record, indent=2) + "\n", encoding="utf-8"
+    )
+    return dataset_root
+
+
+def _process_received_case(
+    store: CaseStore,
+    dataset_root: Path,
+    email_id: str,
+    include_ai: bool,
+) -> None:
+    try:
+        report = inspect_shipping_email(email_id, str(dataset_root))
+        report["source"] = "mailpit"
+        if include_ai:
+            try:
+                report["ai_analysis"] = analyze_shipping_case(report)
+            except AIUnavailable as error:
+                report["ai_analysis"] = {"available": False, "reason": str(error)}
+        (dataset_root / "report.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
+        store.save_report(report)
+    except Exception as error:
+        failure = _read_json(dataset_root / "inbox" / f"{email_id}.json", {})
+        failure.update({
+            "email_id": email_id,
+            "category": "UNPROCESSED",
+            "status": "UNPROCESSED",
+            "review_reason": "processing_failed",
+            "error": str(error),
+            "source": "mailpit",
+        })
+        (dataset_root / "report.json").write_text(
+            json.dumps(failure, indent=2) + "\n", encoding="utf-8"
+        )
+        store.save_report(failure)
 
 
 # Every review reason gets a knowledge citation. Matches and non-comparison emails do not:

@@ -78,6 +78,7 @@ export function App() {
     setQueueLoading(true);
     setQueueError(null);
     try {
+      await api.syncMailpit().catch(() => undefined);
       const result = await api.getCases(1);
       const summaries = result.cases;
       setCasePage(1);
@@ -135,6 +136,14 @@ export function App() {
       else setQueueLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    if (!backendConnected) return;
+    const timer = window.setInterval(() => {
+      void refreshCases();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [backendConnected]);
 
   // Fetch live detail report and manager review when selected case changes
   useEffect(() => {
@@ -336,11 +345,6 @@ export function App() {
                 {currentCase && <EmailMessage currentCase={currentCase} />}
 
                 {/* Side-by-Side Blueprint Diff Comparator */}
-                {queueLoading && (
-                  <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-                    Loading live backend inbox...
-                  </div>
-                )}
                 {queueError && (
                   <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
                     {queueError}

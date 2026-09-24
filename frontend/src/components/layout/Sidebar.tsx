@@ -94,9 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setScanNotice(null);
     const start = Date.now();
     try {
-      if (onRefreshInbox) {
-        await onRefreshInbox();
-      }
+      await onRefreshInbox();
       const elapsed = Date.now() - start;
       if (elapsed < 1200) {
         await new Promise((resolve) => setTimeout(resolve, 1200 - elapsed));
