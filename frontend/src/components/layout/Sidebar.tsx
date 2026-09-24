@@ -11,9 +11,8 @@ import {
   AlertCircle,
   HelpCircle,
   Ship,
-  Filter,
-  ChevronDown,
-  Layers,
+  Inbox,
+  Clock,
   RotateCcw,
   RefreshCw,
   Check,
@@ -24,6 +23,9 @@ import {
   ShieldAlert,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
   X,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
@@ -40,7 +42,7 @@ interface SidebarProps {
   onRefreshInbox?: () => Promise<void> | void;
   onLoadMore?: () => Promise<void> | void;
   hasMoreCases?: boolean;
-  /** When true, the inbox shrinks to a slim rail so the case gets the full width. */
+  /** When true, the entire inbox shrinks to a slim rail so the case gets the full width. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   mobileOpen?: boolean;
@@ -65,9 +67,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const [loadingMore, setLoadingMore] = useState(false);
-  const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
     "success",
@@ -115,35 +116,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const typeDropdownRef = useRef<HTMLDivElement>(null);
-  const statusDropdownRef = useRef<HTMLDivElement>(null);
-
-  const safeAll = allCases && allCases.length > 0 ? allCases : cases;
-
-  // Verification status only applies to BL Verification or when viewing All
-  const isStatusApplicable =
-    categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
-
-  // Close dropdowns on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        typeDropdownRef.current &&
-        !typeDropdownRef.current.contains(event.target as Node)
-      ) {
-        setTypeDropdownOpen(false);
-      }
-      if (
-        statusDropdownRef.current &&
-        !statusDropdownRef.current.contains(event.target as Node)
-      ) {
-        setStatusDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   useEffect(() => {
     return () => {
       if (scanNoticeTimeoutRef.current !== null) {
@@ -152,24 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, []);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setTypeDropdownOpen(false);
-        setStatusDropdownOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (collapsed) {
-      setTypeDropdownOpen(false);
-      setStatusDropdownOpen(false);
-    }
-  }, [collapsed]);
+  const safeAll = allCases && allCases.length > 0 ? allCases : cases;
 
   // Category counts across total dataset
   const blCount = safeAll.filter((c) => c.category === "BL_COMPARISON").length;
@@ -180,6 +135,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const invCount = safeAll.filter((c) => c.category === "INVOICE_QUERY").length;
   const genCount = safeAll.filter((c) => c.category === "GENERAL").length;
   const spamCount = safeAll.filter((c) => c.category === "SPAM").length;
+
+  // Verification status only applies to BL Verification or when viewing All
+  const isStatusApplicable =
+    categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
 
   // Status counts relative to current scope
   const casesInScope =
@@ -195,22 +154,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
     (c) => c.status === "NEEDS_REVIEW",
   ).length;
 
-  // Category options list
-  const categoryOptions: Array<{
+  // Category options list (Outlook / Gmail Label Hierarchy)
+  const categoryFolders: Array<{
     value: EmailCategory | "ALL";
     label: string;
     shortLabel: string;
     count: number;
-    icon: typeof Layers;
+    icon: typeof Inbox;
     color: string;
+    activeBg: string;
+    activeText: string;
   }> = [
     {
       value: "ALL",
-      label: "All Email Types",
-      shortLabel: "All Types",
+      label: "All Inbound",
+      shortLabel: "All",
       count: safeAll.length,
-      icon: Layers,
-      color: "text-[#345ec4]",
+      icon: Inbox,
+      color: "text-[#345ec4] dark:text-[#5a82e2]",
+      activeBg: "bg-[#eef3fc] dark:bg-[#091f52]",
+      activeText: "text-[#1a3d8e] dark:text-white",
     },
     {
       value: "BL_COMPARISON",
@@ -218,23 +181,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: "BL Verify",
       count: blCount,
       icon: FileText,
-      color: "text-[#345ec4]",
+      color: "text-blue-600 dark:text-blue-400",
+      activeBg: "bg-blue-50 dark:bg-blue-950/60",
+      activeText: "text-blue-900 dark:text-blue-200",
     },
     {
       value: "DOCUMENT_CHASE",
       label: "Send Draft BL",
-      shortLabel: "Send Draft BL",
+      shortLabel: "Chasers",
       count: chaseCount,
-      icon: HelpCircle,
-      color: "text-violet-600",
+      icon: Clock,
+      color: "text-violet-600 dark:text-violet-400",
+      activeBg: "bg-violet-50 dark:bg-violet-950/60",
+      activeText: "text-violet-900 dark:text-violet-200",
     },
     {
       value: "SI_REQUEST",
       label: "SI Requests",
-      shortLabel: "SI Requests",
+      shortLabel: "SI Inbound",
       count: siCount,
       icon: FileCheck,
-      color: "text-cyan-600",
+      color: "text-cyan-600 dark:text-cyan-400",
+      activeBg: "bg-cyan-50 dark:bg-cyan-950/60",
+      activeText: "text-cyan-900 dark:text-cyan-200",
     },
     {
       value: "INVOICE_QUERY",
@@ -242,7 +211,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: "Invoices",
       count: invCount,
       icon: Receipt,
-      color: "text-indigo-600",
+      color: "text-indigo-600 dark:text-indigo-400",
+      activeBg: "bg-indigo-50 dark:bg-indigo-950/60",
+      activeText: "text-indigo-900 dark:text-indigo-200",
     },
     {
       value: "GENERAL",
@@ -250,65 +221,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: "General",
       count: genCount,
       icon: Mail,
-      color: "text-slate-600",
+      color: "text-slate-600 dark:text-slate-400",
+      activeBg: "bg-slate-100 dark:bg-[#081a44]",
+      activeText: "text-slate-900 dark:text-white",
     },
     {
       value: "SPAM",
-      label: "Spam & Quarantined",
+      label: "Quarantined Spam",
       shortLabel: "Spam",
       count: spamCount,
       icon: ShieldAlert,
-      color: "text-rose-600",
+      color: "text-rose-600 dark:text-rose-400",
+      activeBg: "bg-rose-50 dark:bg-rose-950/60",
+      activeText: "text-rose-900 dark:text-rose-200",
     },
   ];
 
-  // Status options list (when active)
+  // Segmented status options
   const statusOptions: Array<{
     value: VerificationStatus | "ALL";
     label: string;
+    shortLabel: string;
     count: number;
-    color: string;
+    dotColor: string;
     badgeBg: string;
   }> = [
     {
       value: "ALL",
-      label: "All Statuses",
+      label: "All",
+      shortLabel: "All",
       count: casesInScope.length,
-      color: "bg-slate-400",
-      badgeBg:
-        "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+      dotColor: "bg-slate-400",
+      badgeBg: "text-slate-700 dark:text-slate-300",
     },
     {
       value: "PASS",
       label: "OK",
+      shortLabel: "OK",
       count: cleanCount,
-      color: "bg-emerald-500",
-      badgeBg:
-        "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300",
+      dotColor: "bg-emerald-500",
+      badgeBg: "text-emerald-700 dark:text-emerald-400",
     },
     {
       value: "MISMATCH",
       label: "Mismatch",
+      shortLabel: "Mismatch",
       count: discrepancyCount,
-      color: "bg-rose-500",
-      badgeBg:
-        "bg-rose-100 dark:bg-rose-950/80 text-rose-800 dark:text-rose-300",
+      dotColor: "bg-rose-500",
+      badgeBg: "text-rose-700 dark:text-rose-400",
     },
     {
       value: "NEEDS_REVIEW",
       label: "Needs Review",
+      shortLabel: "Review",
       count: reviewCount,
-      color: "bg-amber-500",
-      badgeBg:
-        "bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300",
+      dotColor: "bg-amber-500",
+      badgeBg: "text-amber-700 dark:text-amber-400",
     },
   ];
 
-  const currentCategoryObj =
-    categoryOptions.find((o) => o.value === categoryFilter) ||
-    categoryOptions[0];
-  const currentStatusObj =
-    statusOptions.find((o) => o.value === statusFilter) || statusOptions[0];
+  const currentFolder =
+    categoryFolders.find((f) => f.value === categoryFilter) || categoryFolders[0];
 
   const getCategoryBadge = (category: EmailCategory) => {
     switch (category) {
@@ -352,7 +325,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const getStatusBadge = (c: ShippingCase) => {
-    // If not BL Verification, status is just default (verification does not apply)
     if (c.category !== "BL_COMPARISON") {
       return (
         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-[#0a1e4d]/50 dark:text-slate-400 border border-slate-200/50 dark:border-[#1a3d8e]/40">
@@ -383,7 +355,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Needs Review</span>
           </span>
         );
-      case "INQUIRY":
       default:
         return (
           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-[#0a1e4d]/50 dark:text-slate-400 border border-slate-200/50 dark:border-[#1a3d8e]/40">
@@ -430,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Collapsed: a slim rail with just the way back on desktop.
+  // Entire inbox collapsed to a slim 48px rail
   if (collapsed && !mobileOpen) {
     return (
       <aside className="w-12 shrink-0 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 hidden md:flex flex-col items-center gap-3 py-3 h-[calc(100dvh-4rem)] transition-colors select-none">
@@ -466,432 +437,450 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col shadow-2xl md:shadow-xs transition-all select-none ${
+        className={`border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col md:flex-row shadow-2xl md:shadow-xs transition-all select-none ${
           mobileOpen
-            ? "fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs sm:max-w-sm h-dvh flex"
-            : "hidden md:flex md:h-[calc(100dvh-4rem)] md:w-84"
+            ? "fixed inset-y-0 left-0 z-50 w-[92vw] max-w-sm sm:max-w-md h-dvh flex"
+            : "hidden md:flex md:h-[calc(100dvh-4rem)]"
         }`}
       >
-        {/* Queue Header with Two Clean Dropdown Selectors */}
-        <div className="p-3.5 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2.5">
-          {/* Title Bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {onCloseMobile && (
-                <button
-                  type="button"
-                  onClick={onCloseMobile}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
-                  title="Close inbox"
-                  aria-label="Close inbox"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-              <Filter className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
-                Inbox
-              </h2>
+        {/* ======================================================== */}
+        {/* PANE 1: GMAIL / OUTLOOK FOLDER & LABEL RAIL               */}
+        {/* ======================================================== */}
+        <div
+          className={`border-r border-slate-200/80 dark:border-[#1a3d8e]/60 bg-slate-50/70 dark:bg-[#030d24] flex flex-col shrink-0 transition-all duration-200 ${
+            mobileOpen
+              ? "p-2.5 border-b md:border-b-0"
+              : railCollapsed
+                ? "w-14 items-center py-3.5"
+                : "w-48 py-3"
+          }`}
+        >
+          {/* Rail Header */}
+          <div
+            className={`flex items-center justify-between pb-2 mb-1 px-2.5 ${
+              railCollapsed && !mobileOpen ? "justify-center px-0 mb-3" : ""
+            }`}
+          >
+            {(!railCollapsed || mobileOpen) && (
+              <div className="flex items-center space-x-1.5">
+                <Inbox className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Folders
+                </span>
+              </div>
+            )}
+            {!mobileOpen && (
               <button
                 type="button"
-                id="sidebar-refresh-inbox"
-                data-testid="sidebar-refresh-inbox"
-                onClick={handleRefreshInbox}
-                disabled={isRefreshing || !onRefreshInbox}
-                aria-label="Scan and refresh live inbox"
-                title="Scan and refresh live inbox"
-                className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
+                onClick={() => setRailCollapsed(!railCollapsed)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                title={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
+                aria-label={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
               >
-                <RefreshCw
-                  className={`w-3.5 h-3.5 ${
-                    isRefreshing
-                      ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
-                      : ""
-                  }`}
-                />
+                {railCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
               </button>
-              {isRefreshing && (
-                <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse">
-                  Scanning...
-                </span>
-              )}
-              {!isRefreshing && scanNotice && (
-                <span
-                  role="status"
-                  aria-live="polite"
-                  className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
-                >
-                  {scanNoticeTone === "success" ? (
-                    <Check className="w-3 h-3" />
-                  ) : (
-                    <AlertTriangle className="w-3 h-3" />
-                  )}{" "}
-                  {scanNotice}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center space-x-1.5">
-              {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
-                <button
-                  onClick={() => {
-                    onCategoryFilterChange("ALL");
-                    onStatusFilterChange("ALL");
-                  }}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
-                  title="Reset all filters"
-                  data-testid="reset-filters"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
-              )}
-              <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-semibold border border-[#345ec4]/30">
-                {cases.length} of {safeAll.length}
-              </span>
-              {onToggleCollapsed && (
-                <button
-                  type="button"
-                  onClick={onToggleCollapsed}
-                  className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-                  title="Hide inbox"
-                  aria-label="Hide inbox"
-                  data-testid="collapse-inbox"
-                >
-                  <PanelLeftClose className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* The two filters sit side by side to save vertical space for the inbox list */}
-          <div className="grid grid-cols-2 gap-2">
-            {/* 1. Email Type Dropdown Button Selector */}
-            <div className="relative min-w-0" ref={typeDropdownRef}>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-                <span>Email Type</span>
-                <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
-                  {safeAll.length} total
-                </span>
-              </label>
+          {/* Folder Buttons List */}
+          <nav
+            aria-label="Email folders and labels"
+            className={`flex ${
+              mobileOpen
+                ? "flex-row overflow-x-auto space-x-1.5 pb-1 no-scrollbar"
+                : railCollapsed
+                  ? "flex-col space-y-2.5 px-1 pt-2 overflow-y-auto"
+                  : "flex-col space-y-1 px-1.5 overflow-y-auto"
+            }`}
+          >
+            {categoryFolders.map((folder) => {
+              const isSelected = categoryFilter === folder.value;
+              const Icon = folder.icon;
 
-              <button
-                id="category-dropdown-btn"
-                data-testid="category-dropdown-btn"
-                onClick={() => {
-                  setTypeDropdownOpen(!typeDropdownOpen);
-                  setStatusDropdownOpen(false);
-                }}
-                className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                  typeDropdownOpen
-                    ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
-                    : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
-                }`}
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <currentCategoryObj.icon
-                    className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
-                  />
-                  <span className="truncate">
-                    {currentCategoryObj.shortLabel}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                      typeDropdownOpen ? "rotate-180" : ""
+              // Collapsed Icon-Only Mode on Desktop
+              if (railCollapsed && !mobileOpen) {
+                return (
+                  <button
+                    key={folder.value}
+                    type="button"
+                    data-testid={`category-label-${folder.value}`}
+                    data-category={folder.value}
+                    onClick={() => onCategoryFilterChange(folder.value)}
+                    title={`${folder.label} (${folder.count})`}
+                    className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                      isSelected
+                        ? `${folder.activeBg} ${folder.color} ring-2 ring-[#345ec4]/30 shadow-xs font-bold`
+                        : "text-slate-500 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"
                     }`}
-                  />
-                </div>
-              </button>
+                  >
+                    <Icon className="w-4 h-4" />
+                    {folder.count > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-[#1a3d8e] dark:bg-[#5a82e2] text-white text-[9px] font-bold flex items-center justify-center leading-none shadow-xs pointer-events-none">
+                        {folder.count > 99 ? "99+" : folder.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              }
 
-              {/* Email Type Dropdown Menu */}
-              {typeDropdownOpen && (
-                <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                  {categoryOptions.map((opt) => {
-                    const isSelected = categoryFilter === opt.value;
-                    const IconComponent = opt.icon;
-                    return (
-                      <button
-                        key={opt.value}
-                        data-testid={`category-option-${opt.value}`}
-                        onClick={() => {
-                          onCategoryFilterChange(opt.value);
-                          setTypeDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          isSelected
-                            ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <IconComponent
-                            className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
-                          />
-                          <span className="truncate">{opt.label}</span>
-                        </div>
-                        <div className="flex items-center space-x-2 shrink-0 ml-2">
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
-                            {opt.count}
-                          </span>
-                          {isSelected && (
-                            <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* 2. Verification Status Dropdown Button Selector */}
-            <div className="relative min-w-0" ref={statusDropdownRef}>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-                <span>Status</span>
-                {!isStatusApplicable && (
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
-                    BL Verify only
-                  </span>
-                )}
-              </label>
-
-              {isStatusApplicable ? (
+              // Full Expanded Label Item (Desktop or Mobile)
+              return (
                 <button
-                  id="status-dropdown-btn"
-                  data-testid="status-dropdown-btn"
-                  onClick={() => {
-                    setStatusDropdownOpen(!statusDropdownOpen);
-                    setTypeDropdownOpen(false);
-                  }}
-                  className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                    statusDropdownOpen
-                      ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
-                      : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
+                  key={folder.value}
+                  type="button"
+                  data-testid={`category-label-${folder.value}`}
+                  data-category={folder.value}
+                  onClick={() => onCategoryFilterChange(folder.value)}
+                  className={`group w-full flex items-center justify-between text-left transition-all cursor-pointer rounded-xl ${
+                    mobileOpen
+                      ? "px-2.5 py-1.5 shrink-0 text-xs space-x-1.5"
+                      : "px-2.5 py-2 text-xs"
+                  } ${
+                    isSelected
+                      ? `${folder.activeBg} ${folder.activeText} font-bold shadow-xs border-l-3 border-l-[#345ec4] dark:border-l-[#5a82e2]`
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-[#091f52]/40 font-medium"
                   }`}
                 >
                   <div className="flex items-center space-x-2 truncate">
-                    <span
-                      className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
-                    />
-                    <span className="truncate">{currentStatusObj.label}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                        statusDropdownOpen ? "rotate-180" : ""
+                    <Icon
+                      className={`w-3.5 h-3.5 shrink-0 ${
+                        isSelected
+                          ? folder.color
+                          : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200"
                       }`}
                     />
+                    <span className="truncate">
+                      {mobileOpen ? folder.shortLabel : folder.label}
+                    </span>
                   </div>
-                </button>
-              ) : (
-                // Disabled state when category is non-BL (status does not apply)
-                <button
-                  id="status-dropdown-btn"
-                  disabled
-                  className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                  title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
-                >
-                  <div className="flex items-center space-x-2 truncate">
-                    <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                    <span className="truncate">Default</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
-                    N/A
+
+                  <span
+                    className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded-md font-semibold transition-colors shrink-0 ${
+                      isSelected
+                        ? "bg-[#345ec4] text-white dark:bg-[#5a82e2] dark:text-white"
+                        : "bg-slate-200/80 text-slate-500 dark:bg-[#06183e] dark:text-slate-400 group-hover:bg-slate-300 dark:group-hover:bg-[#0c2966]"
+                    }`}
+                  >
+                    {folder.count}
                   </span>
                 </button>
-              )}
+              );
+            })}
+          </nav>
+        </div>
 
-              {/* Status Dropdown Menu (only renders when applicable) */}
-              {isStatusApplicable && statusDropdownOpen && (
-                <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+        {/* ======================================================== */}
+        {/* PANE 2: MESSAGE LIST & VERIFICATION FILTERING            */}
+        {/* ======================================================== */}
+        <div className="flex-1 flex flex-col min-w-0 md:w-80 lg:w-84 h-full bg-white dark:bg-[#06163a]">
+          {/* Message List Header */}
+          <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2 shrink-0">
+            {/* Folder Title Bar with Controls */}
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex items-center space-x-1.5 min-w-0">
+                {onCloseMobile && (
+                  <button
+                    type="button"
+                    onClick={onCloseMobile}
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
+                    title="Close inbox"
+                    aria-label="Close inbox"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+                <currentFolder.icon
+                  className={`w-4 h-4 ${currentFolder.color} shrink-0`}
+                />
+                <h2
+                  className="text-sm font-bold text-slate-900 dark:text-white truncate"
+                  title={currentFolder.label}
+                >
+                  <span className="hidden xl:inline">{currentFolder.label}</span>
+                  <span className="xl:hidden">{currentFolder.shortLabel}</span>
+                </h2>
+                <button
+                  type="button"
+                  id="sidebar-refresh-inbox"
+                  data-testid="sidebar-refresh-inbox"
+                  onClick={handleRefreshInbox}
+                  disabled={isRefreshing || !onRefreshInbox}
+                  aria-label="Scan and refresh live inbox"
+                  title="Scan and refresh live inbox"
+                  className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 ${
+                      isRefreshing
+                        ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
+                        : ""
+                    }`}
+                  />
+                </button>
+                {isRefreshing && (
+                  <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse hidden sm:inline">
+                    Syncing...
+                  </span>
+                )}
+                {!isRefreshing && scanNotice && (
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${
+                      scanNoticeTone === "success"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    }`}
+                  >
+                    {scanNoticeTone === "success" ? (
+                      <Check className="w-3 h-3" />
+                    ) : (
+                      <AlertTriangle className="w-3 h-3" />
+                    )}
+                    {scanNotice}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-1 shrink-0">
+                {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
+                  <button
+                    onClick={() => {
+                      onCategoryFilterChange("ALL");
+                      onStatusFilterChange("ALL");
+                    }}
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
+                    title="Reset all filters"
+                    data-testid="reset-filters"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span className="hidden sm:inline">Reset</span>
+                  </button>
+                )}
+                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-bold border border-[#345ec4]/30">
+                  {cases.length} of {safeAll.length}
+                </span>
+                {onToggleCollapsed && (
+                  <button
+                    type="button"
+                    onClick={onToggleCollapsed}
+                    className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                    title="Hide inbox sidebar"
+                    aria-label="Hide inbox sidebar"
+                    data-testid="collapse-inbox"
+                  >
+                    <PanelLeftClose className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Segmented Status Filter Bar (All, OK, Mismatch, Review) */}
+            {isStatusApplicable ? (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <span>Status Filter</span>
+                  <span className="text-[10px] font-normal lowercase italic text-slate-400">
+                    BL Ground-Truth
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#040e28] border border-slate-200/80 dark:border-[#1a3d8e]/60">
                   {statusOptions.map((opt) => {
                     const isSelected = statusFilter === opt.value;
                     return (
                       <button
                         key={opt.value}
-                        data-testid={`status-option-${opt.value}`}
-                        onClick={() => {
-                          onStatusFilterChange(opt.value);
-                          setStatusDropdownOpen(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                        type="button"
+                        data-testid={`status-pill-${opt.value}`}
+                        onClick={() => onStatusFilterChange(opt.value)}
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1 px-1 rounded-lg transition-all cursor-pointer ${
                           isSelected
-                            ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+                            ? "bg-white dark:bg-[#091f52] text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200/60 dark:border-[#1a3d8e]"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-[#091f52]/40 font-medium"
                         }`}
+                        title={`Filter by ${opt.label} status (${opt.count} cases)`}
                       >
-                        <div className="flex items-center space-x-2 truncate">
+                        <div className="flex items-center space-x-1">
                           <span
-                            className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
+                            className={`w-1.5 h-1.5 rounded-full ${opt.dotColor} shrink-0`}
                           />
-                          <span className="truncate">{opt.label}</span>
-                        </div>
-                        <div className="flex items-center space-x-2 shrink-0 ml-2">
-                          <span
-                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
-                          >
-                            {opt.count}
+                          <span className="text-[11px] leading-tight">
+                            {opt.shortLabel}
                           </span>
-                          {isSelected && (
-                            <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                          )}
                         </div>
+                        <span className="text-[10px] opacity-75 font-mono">
+                          {opt.count}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#040e28]/60 border border-slate-200/60 dark:border-[#1a3d8e]/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                  <span className="font-medium">Default</span>
+                </div>
+                <span className="text-[10px] font-mono uppercase bg-slate-200/60 dark:bg-[#091f52] px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                  N/A
+                </span>
+              </div>
+            )}
+
+            {/* Batch Export Bar */}
+            <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  {selectedOkIds.length} OK selected
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
+                    className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7] cursor-pointer"
+                  >
+                    Select all OK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedExportIds([])}
+                    className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400 cursor-pointer"
+                  >
+                    Clear selection
+                  </button>
+                </div>
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <select
+                  value={exportFormat}
+                  onChange={(event) =>
+                    setExportFormat(event.target.value as ExportFormat)
+                  }
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200 cursor-pointer"
+                  aria-label="Batch export format"
+                >
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                  <option value="pdf">PDF</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void exportSelected()}
+                  disabled={selectedOkIds.length === 0 || exporting}
+                  className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  {exporting ? "Exporting..." : "Export BL Draft"}
+                </button>
+              </div>
+              {exportNotice && (
+                <p
+                  className="mt-1 text-[10px] text-slate-500 dark:text-slate-400"
+                  role="status"
+                >
+                  {exportNotice}
+                </p>
               )}
             </div>
           </div>
-          <div className="border-t border-slate-100 pt-2.5 dark:border-[#1a3d8e]/40">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                {selectedOkIds.length} OK selected
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
-                  className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7]"
-                >
-                  Select all OK
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedExportIds([])}
-                  className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400"
-                >
-                  Clear selection
-                </button>
+
+          {/* Scrollable Cases List */}
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+            {visibleCases.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                No cases match the selected filters.
               </div>
-            </div>
-            <div className="mt-2 flex items-center gap-1.5">
-              <select
-                value={exportFormat}
-                onChange={(event) =>
-                  setExportFormat(event.target.value as ExportFormat)
-                }
-                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200"
-                aria-label="Batch export format"
-              >
-                <option value="csv">CSV</option>
-                <option value="json">JSON</option>
-                <option value="pdf">PDF</option>
-              </select>
-              <button
-                type="button"
-                onClick={() => void exportSelected()}
-                disabled={selectedOkIds.length === 0 || exporting}
-                className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {exporting ? "Exporting..." : "Export BL Draft"}
-              </button>
-            </div>
-            {exportNotice && (
-              <p
-                className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400"
-                role="status"
-              >
-                {exportNotice}
-              </p>
+            ) : (
+              visibleCases.map((c) => {
+                const isSelected = c.id === selectedCaseId;
+                return (
+                  <button
+                    key={c.id}
+                    data-case-id={c.id}
+                    onClick={() => {
+                      onSelectCase(c.id);
+                      if (onCloseMobile) onCloseMobile();
+                    }}
+                    className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
+                      isSelected
+                        ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
+                        : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedOkIds.includes(c.id)}
+                          disabled={
+                            c.category !== "BL_COMPARISON" || c.status !== "PASS"
+                          }
+                          onChange={() => toggleExportSelection(c)}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Select ${c.id} for Draft BL export`}
+                          className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
+                        />
+                        <span className="text-[14px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
+                          {c.id}
+                        </span>
+                        {getCategoryBadge(c.category)}
+                      </div>
+                      <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
+                        {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
+                          ? formatMalaysiaTime(c.timestamp, "compact")
+                          : c.timestamp.split(" ")[0]}
+                      </span>
+                    </div>
+
+                    {/* Vessel / Reference line + Status Badge */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[170px]">
+                        <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                        <span className="truncate">
+                          {c.vessel !== "N/A" ? c.vessel : c.subject}
+                        </span>
+                      </div>
+                      {getStatusBadge(c)}
+                    </div>
+
+                    {/* Subject Preview */}
+                    <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
+                      {c.subject}
+                    </p>
+                  </button>
+                );
+              })
+            )}
+
+            {/* Load More Button */}
+            {hasMoreCases && (
+              <div className="p-3 text-center">
+                <button
+                  onClick={async () => {
+                    if (!onLoadMore || loadingMore) return;
+                    setLoadingMore(true);
+                    try {
+                      await onLoadMore();
+                    } finally {
+                      setLoadingMore(false);
+                    }
+                  }}
+                  disabled={loadingMore}
+                  className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
+                >
+                  <span>{loadingMore ? "Loading..." : "Load more cases"}</span>
+                  {!loadingMore && <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  Showing {cases.length} loaded cases
+                </span>
+              </div>
             )}
           </div>
-        </div>
-
-        {/* Scrollable Cases List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
-          {visibleCases.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-              No cases match the selected filters.
-            </div>
-          ) : (
-            visibleCases.map((c) => {
-              const isSelected = c.id === selectedCaseId;
-              return (
-                <button
-                  key={c.id}
-                  data-case-id={c.id}
-                  onClick={() => {
-                    onSelectCase(c.id);
-                    if (onCloseMobile) onCloseMobile();
-                  }}
-                  className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-300 dark:border-b-[#1a3d8e] ${
-                    isSelected
-                      ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
-                      : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedOkIds.includes(c.id)}
-                    disabled={
-                      c.category !== "BL_COMPARISON" || c.status !== "PASS"
-                    }
-                    onChange={() => toggleExportSelection(c)}
-                    onClick={(event) => event.stopPropagation()}
-                    aria-label={`Select ${c.id} for Draft BL export`}
-                    className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30"
-                  />
-                  {/* Header Line: ID, Category Badge, Timestamp */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <span className="text-[15px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        {c.id}
-                      </span>
-                      {getCategoryBadge(c.category)}
-                    </div>
-                    <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                      {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
-                        ? formatMalaysiaTime(c.timestamp, "compact")
-                        : c.timestamp.split(" ")[0]}
-                    </span>
-                  </div>
-
-                  {/* Vessel / Reference line + Status Badge */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
-                      <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                      <span className="truncate">
-                        {c.vessel !== "N/A" ? c.vessel : c.subject}
-                      </span>
-                    </div>
-                    {getStatusBadge(c)}
-                  </div>
-
-                  {/* Subject Preview */}
-                  <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
-                    {c.subject}
-                  </p>
-                </button>
-              );
-            })
-          )}
-
-          {/* Load More Button */}
-          {hasMoreCases && (
-            <div className="p-3 text-center">
-              <button
-                onClick={async () => {
-                  if (!onLoadMore || loadingMore) return;
-                  setLoadingMore(true);
-                  try {
-                    await onLoadMore();
-                  } finally {
-                    setLoadingMore(false);
-                  }
-                }}
-                disabled={loadingMore}
-                className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
-              >
-                <span>{loadingMore ? "Loading..." : "Load more cases"}</span>
-                {!loadingMore && <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-              <span className="text-[10px] text-slate-400 block mt-1">
-                Showing {cases.length} loaded cases
-              </span>
-            </div>
-          )}
         </div>
       </aside>
     </>

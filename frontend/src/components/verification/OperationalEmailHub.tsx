@@ -488,16 +488,16 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-bold tracking-wide uppercase text-indigo-900 dark:text-indigo-200">
-                  AI Summary & Action Triage
+                  AI Summary
                 </span>
                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/60 hidden sm:inline-block">
-                  Point-Form Triage
+                  Overview
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {aiSummaryExpanded
-                  ? "Click to collapse automated logistics triage and extracted entities"
-                  : "Click to expand automated logistics triage, entities, and recommended next steps"}
+                  ? "Click to collapse automated logistics summary and extracted entities"
+                  : "Click to expand automated logistics summary, entities, and recommended next steps"}
               </p>
             </div>
           </div>

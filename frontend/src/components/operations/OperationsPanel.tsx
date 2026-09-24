@@ -214,7 +214,7 @@ export function OperationsPanel({
               </p>
               <p className="text-[11px] font-medium text-[#345ec4] dark:text-[#8ea9f7]">
                 💡 Click <strong>"Process inbox"</strong> above to demo the live
-                mailbox scanning and triage sequence.
+                mailbox scanning and verification sequence.
               </p>
             </div>
           </div>
