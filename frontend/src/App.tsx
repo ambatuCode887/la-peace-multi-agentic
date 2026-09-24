@@ -78,7 +78,7 @@ export function App() {
     setQueueLoading(true);
     setQueueError(null);
     try {
-      await api.syncMailpit().catch(() => undefined);
+      void api.syncMailpit().catch(() => undefined);
       const result = await api.getCases(1);
       const summaries = result.cases;
       setCasePage(1);

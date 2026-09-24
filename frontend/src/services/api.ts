@@ -676,6 +676,9 @@ export function mapSummaryToShippingCase(
     pol: existing?.pol || 'N/A',
     pod: existing?.pod || 'N/A',
     fields: existing?.fields || [],
+    attachments: existing?.attachments || [],
+    promptInjectionDetected: existing?.promptInjectionDetected,
+    promptInjectionMatches: existing?.promptInjectionMatches,
     aiAnalysis: {
       summary: 'AI review summary is available after opening the case detail.',
       recommendation: 'Open the case to inspect the deterministic result.',
