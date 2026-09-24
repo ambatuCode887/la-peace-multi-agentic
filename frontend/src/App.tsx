@@ -137,14 +137,6 @@ export function App() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!backendConnected) return;
-    const timer = window.setInterval(() => {
-      void refreshCases();
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [backendConnected]);
-
   // Fetch live detail report and manager review when selected case changes
   useEffect(() => {
     if (backendConnected && selectedCaseId) {
