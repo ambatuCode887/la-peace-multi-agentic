@@ -245,6 +245,12 @@ export const api = {
     };
   },
 
+  async syncMailpit(): Promise<{ imported: number }> {
+    const res = await fetch(`${API_BASE}/inbox/mailpit/sync`, { method: 'POST' });
+    if (!res.ok) throw new Error(`Mailpit sync failed: ${res.statusText}`);
+    return res.json();
+  },
+
   async getCaseDetail(emailId: string): Promise<BackendReport> {
     const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}`);
     if (!res.ok) throw new Error(`Failed to fetch case ${emailId}: ${res.statusText}`);
