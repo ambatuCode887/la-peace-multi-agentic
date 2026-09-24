@@ -22,13 +22,14 @@ import {
   Mail,
   ShieldAlert,
   PanelLeftClose,
-  PanelLeftOpen,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   X,
   Send,
   Paperclip,
+  LayoutDashboard,
+  PenSquare,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 import { outboxService, type DispatchedEmail } from "../../services/outboxService";
@@ -45,15 +46,20 @@ interface SidebarProps {
   onRefreshInbox?: () => Promise<void> | void;
   onLoadMore?: () => Promise<void> | void;
   hasMoreCases?: boolean;
-  /** When true, the entire inbox shrinks to a slim rail so the case gets the full width. */
+  /** When true, the entire inbox message list shrinks to a slim rail so the canvas gets full width. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  railCollapsed?: boolean;
+  onToggleRail?: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
   activeMailboxFolder?: "INBOX" | "SENT";
   onMailboxFolderChange?: (folder: "INBOX" | "SENT") => void;
   selectedSentId?: string | null;
   onSelectSent?: (sentEmail: DispatchedEmail) => void;
+  activeView?: "dashboard" | "inbox";
+  onGoToDashboard?: () => void;
+  onOpenCompose?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,15 +76,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   hasMoreCases = false,
   collapsed = false,
   onToggleCollapsed,
+  railCollapsed: propRailCollapsed,
+  onToggleRail,
   mobileOpen = false,
   onCloseMobile,
   activeMailboxFolder = "INBOX",
   onMailboxFolderChange,
   selectedSentId,
   onSelectSent,
+  activeView = "dashboard",
+  onGoToDashboard,
+  onOpenCompose,
 }) => {
   const [loadingMore, setLoadingMore] = useState(false);
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [internalRailCollapsed, setInternalRailCollapsed] = useState(false);
+  const railCollapsed = propRailCollapsed !== undefined ? propRailCollapsed : internalRailCollapsed;
+  const handleToggleRail = () => {
+    if (onToggleRail) {
+      onToggleRail();
+    } else {
+      setInternalRailCollapsed((prev) => !prev);
+    }
+  };
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
   const [scanNoticeTone, setScanNoticeTone] = useState<"success" | "error">(
@@ -422,30 +441,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Entire inbox collapsed to a slim 48px rail
-  if (collapsed && !mobileOpen) {
-    return (
-      <aside className="w-12 shrink-0 border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 hidden md:flex flex-col items-center gap-3 py-3 h-[calc(100dvh-4rem)] transition-colors select-none">
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="p-2 rounded-lg text-[#345ec4] dark:text-[#8ea9f7] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-          title="Show inbox"
-          aria-label="Show inbox"
-          data-testid="expand-inbox"
-        >
-          <PanelLeftOpen className="w-5 h-5" />
-        </button>
-        <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] border border-[#345ec4]/30">
-          {cases.length}
-        </span>
-        <span className="text-xs font-bold tracking-wide text-slate-500 dark:text-slate-400 [writing-mode:vertical-rl] rotate-180">
-          Inbox
-        </span>
-      </aside>
-    );
-  }
-
   return (
     <>
       {/* Mobile Drawer Backdrop Overlay */}
@@ -458,6 +453,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
+        data-testid="sidebar-container"
         className={`border-r border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col md:flex-row shadow-2xl md:shadow-xs transition-all select-none ${
           mobileOpen
             ? "fixed inset-y-0 left-0 z-50 w-[92vw] max-w-sm sm:max-w-md h-dvh flex"
@@ -468,18 +464,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* PANE 1: GMAIL / OUTLOOK FOLDER & LABEL RAIL               */}
         {/* ======================================================== */}
         <div
+          data-testid="sidebar-rail"
           className={`border-r border-slate-200/80 dark:border-[#1a3d8e]/60 bg-slate-50/70 dark:bg-[#030d24] flex flex-col shrink-0 transition-all duration-200 ${
             mobileOpen
               ? "p-2.5 border-b md:border-b-0"
               : railCollapsed
-                ? "w-14 items-center py-3.5"
+                ? "w-16 items-center py-3"
                 : "w-48 py-3"
           }`}
         >
           {/* Rail Header */}
           <div
-            className={`flex items-center justify-between pb-2 mb-1 px-2.5 ${
-              railCollapsed && !mobileOpen ? "justify-center px-0 mb-3" : ""
+            className={`h-8 flex items-center pb-2 mb-1.5 w-full ${
+              railCollapsed && !mobileOpen
+                ? "justify-center px-0"
+                : "justify-between px-2.5"
             }`}
           >
             {(!railCollapsed || mobileOpen) && (
@@ -493,7 +492,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {!mobileOpen && (
               <button
                 type="button"
-                onClick={() => setRailCollapsed(!railCollapsed)}
+                data-testid="toggle-rail-btn"
+                onClick={handleToggleRail}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
                 title={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
                 aria-label={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
@@ -507,15 +507,92 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
+          {/* Operations Hub (Dashboard) Navigation Button */}
+          {onGoToDashboard && (
+            railCollapsed && !mobileOpen ? (
+              <div className="flex justify-center mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-dashboard-btn"
+                  onClick={onGoToDashboard}
+                  title="Operations Dashboard"
+                  className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                    activeView === "dashboard"
+                      ? "bg-[#e8effd] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] ring-2 ring-[#345ec4]/40 font-bold shadow-xs"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"
+                  }`}
+                >
+                  <LayoutDashboard className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
+                </button>
+              </div>
+            ) : (
+              <div className="px-1.5 mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-dashboard-btn"
+                  onClick={onGoToDashboard}
+                  className={`group w-full h-9 flex items-center justify-between text-left transition-all cursor-pointer rounded-xl px-2.5 text-xs ${
+                    activeView === "dashboard"
+                      ? "bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] font-bold shadow-xs border-l-3 border-l-[#345ec4]"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-[#091f52]/40 font-medium"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <LayoutDashboard className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                    <span className="truncate">Operations Hub</span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#345ec4] dark:text-[#5a82e2] bg-white/70 dark:bg-[#091f52] px-1.5 py-0.5 rounded">
+                    KPI
+                  </span>
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Divider between Operations Hub and Actions/Folders */}
+          <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+
+          {/* Quick Compose Button */}
+          {onOpenCompose && (
+            railCollapsed && !mobileOpen ? (
+              <div className="flex justify-center mb-1.5 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-compose-btn"
+                  onClick={onOpenCompose}
+                  title="Compose New Email"
+                  className="w-9 h-9 rounded-xl bg-gradient-to-r from-[#052464] to-[#345ec4] text-white flex items-center justify-center shadow-xs hover:shadow-[#345ec4]/30 cursor-pointer hover:scale-105 transition-all"
+                >
+                  <PenSquare className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="px-1.5 mb-1.5 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-compose-btn"
+                  onClick={onOpenCompose}
+                  className="w-full h-9 px-3 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white text-xs font-bold flex items-center justify-center space-x-2 shadow-xs cursor-pointer hover:scale-[1.02] transition-all"
+                >
+                  <PenSquare className="w-3.5 h-3.5" />
+                  <span>Compose Email</span>
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Divider between Actions and Inbound Folders */}
+          <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+
           {/* Folder Buttons List */}
           <nav
             aria-label="Email folders and labels"
-            className={`flex ${
+            className={`flex w-full ${
               mobileOpen
                 ? "flex-row overflow-x-auto space-x-1.5 pb-1 no-scrollbar"
                 : railCollapsed
-                  ? "flex-col space-y-2.5 px-1 pt-2 overflow-y-auto"
-                  : "flex-col space-y-1 px-1.5 overflow-y-auto"
+                  ? "flex-col space-y-2.5 px-0 py-1 overflow-y-auto items-center"
+                  : "flex-col space-y-2 px-1.5 py-1 overflow-y-auto"
             }`}
           >
             {categoryFolders.map((folder) => {
@@ -535,7 +612,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onCategoryFilterChange(folder.value);
                     }}
                     title={`${folder.label} (${folder.count})`}
-                    className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                    className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                       isSelected
                         ? `${folder.activeBg} ${folder.color} ring-2 ring-[#345ec4]/30 shadow-xs font-bold`
                         : "text-slate-500 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"
@@ -543,7 +620,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <Icon className="w-4 h-4" />
                     {folder.count > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-[#1a3d8e] dark:bg-[#5a82e2] text-white text-[9px] font-bold flex items-center justify-center leading-none shadow-xs pointer-events-none">
+                      <span className="absolute top-0.5 right-0.5 h-3.5 min-w-3.5 px-1 rounded-full bg-[#1a3d8e] dark:bg-[#5a82e2] text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-xs pointer-events-none border border-white dark:border-[#030d24]">
                         {folder.count > 99 ? "99+" : folder.count}
                       </span>
                     )}
@@ -562,10 +639,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     if (onMailboxFolderChange) onMailboxFolderChange("INBOX");
                     onCategoryFilterChange(folder.value);
                   }}
-                  className={`group w-full flex items-center justify-between text-left transition-all cursor-pointer rounded-xl ${
+                  className={`group w-full h-9 flex items-center justify-between text-left transition-all cursor-pointer rounded-xl shrink-0 ${
                     mobileOpen
-                      ? "px-2.5 py-1.5 shrink-0 text-xs space-x-1.5"
-                      : "px-2.5 py-2 text-xs"
+                      ? "px-2.5 shrink-0 text-xs space-x-1.5"
+                      : "px-2.5 text-xs"
                   } ${
                     isSelected
                       ? `${folder.activeBg} ${folder.activeText} font-bold shadow-xs border-l-3 border-l-[#345ec4] dark:border-l-[#5a82e2]`
@@ -599,7 +676,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
 
             {/* Divider between Inbound Folders and Sent Mailbox */}
-            <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+            <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
 
             {/* SENT MAIL FOLDER BUTTON */}
             {railCollapsed && !mobileOpen ? (
@@ -610,7 +687,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (onMailboxFolderChange) onMailboxFolderChange("SENT");
                 }}
                 title={`Sent Mail (${sentEmails.length})`}
-                className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                   activeMailboxFolder === "SENT"
                     ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 ring-2 ring-emerald-500/40 shadow-xs font-bold"
                     : "text-slate-500 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"
@@ -618,7 +695,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Send className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 {sentEmails.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center leading-none shadow-xs pointer-events-none">
+                  <span className="absolute top-0.5 right-0.5 h-3.5 min-w-3.5 px-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white text-[8px] font-bold flex items-center justify-center leading-none shadow-xs pointer-events-none border border-white dark:border-[#030d24]">
                     {sentEmails.length > 99 ? "99+" : sentEmails.length}
                   </span>
                 )}
@@ -630,10 +707,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => {
                   if (onMailboxFolderChange) onMailboxFolderChange("SENT");
                 }}
-                className={`group w-full flex items-center justify-between text-left transition-all cursor-pointer rounded-xl ${
+                className={`group w-full h-9 flex items-center justify-between text-left transition-all cursor-pointer rounded-xl shrink-0 ${
                   mobileOpen
-                    ? "px-2.5 py-1.5 shrink-0 text-xs space-x-1.5"
-                    : "px-2.5 py-2 text-xs"
+                    ? "px-2.5 shrink-0 text-xs space-x-1.5"
+                    : "px-2.5 text-xs"
                 } ${
                   activeMailboxFolder === "SENT"
                     ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-200 font-bold shadow-xs border-l-3 border-l-emerald-600 dark:border-l-emerald-500"
@@ -668,7 +745,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* ======================================================== */}
         {/* PANE 2: MESSAGE LIST & VERIFICATION FILTERING            */}
         {/* ======================================================== */}
-        <div className="flex-1 flex flex-col min-w-0 md:w-80 lg:w-84 h-full bg-white dark:bg-[#06163a]">
+        {!collapsed && (
+          <div className="flex-1 flex flex-col min-w-0 md:w-80 lg:w-84 h-full bg-white dark:bg-[#06163a]">
           {activeMailboxFolder === "SENT" ? (
             <>
               {/* Sent Mail Header */}
@@ -865,9 +943,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   <span>Status Filter</span>
-                  <span className="text-[10px] font-normal lowercase italic text-slate-400">
-                    BL Ground-Truth
-                  </span>
                 </div>
                 <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#040e28] border border-slate-200/80 dark:border-[#1a3d8e]/60">
                   {statusOptions.map((opt) => {
@@ -1011,9 +1086,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {getCategoryBadge(c.category)}
                       </div>
                       <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                        {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
-                          ? formatMalaysiaTime(c.timestamp, "compact")
-                          : c.timestamp.split(" ")[0]}
+                        {formatMalaysiaTime(c.timestamp, "compact")}
                       </span>
                     </div>
 
@@ -1064,7 +1137,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
             </>
           )}
-        </div>
+          </div>
+        )}
       </aside>
     </>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Sun, Moon, Inbox, Menu, X } from "lucide-react";
+import { Search, Sun, Moon, Menu, X } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 
 interface HeaderProps {
@@ -8,8 +8,8 @@ interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   backendConnected?: boolean;
-  operationsOpen?: boolean;
-  onToggleOperations?: () => void;
+  activeView?: "dashboard" | "inbox";
+  onGoToDashboard?: () => void;
   onToggleMobileInbox?: () => void;
   mobileInboxOpen?: boolean;
 }
@@ -19,8 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   searchQuery,
   onSearchChange,
-  operationsOpen = false,
-  onToggleOperations,
+  activeView = "dashboard",
+  onGoToDashboard,
   onToggleMobileInbox,
   mobileInboxOpen = false,
 }) => {
@@ -29,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur-md sticky top-0 z-30 shadow-xs dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 transition-colors">
       <div className="h-16 px-3 sm:px-6 flex items-center justify-between">
-        {/* Left Side: Mobile Menu Button + Brand Identity */}
+        {/* Left Side: Mobile Menu Button + Brand Identity Dashboard Button */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           {onToggleMobileInbox && (
             <button
@@ -50,23 +50,37 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <img
-            src={lapeaceIcon}
-            alt="La Peace SDOC"
-            className="w-7 h-7 sm:w-8 sm:h-8 object-contain drop-shadow-sm select-none"
-            style={{ imageRendering: "pixelated" }}
-          />
-          <div>
-            <div className="flex items-center">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-                La Peace{" "}
-                <span className="text-[#345ec4] dark:text-[#5a82e2]">SDOC</span>
-              </h1>
+          {/* Clickable Brand Logo & Name Navigates to Operations Dashboard */}
+          <button
+            type="button"
+            data-testid="brand-dashboard-btn"
+            onClick={onGoToDashboard}
+            className="flex items-center space-x-2 sm:space-x-3 group cursor-pointer text-left focus:outline-none"
+            title="Go to Operations Dashboard"
+          >
+            <img
+              src={lapeaceIcon}
+              alt="La Peace SDOC"
+              className="w-7 h-7 sm:w-8 sm:h-8 object-contain drop-shadow-sm select-none group-hover:scale-105 transition-transform"
+              style={{ imageRendering: "pixelated" }}
+            />
+            <div>
+              <div className="flex items-center space-x-1.5">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-[#345ec4] dark:group-hover:text-[#5a82e2] transition-colors">
+                  La Peace{" "}
+                  <span className="text-[#345ec4] dark:text-[#5a82e2]">SDOC</span>
+                </h1>
+                {activeView === "dashboard" && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30 hidden sm:inline-block">
+                    Dashboard
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
+                Multi-Agentic AI Document Verification
+              </p>
             </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
-              Multi-Agentic AI Document Verification
-            </p>
-          </div>
+          </button>
         </div>
 
         {/* Global Search Bar (Desktop) */}
@@ -94,25 +108,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Search className="w-4 h-4" />
           </button>
-
-          {/* Operations: process inbox, upload a case, retry or delete */}
-          {onToggleOperations && (
-            <button
-              id="operations-toggle"
-              data-testid="operations-toggle"
-              onClick={onToggleOperations}
-              aria-pressed={operationsOpen}
-              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
-                operationsOpen
-                  ? "bg-[#1a3d8e] border-[#1a3d8e] text-white"
-                  : "border-slate-200/80 text-slate-600 hover:bg-slate-100 dark:border-[#1a3d8e]/60 dark:text-slate-300 dark:hover:bg-[#0a1e4d]"
-              }`}
-              title="Process the inbox, upload a case, retry or delete"
-            >
-              <Inbox className="w-4 h-4" />
-              <span className="hidden sm:inline">Operations</span>
-            </button>
-          )}
 
           {/* Dark/Light Mode Toggle */}
           <button
