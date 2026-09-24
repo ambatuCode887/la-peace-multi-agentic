@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from "react";
 import type { ShippingCase } from "../../types/shipping";
 import { formatMalaysiaTime } from "../../utils/formatTime";
+import { API_BASE } from "../../services/api";
+import { AttachmentViewerModal } from "./AttachmentViewerModal";
+import type { OriginalAttachment } from "./AttachmentViewerModal";
 import {
   Sparkles,
   Clock,
@@ -53,6 +56,9 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
 }) => {
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [emailExpanded, setEmailExpanded] = useState(true);
+  const [aiSummaryExpanded, setAiSummaryExpanded] = useState(true);
+  const [selectedAttachment, setSelectedAttachment] =
+    useState<OriginalAttachment | null>(null);
 
   const textToScan = `${currentCase.subject}\n${currentCase.body || ""}`;
 
@@ -291,6 +297,26 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
     return namePart.slice(0, 2).toUpperCase();
   }, [currentCase.sender]);
 
+  // ONLY original attachments that actually exist on this case record
+  const attachments: OriginalAttachment[] = useMemo(() => {
+    if (!currentCase.attachments || currentCase.attachments.length === 0) {
+      return [];
+    }
+
+    return currentCase.attachments.map((attPath) => {
+      const filename = attPath.split("/").pop() || attPath;
+      const parts = filename.split(".");
+      const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : "txt";
+      const cleanPath = attPath.replace(/^\/+/, "");
+
+      return {
+        filename,
+        ext,
+        url: `${API_BASE}/cases/${encodeURIComponent(currentCase.id)}/attachments/${cleanPath}`,
+      };
+    });
+  }, [currentCase.id, currentCase.attachments]);
+
   return (
     <div className="space-y-4">
       {/* 1. TOP URGENCY & SLA STATUS BAR */}
@@ -325,77 +351,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
         </div>
       </div>
 
-      {/* 2. AI SUMMARY POINT-FORM CARD */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-indigo-50/70 via-blue-50/40 to-white dark:from-[#091b49]/90 dark:via-[#06163a] dark:to-[#040f2b] border border-indigo-200/80 dark:border-indigo-900/70 shadow-xs p-4 sm:p-6 space-y-4">
-        {/* Subtle Decorative Gradient Glow */}
-        <div className="absolute -top-16 -right-16 w-48 h-48 bg-indigo-400/10 dark:bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        {/* AI Summary Header Bar */}
-        <div className="flex items-center justify-between border-b border-indigo-100/80 dark:border-[#1a3d8e]/40 pb-3">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-xs">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <span className="text-xs font-bold tracking-wide uppercase text-indigo-900 dark:text-indigo-200">
-              AI Summary
-            </span>
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/60 hidden sm:inline-block">
-              Point-Form Triage
-            </span>
-          </div>
-
-          <button
-            onClick={copySummaryText}
-            className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-[#091f52] transition-colors border border-slate-200/60 dark:border-[#1a3d8e]/60 cursor-pointer shadow-2xs"
-            title="Copy structured summary to clipboard"
-          >
-            {copiedSummary ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
-                <span>Copy Summary</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Executive Takeaway */}
-        <div className="pt-1">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed">
-            {aiSummary.executiveTakeaway}
-          </h3>
-        </div>
-
-        {/* Point-Form Bullets with Color-Coded Urgency */}
-        <div className="space-y-2.5 pt-1">
-          {aiSummary.points.map((point, index) => (
-            <div key={index} className="flex items-start space-x-3 text-xs leading-relaxed">
-              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 shrink-0" />
-              <div className="text-slate-700 dark:text-slate-300">
-                <strong className="text-slate-900 dark:text-white font-semibold mr-1.5">
-                  {point.label}:
-                </strong>
-                {point.urgencyBadge && (
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border mr-2 align-middle ${point.urgencyBadge.classes}`}
-                  >
-                    {point.urgencyBadge.text}
-                  </span>
-                )}
-                <span className={point.highlight ? "font-medium text-slate-900 dark:text-slate-100" : ""}>
-                  {point.text}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. MODERN GMAIL-STYLE EMAIL VIEWER */}
+      {/* 2. MODERN GMAIL-STYLE EMAIL VIEWER (Raw email shown first and in full by default) */}
       <div className="rounded-2xl bg-white dark:bg-[#06163a] border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs overflow-hidden">
         {/* Email Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#1a3d8e]/40 space-y-3">
@@ -404,6 +360,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
               {currentCase.subject}
             </h2>
             <button
+              type="button"
               onClick={() => setEmailExpanded(!emailExpanded)}
               className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
               title={emailExpanded ? "Collapse message" : "Expand message"}
@@ -451,16 +408,177 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
               )}
             </div>
 
-            {/* Email Attachments indicator if present */}
-            {currentCase.fields.length === 0 && (
-              <div className="pt-4 border-t border-slate-100 dark:border-[#1a3d8e]/40 flex items-center space-x-2 text-xs text-slate-400 dark:text-slate-500">
-                <Paperclip className="w-3.5 h-3.5" />
-                <span>No document attachments found on this email record.</span>
+            {/* Outlook / Gmail Style Attachments Section */}
+            {attachments.length > 0 && (
+              <div className="pt-4 border-t border-slate-100 dark:border-[#1a3d8e]/40 space-y-2.5">
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center space-x-1.5 font-semibold text-slate-700 dark:text-slate-200">
+                    <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Attachments ({attachments.length})</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">
+                    Click document chip to preview
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {attachments.map((att, idx) => (
+                    <button
+                      key={`${att.filename}-${idx}`}
+                      type="button"
+                      onClick={() => setSelectedAttachment(att)}
+                      className="flex items-center space-x-3 p-2.5 sm:p-3 rounded-xl border border-slate-200/80 dark:border-[#1a3d8e]/60 bg-slate-50/70 hover:bg-indigo-50/60 dark:bg-[#091f52]/40 dark:hover:bg-[#0c286d] text-left transition-all group cursor-pointer shadow-2xs hover:border-indigo-300 dark:hover:border-indigo-600"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-white dark:bg-[#06163a] border border-slate-200 dark:border-[#1a3d8e]/60 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                        {att.ext === "pdf" ? (
+                          <span className="text-[9px] font-black tracking-tighter text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1 py-0.5 rounded">
+                            PDF
+                          </span>
+                        ) : ["xlsx", "xls"].includes(att.ext) ? (
+                          <span className="text-[9px] font-black tracking-tighter text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1 py-0.5 rounded">
+                            XLS
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-black tracking-tighter text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 py-0.5 rounded">
+                            {att.ext.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {att.filename}
+                        </div>
+                        <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center space-x-1.5 mt-0.5">
+                          <span className="uppercase font-mono">{att.ext}</span>
+                          <span>•</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-medium">Click to view / download</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* 3. AI SUMMARY POINT-FORM CARD (Positioned below email body, collapsed by default) */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-indigo-50/70 via-blue-50/40 to-white dark:from-[#091b49]/90 dark:via-[#06163a] dark:to-[#040f2b] border border-indigo-200/80 dark:border-indigo-900/70 shadow-xs transition-all">
+        {/* Subtle Decorative Gradient Glow */}
+        <div className="absolute -top-16 -right-16 w-48 h-48 bg-indigo-400/10 dark:bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        {/* AI Summary Interactive Header Toggle */}
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setAiSummaryExpanded((prev) => !prev);
+            }
+          }}
+          onClick={() => setAiSummaryExpanded((prev) => !prev)}
+          className="w-full flex items-center justify-between p-4 sm:p-4.5 text-left hover:bg-indigo-100/30 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer select-none"
+        >
+          <div className="flex items-center space-x-2.5">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-xs shrink-0">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-bold tracking-wide uppercase text-indigo-900 dark:text-indigo-200">
+                  AI Summary & Action Triage
+                </span>
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-800/60 hidden sm:inline-block">
+                  Point-Form Triage
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {aiSummaryExpanded
+                  ? "Click to collapse automated logistics triage and extracted entities"
+                  : "Click to expand automated logistics triage, entities, and recommended next steps"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {aiSummaryExpanded && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copySummaryText();
+                }}
+                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-[#091f52] transition-colors border border-slate-200/60 dark:border-[#1a3d8e]/60 cursor-pointer shadow-2xs mr-1"
+                title="Copy structured summary to clipboard"
+              >
+                {copiedSummary ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Copy Summary</span>
+                  </>
+                )}
+              </button>
+            )}
+            <div className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              {aiSummaryExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Collapsible Content */}
+        {aiSummaryExpanded && (
+          <div className="p-4 sm:p-6 pt-1 space-y-4 border-t border-indigo-100/80 dark:border-[#1a3d8e]/40 animate-in fade-in">
+            {/* Executive Takeaway */}
+            <div className="pt-2">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed">
+                {aiSummary.executiveTakeaway}
+              </h3>
+            </div>
+
+            {/* Point-Form Bullets with Color-Coded Urgency */}
+            <div className="space-y-2.5 pt-1">
+              {aiSummary.points.map((point, index) => (
+                <div key={index} className="flex items-start space-x-3 text-xs leading-relaxed">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 shrink-0" />
+                  <div className="text-slate-700 dark:text-slate-300">
+                    <strong className="text-slate-900 dark:text-white font-semibold mr-1.5">
+                      {point.label}:
+                    </strong>
+                    {point.urgencyBadge && (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border mr-2 align-middle ${point.urgencyBadge.classes}`}
+                      >
+                        {point.urgencyBadge.text}
+                      </span>
+                    )}
+                    <span className={point.highlight ? "font-medium text-slate-900 dark:text-slate-100" : ""}>
+                      {point.text}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. ATTACHMENT VIEWER POPUP MODAL (Gmail / Outlook Lightbox) */}
+      <AttachmentViewerModal
+        isOpen={Boolean(selectedAttachment)}
+        onClose={() => setSelectedAttachment(null)}
+        attachment={selectedAttachment}
+      />
     </div>
   );
 };

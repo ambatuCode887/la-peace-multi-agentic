@@ -609,6 +609,7 @@ export function mapReportToShippingCase(
     pol: existing?.pol || String(report.documents?.si?.fields?.port_of_loading || 'N/A'),
     pod: existing?.pod || String(report.documents?.si?.fields?.port_of_discharge || 'N/A'),
     fields,
+    attachments: report.attachments || existing?.attachments || [],
     aiAnalysis: {
       confidence,
       summary,

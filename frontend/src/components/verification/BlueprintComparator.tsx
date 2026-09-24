@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ShippingCase, FieldComparison } from "../../types/shipping";
 import {
   CheckCircle2,
@@ -29,7 +29,17 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
 }) => {
   const [rereadMessage, setRereadMessage] = useState<string | null>(null);
   const [isRereading, setIsRereading] = useState<string | null>(null);
-  const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(null);
+  const [selectedFieldKey, setSelectedFieldKey] = useState<string | null>(
+    () => currentCase.fields[0]?.key || "shipper",
+  );
+
+  // Keep the first row (shipper) selected by default when switching cases
+  useEffect(() => {
+    if (currentCase.fields && currentCase.fields.length > 0) {
+      setSelectedFieldKey(currentCase.fields[0].key);
+    }
+  }, [currentCase.id]);
+
   const securitySources = Array.from(
     new Set(
       currentCase.promptInjectionMatches?.map((match) => match.source) || [],
@@ -416,6 +426,15 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Operator Guidance Tip */}
+        <div className="mb-4 rounded-xl border border-blue-200/80 bg-blue-50/70 dark:border-[#345ec4]/50 dark:bg-[#091f52]/40 px-3.5 py-2 text-xs text-blue-900 dark:text-blue-200 flex items-center space-x-2">
+          <span className="text-sm shrink-0 select-none">💡</span>
+          <span className="text-[11px] leading-relaxed">
+            <strong className="font-semibold">Tip:</strong> Click any comparison row in the table above to inspect its source document evidence, OCR snippets, and independent reader confidence.
+          </span>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {renderEvidenceSource(
             "SI · Source of truth",
