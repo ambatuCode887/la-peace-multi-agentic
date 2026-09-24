@@ -6,6 +6,68 @@
 - [ ] Confirm whether the required deployment target is Google Cloud Vertex AI or Google AI Studio/Gemini API.
 - [ ] Decide whether Qdrant remains local for development or is deployed as a managed/hosted service.
 
+## Rubric-led improvement roadmap
+
+Current provisional assessment: **73/100** (Technical 50/70, Product & Impact 23/30). Technology Integration is provisional in the judging rubric. Priorities below target the largest score gaps first and avoid counting the same evidence toward multiple criteria.
+
+### 1. Complete the live inbox flow at batch scale
+
+Targets: End-to-End Functionality; Architecture & Scalability.
+
+- [ ] Make Mailpit sync page through every message instead of stopping at the newest 50; preserve idempotency across pages.
+- [ ] Keep the 200-email demo sender repeatable and collision-safe, and verify that every generated message includes the expected attachments.
+- [ ] Add an API integration test with more than 50 Mailpit messages; assert all are imported, attachments persist, and a second sync creates no duplicates.
+- [ ] Verify the UI can browse all imported cases through its existing case pagination and that manual refresh reports failures clearly.
+
+**Done when:** a clean Mailpit run imports and verifies 200 messages, all 200 can be browsed, and repeating sync imports zero duplicates.
+
+### 2. Close verification and failure-handling gaps
+
+Targets: Engineering Quality & Robustness; End-to-End Functionality.
+
+- [ ] Prevent a `MISMATCH` verdict when either document has low-confidence or conflicting extraction; route the case to `NEEDS_REVIEW` with the uncertain fields and evidence.
+- [ ] Add bounded retries for recoverable attachment, OCR, and model failures; retain a clear terminal review reason when retries are exhausted.
+- [ ] Add adversarial fixtures for misleading subjects, missing or extra attachments, wrong document types, blank fields, rotated/low-quality scans, and unit/format variations.
+- [ ] Test that AI, vision, and RAG outputs cannot override deterministic comparison status, including when optional services are unavailable.
+- [ ] Restrict permissive CORS before public deployment and verify that secrets and uploaded documents are not exposed through logs or error responses.
+
+**Done when:** every adversarial fixture has an expected category/status, uncertainty never becomes an unsupported mismatch decision, and the full automated test suite passes in CI.
+
+### 3. Publish a reproducible evaluation scoreboard
+
+Targets: Solution Effectiveness & User Value; Engineering Quality & Robustness; Impact & Future Potential.
+
+- [ ] Run the complete 520-email dataset against the expected labels/submission format and save the exact command, dataset version, and result artifact.
+- [ ] Report classification precision/recall by category, field extraction accuracy by field, mismatch precision/recall, false-mismatch rate, and human-review rate.
+- [ ] Break results down by attachment type and OCR/vision path; compare advanced readers with the text baseline.
+- [ ] Include latency, failure rate, and optional AI cost separately from accuracy so judges can assess operational trade-offs.
+- [ ] Add a small regression gate for known hard cases and preserve the scoreboard output with the demo materials.
+
+**Done when:** a reviewer can reproduce the scores from a documented command and distinguish measured results from estimates.
+
+### 4. Tighten the judge and operator demo path
+
+Targets: User Experience & Differentiation; End-to-End Functionality.
+
+- [ ] Write a short walkthrough that demonstrates one clean match, one real mismatch, one uncertain/OCR case, and one missing-document escalation.
+- [ ] Make manual inbox sync, sync progress/errors, case pagination, and processing completion states unambiguous; keep automatic polling disabled unless explicitly enabled.
+- [ ] Show which reader produced each extraction (text, PDF, OCR, or vision) and expose the source evidence used for the displayed result.
+- [ ] Remove stale or unfinished UI TODOs and verify the core workflow on a clean browser session and a second device.
+
+**Done when:** a judge can complete the four-case walkthrough without setup guesswork and can trace each verdict to evidence.
+
+### 5. Prove impact and prepare a credible adoption path
+
+Targets: Solution Effectiveness & User Value; Impact & Future Potential; Architecture & Scalability.
+
+- [ ] Validate the workflow with shipping/documentation reviewers and record the most frequent correction and review tasks.
+- [ ] Define pilot measures: review time per shipment, mismatch detection rate, false-alarm rate, escalation rate, and percentage of cases needing manual correction.
+- [ ] Document deployment assumptions, data retention/access controls, supported document types, model/service dependencies, and recovery expectations.
+- [ ] If sustained or concurrent ingestion is required, move long-running OCR/verification work from in-process background tasks to a durable queue with retries and observable job status.
+- [ ] Prioritize integrations (email provider, TMS/ERP, archive search) only after the pilot workflow and data-access requirements are validated.
+
+**Done when:** the team has a stakeholder-backed pilot plan with baseline/target metrics and a deployment design matched to expected volume.
+
 ## Dataset and evaluation
 
 - [x] Obtain the prepared dataset folder at `C:\Users\User\Downloads\sdoc-hackathon-docker`.
