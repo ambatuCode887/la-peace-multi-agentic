@@ -156,6 +156,48 @@ Gross Weight: 22 MT
     ]
 
 
+def test_unknown_weight_unit_requires_review() -> None:
+    document = extract_shipment_fields(
+        """BILL OF LADING
+Gross Weight: 22000 stones
+"""
+    )
+
+    assert document.fields["gross_weight_kg"] is None
+    assert "gross_weight_kg" in document.missing_fields
+
+
+def test_conflicting_port_codes_remain_visible_as_a_mismatch() -> None:
+    si = extract_shipment_fields(
+        """SHIPPING INSTRUCTION
+Shipper: ACME
+Consignee: BUYER
+Notify Party: BUYER
+Port of Loading: PORT KLANG, MALAYSIA (MYPKG)
+Port of Discharge: KOBE
+Container Count: 1
+Gross Weight: 1000 KG
+"""
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING
+Shipper: ACME
+Consignee: BUYER
+Notify Party: BUYER
+Port of Loading: PORT KLANG, MALAYSIA (MYKUL)
+Port of Discharge: KOBE
+Container Count: 1
+Gross Weight: 1000 KG
+"""
+    )
+
+    result = compare_shipments(si, bl)
+
+    assert result["status"] == "MISMATCH"
+    assert result["defect_fields"] == ["port_of_loading"]
+    assert result["routing_telemetry"]["field_resolutions"]["port_of_loading"]["reason"] == "conflicting_port_codes"
+
+
 def test_ocr_corruption_does_not_hide_shipper_mismatch() -> None:
     si = extract_shipment_fields(
         """SHIPPING INSTRUCTION

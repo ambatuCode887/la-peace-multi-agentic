@@ -23,6 +23,13 @@ export interface BackendCaseSummary {
   deletable?: boolean;
 }
 
+export interface CasesPage {
+  cases: BackendCaseSummary[];
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
 export interface VerificationUpload {
   emailId: string;
   sender: string;
@@ -222,15 +229,20 @@ export const api = {
     }
   },
 
-  async getCases(): Promise<BackendCaseSummary[]> {
-    const res = await fetch(`${API_BASE}/cases`);
+  async getCases(page = 1, pageSize = 40): Promise<CasesPage> {
+    const res = await fetchWithTimeout(`${API_BASE}/cases?page=${page}&page_size=${pageSize}`);
     if (!res.ok) throw new Error(`Failed to fetch cases: ${res.statusText}`);
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
       throw new Error(`Invalid response format from API (received ${contentType || 'non-JSON'}).`);
     }
     const data = await res.json();
-    return data.cases || [];
+    return {
+      cases: data.cases || [],
+      page: data.page || page,
+      page_size: data.page_size || pageSize,
+      has_more: Boolean(data.has_more),
+    };
   },
 
   async getCaseDetail(emailId: string): Promise<BackendReport> {
@@ -394,6 +406,7 @@ export const api = {
       defect_fields: string[];
       decision: 'accept' | 'confirm_mismatch' | 'false_alarm' | 'request_clarification';
       note?: string;
+      supporting_evidence?: string;
       si_fields?: Record<string, any>;
       bl_fields?: Record<string, any>;
     }
