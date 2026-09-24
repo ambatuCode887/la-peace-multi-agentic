@@ -10,7 +10,7 @@ import { DiscrepancyBanner } from "./components/verification/DiscrepancyBanner";
 import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
-import { OperationsPanel } from "./components/operations/OperationsPanel";
+import { OperationsDashboard } from "./components/dashboard/OperationsDashboard";
 import { SentEmailViewer } from "./components/verification/SentEmailViewer";
 import { ALL_CASES } from "./data/allCases";
 import {
@@ -23,6 +23,7 @@ import { outboxService, type DispatchedEmail } from "./services/outboxService";
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
+  const [activeView, setActiveView] = useState<"dashboard" | "inbox">("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string>(() => {
     try {
       const param = new URLSearchParams(window.location.search).get("case");
@@ -55,8 +56,6 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
-  const [operationsOpen, setOperationsOpen] = useState<boolean>(false);
-  const [detailVersion, setDetailVersion] = useState<number>(0);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "review" | "email" | "chat"
   >("summary");
@@ -65,14 +64,9 @@ export function App() {
   // Starts true: the first backend check may retry while a hosted backend wakes up.
   const [queueLoading, setQueueLoading] = useState<boolean>(true);
   const [queueError, setQueueError] = useState<string | null>(null);
-  // Remembered between visits; storage can be unavailable (private windows), so it is best effort.
-  const [inboxCollapsed, setInboxCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("inboxCollapsed") === "1";
-    } catch {
-      return false;
-    }
-  });
+  // Default to collapsed when on dashboard for maximum workspace width
+  const [inboxCollapsed, setInboxCollapsed] = useState<boolean>(true);
+  const [railCollapsed, setRailCollapsed] = useState<boolean>(true);
 
   useEffect(() => {
     try {
@@ -174,7 +168,7 @@ export function App() {
         );
       });
     }
-  }, [selectedCaseId, backendConnected, detailVersion]);
+  }, [selectedCaseId, backendConnected]);
 
   const isStatusApplicable =
     categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
@@ -211,32 +205,6 @@ export function App() {
         : [mapped, ...previous];
     });
     setSelectedCaseId(report.email_id);
-  };
-
-  // Operations panel actions. Each one reloads the queue and the open case afterwards.
-  const handleProcessInbox = async () => {
-    await api.processInbox();
-    await refreshCases();
-    setDetailVersion((version) => version + 1);
-  };
-
-  const handleRetryCase = async (emailId: string) => {
-    await api.retryCase(emailId);
-    await refreshCases();
-    setDetailVersion((version) => version + 1);
-  };
-
-  const handleDeleteCase = async (emailId: string) => {
-    await api.deleteCase(emailId);
-    await refreshCases();
-  };
-
-  // A newly verified upload is shown straight away, so clear any filter that would hide it.
-  const handleVerified = (report: BackendReport) => {
-    handleReport(report);
-    setCategoryFilter("ALL");
-    setStatusFilter("ALL");
-    setSearchQuery("");
   };
 
   const handleReviewSaved = (report: BackendReport) => {
@@ -277,22 +245,51 @@ export function App() {
 
   const handleSelectCase = (id: string) => {
     setActiveMailboxFolder("INBOX");
-    setOperationsOpen(false);
+    setActiveView("inbox");
     setSelectedCaseId(id);
     setMobileInboxOpen(false);
   };
 
+  const handleGoToDashboard = () => {
+    setActiveView("dashboard");
+    setInboxCollapsed(true);
+    setRailCollapsed(true);
+  };
+
+  const handleNavigateToInbox = (
+    category: EmailCategory | "ALL" = "ALL",
+    status: VerificationStatus | "ALL" = "ALL",
+    caseId?: string
+  ) => {
+    setActiveView("inbox");
+    setActiveMailboxFolder("INBOX");
+    setInboxCollapsed(false);
+    setCategoryFilter(category);
+    setStatusFilter(status);
+    if (caseId) {
+      setSelectedCaseId(caseId);
+    }
+  };
+
+  const handleOpenCompose = () => {
+    setActiveView("inbox");
+    setActiveMailboxFolder("INBOX");
+    setInboxCollapsed(false);
+    setDrawerOpen(true);
+    setActiveDrawerTab("email");
+  };
+
   return (
     <div className="flex flex-col h-screen h-dvh bg-[#f5f8ff] text-[#0d1a3a] dark:bg-[#05163a] dark:text-[#eef3fc] transition-colors">
-      {/* Top Header with La Peace SDOC Branding, raw Lapis Lazuli icon & Live Backend Telemetry */}
+      {/* Top Header with La Peace SDOC Branding (Dashboard home button) & Controls */}
       <Header
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode((prev) => !prev)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         backendConnected={backendConnected}
-        operationsOpen={operationsOpen}
-        onToggleOperations={() => setOperationsOpen((open) => !open)}
+        activeView={activeView}
+        onGoToDashboard={handleGoToDashboard}
         mobileInboxOpen={mobileInboxOpen}
         onToggleMobileInbox={() => setMobileInboxOpen((prev) => !prev)}
       />
@@ -309,29 +306,54 @@ export function App() {
           onCategoryFilterChange={(cat) => {
             setActiveMailboxFolder("INBOX");
             handleCategoryFilterChange(cat);
+            setActiveView("inbox");
+            setInboxCollapsed(false);
           }}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
           onRefreshInbox={() => refreshCases(true)}
           collapsed={inboxCollapsed}
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
+          railCollapsed={railCollapsed}
+          onToggleRail={() => setRailCollapsed((prev) => !prev)}
           mobileOpen={mobileInboxOpen}
           onCloseMobile={() => setMobileInboxOpen(false)}
           activeMailboxFolder={activeMailboxFolder}
-          onMailboxFolderChange={setActiveMailboxFolder}
+          onMailboxFolderChange={(folder) => {
+            setActiveMailboxFolder(folder);
+            setActiveView("inbox");
+            setInboxCollapsed(false);
+          }}
           selectedSentId={selectedSentEmail?.id || null}
           onSelectSent={(email) => {
             setSelectedSentEmail(email);
             setActiveMailboxFolder("SENT");
+            setActiveView("inbox");
+            setInboxCollapsed(false);
           }}
+          activeView={activeView}
+          onGoToDashboard={handleGoToDashboard}
+          onOpenCompose={handleOpenCompose}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div
-            className={`mx-auto transition-[max-width] duration-200 ${inboxCollapsed ? "max-w-6xl" : "max-w-4xl"}`}
+            className={`mx-auto transition-[max-width] duration-200 ${
+              activeView === "dashboard"
+                ? "max-w-7xl"
+                : inboxCollapsed
+                ? "max-w-6xl"
+                : "max-w-4xl"
+            }`}
           >
-            {activeMailboxFolder === "SENT" ? (
+            {activeView === "dashboard" ? (
+              <OperationsDashboard
+                cases={cases}
+                onNavigateToInbox={handleNavigateToInbox}
+                onOpenCompose={handleOpenCompose}
+              />
+            ) : activeMailboxFolder === "SENT" ? (
               selectedSentEmail ? (
                 <SentEmailViewer
                   email={selectedSentEmail}
@@ -346,20 +368,6 @@ export function App() {
                   No sent messages recorded yet.
                 </div>
               )
-            ) : operationsOpen ? (
-              <OperationsPanel
-                backendConnected={backendConnected}
-                currentCase={currentCase}
-                onVerified={(report) => {
-                  handleVerified(report);
-                  setOperationsOpen(false);
-                }}
-                onProcessInbox={handleProcessInbox}
-                onRefresh={() => refreshCases(true)}
-                onRetry={handleRetryCase}
-                onDelete={handleDeleteCase}
-                onExit={() => setOperationsOpen(false)}
-              />
             ) : (
               <>
                 {/* Conditional Discrepancy & Status Alert Banner */}
@@ -384,8 +392,7 @@ export function App() {
                 )}
                 {!queueLoading && !currentCase && !queueError && (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                    No backend cases are available yet. Upload a case or process
-                    the inbox.
+                    No backend cases are available yet. Process the inbox or refresh.
                   </div>
                 )}
                 {currentCase && (
@@ -400,7 +407,7 @@ export function App() {
         </main>
 
         {/* Zone 3: AI Assistant & Operator Review Workspace (Right) */}
-        {currentCase && (
+        {activeView === "inbox" && currentCase && (
           <CopilotDrawer
             currentCase={currentCase}
             isOpen={drawerOpen}

@@ -134,6 +134,10 @@ class OutboxService {
     return this.getSentEmails().find((e) => e.id === id);
   }
 
+  public getSentCount(): number {
+    return this.getSentEmails().length;
+  }
+
   public subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
     return () => {
