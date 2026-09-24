@@ -74,9 +74,9 @@ def create_app(
         return dashboard_page()
 
     @app.get("/cases")
-    async def cases(page: int = 1, page_size: int = 40) -> dict[str, Any]:
+    async def cases(page: int = 1, page_size: int = 1000) -> dict[str, Any]:
         page = max(page, 1)
-        page_size = min(max(page_size, 1), 100)
+        page_size = min(max(page_size, 1), 1000)
         skip = (page - 1) * page_size
         cases = store.list_cases(skip=skip, limit=page_size)
         return {
@@ -92,9 +92,7 @@ def create_app(
         base_url = env("MAILPIT_URL", "http://127.0.0.1:8025").rstrip("/")
         try:
             async with httpx.AsyncClient(timeout=5) as client:
-                response = await client.get(f"{base_url}/api/v1/messages", params={"limit": 50})
-                response.raise_for_status()
-                summaries = response.json().get("messages", [])
+                summaries = await _mailpit_summaries(client, base_url)
                 imported = 0
                 for summary in summaries:
                     message_id = str(summary.get("ID") or summary.get("id") or "")
@@ -717,6 +715,33 @@ def _save_upload(
         json.dumps(record, indent=2) + "\n", encoding="utf-8"
     )
     return dataset_root
+
+
+async def _mailpit_summaries(
+    client: httpx.AsyncClient,
+    base_url: str,
+    page_size: int = 50,
+) -> list[dict[str, Any]]:
+    start = 0
+    summaries: list[dict[str, Any]] = []
+    while True:
+        response = await client.get(
+            f"{base_url}/api/v1/messages",
+            params={"limit": page_size, "start": start},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        page = payload.get("messages", [])
+        summaries.extend(page)
+        if not page:
+            break
+        start += len(page)
+        total = payload.get("total")
+        if (total is not None and start >= int(total)) or (
+            total is None and len(page) < page_size
+        ):
+            break
+    return summaries
 
 
 def _mailpit_address(value: Any) -> str:

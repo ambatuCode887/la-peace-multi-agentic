@@ -64,8 +64,6 @@ export function App() {
   const [mobileInboxOpen, setMobileInboxOpen] = useState<boolean>(false);
   // Starts true: the first backend check may retry while a hosted backend wakes up.
   const [queueLoading, setQueueLoading] = useState<boolean>(true);
-  const [casePage, setCasePage] = useState(1);
-  const [hasMoreCases, setHasMoreCases] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   // Remembered between visits; storage can be unavailable (private windows), so it is best effort.
   const [inboxCollapsed, setInboxCollapsed] = useState<boolean>(() => {
@@ -92,15 +90,18 @@ export function App() {
     }
   }, [darkMode]);
 
-  const refreshCases = async () => {
+  const refreshCases = async (surfaceErrors = false) => {
     setQueueLoading(true);
     setQueueError(null);
     try {
-      void api.syncMailpit().catch(() => undefined);
-      const result = await api.getCases(1);
+      let syncError: Error | undefined;
+      try {
+        await api.syncMailpit();
+      } catch (error) {
+        syncError = error instanceof Error ? error : new Error(String(error));
+      }
+      const result = await api.getCases(1, 1000);
       const summaries = result.cases;
-      setCasePage(1);
-      setHasMoreCases(result.has_more);
       if (summaries.length > 0) {
         setCases((previous) =>
           summaries.map((summary) =>
@@ -124,26 +125,17 @@ export function App() {
             : summaries[0]?.email_id || "";
         });
       }
+      if (surfaceErrors && syncError) throw syncError;
     } catch (error) {
       console.warn("Backend cases unavailable, using active dataset:", error);
+      setQueueError(
+        error instanceof Error ? error.message : "Could not refresh the inbox.",
+      );
       setCases((previous) => (previous.length === 0 ? ALL_CASES : previous));
+      if (surfaceErrors) throw error;
     } finally {
       setQueueLoading(false);
     }
-  };
-
-  const loadMoreCases = async () => {
-    if (!hasMoreCases || queueLoading) return;
-    const result = await api.getCases(casePage + 1);
-    setCases((previous) => {
-      const existingIds = new Set(previous.map((item) => item.id));
-      const additional = result.cases
-        .filter((summary) => !existingIds.has(summary.email_id))
-        .map((summary) => mapSummaryToShippingCase(summary));
-      return [...previous, ...additional];
-    });
-    setCasePage((page) => page + 1);
-    setHasMoreCases(result.has_more);
   };
 
   // Initial backend health check and live queue hydration.
@@ -320,9 +312,7 @@ export function App() {
           }}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
-          onRefreshInbox={refreshCases}
-          onLoadMore={loadMoreCases}
-          hasMoreCases={hasMoreCases}
+          onRefreshInbox={() => refreshCases(true)}
           collapsed={inboxCollapsed}
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
           mobileOpen={mobileInboxOpen}
@@ -365,7 +355,7 @@ export function App() {
                   setOperationsOpen(false);
                 }}
                 onProcessInbox={handleProcessInbox}
-                onRefresh={refreshCases}
+                onRefresh={() => refreshCases(true)}
                 onRetry={handleRetryCase}
                 onDelete={handleDeleteCase}
                 onExit={() => setOperationsOpen(false)}

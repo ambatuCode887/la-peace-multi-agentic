@@ -75,6 +75,25 @@ def test_create_app_returns_fastapi_application(tmp_path) -> None:
     assert any(route.path == "/cases/{email_id}/manager-review" for route in application.routes)
 
 
+def test_case_list_returns_more_than_100_cases_in_one_response(tmp_path) -> None:
+    for index in range(125):
+        case_id = f"email_{index:03d}"
+        case_root = tmp_path / case_id
+        case_root.mkdir()
+        (case_root / "report.json").write_text(json.dumps({
+            "email_id": case_id,
+            "category": "BL_COMPARISON",
+            "status": "OK",
+        }), encoding="utf-8")
+    client = TestClient(create_app(tmp_path))
+
+    response = client.get("/cases", params={"page_size": 1000})
+
+    assert response.status_code == 200
+    assert len(response.json()["cases"]) == 125
+    assert response.json()["has_more"] is False
+
+
 def test_delete_case_removes_database_record(tmp_path) -> None:
     store = InMemoryCaseStore({
         "email_id": "email_db_only",
@@ -279,6 +298,106 @@ def test_mailpit_sync_imports_new_message(tmp_path, monkeypatch) -> None:
     assert client.get("/cases").json()["cases"][0]["category"] != "UNPROCESSED"
     attachment = next(tmp_path.rglob("document.txt"))
     assert attachment.read_bytes() == b"attached document"
+    assert client.post("/inbox/mailpit/sync").json()["imported"] == 0
+
+
+def test_mailpit_summaries_fetches_all_pages() -> None:
+    messages = [{"ID": f"message-{index}"} for index in range(123)]
+
+    class FakeResponse:
+        def __init__(self, payload: dict) -> None:
+            self.payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self.payload
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.offsets = []
+
+        async def get(self, url: str, *, params: dict):
+            self.offsets.append(params["start"])
+            start = params["start"]
+            limit = params["limit"]
+            return FakeResponse({
+                "messages": messages[start : start + limit],
+                "total": len(messages),
+            })
+
+    fake_client = FakeClient()
+
+    summaries = asyncio.run(
+        shipping_api._mailpit_summaries(fake_client, "http://mailpit")
+    )
+
+    assert len(summaries) == 123
+    assert fake_client.offsets == [0, 50, 100]
+
+
+def test_mailpit_sync_imports_all_pages_and_is_idempotent(tmp_path, monkeypatch) -> None:
+    messages = [{"ID": f"batch-message-{index:03d}"} for index in range(51)]
+    offsets = []
+
+    class FakeResponse:
+        def __init__(self, payload: dict, content: bytes = b"") -> None:
+            self.payload = payload
+            self.content = content
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url: str, **kwargs):
+            if url.endswith("/messages"):
+                start = kwargs["params"]["start"]
+                limit = kwargs["params"]["limit"]
+                offsets.append(start)
+                return FakeResponse({
+                    "messages": messages[start : start + limit],
+                    "total": len(messages),
+                })
+            if url.endswith("/part/2"):
+                message_id = url.split("/message/")[1].split("/part/")[0]
+                return FakeResponse({}, f"attachment for {message_id}".encode())
+            message_id = url.rsplit("/", 1)[-1]
+            return FakeResponse({
+                "ID": message_id,
+                "From": {"Address": "demo@example.com"},
+                "Subject": f"General test {message_id}",
+                "Text": "Batch import test.",
+                "Attachments": [{"PartID": "2", "FileName": f"{message_id}.txt"}],
+            })
+
+    monkeypatch.setattr(shipping_api.httpx, "AsyncClient", lambda **kwargs: FakeClient())
+    client = TestClient(create_app(tmp_path))
+
+    first_sync = client.post("/inbox/mailpit/sync")
+
+    assert first_sync.status_code == 200
+    assert first_sync.json()["imported"] == 51
+    assert offsets == [0, 50]
+    assert len(client.get("/cases", params={"page_size": 100}).json()["cases"]) == 51
+    saved_attachment = next(tmp_path.rglob("batch-message-000.txt"))
+    assert saved_attachment.read_bytes() == b"attachment for batch-message-000"
+
+    second_sync = client.post("/inbox/mailpit/sync")
+
+    assert second_sync.status_code == 200
+    assert second_sync.json()["imported"] == 0
+    assert offsets == [0, 50, 0, 50]
+    assert len(client.get("/cases", params={"page_size": 100}).json()["cases"]) == 51
 
 
 def test_mailpit_sync_renames_existing_case_from_attachment_index(tmp_path, monkeypatch) -> None:
