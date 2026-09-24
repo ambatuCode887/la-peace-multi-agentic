@@ -72,8 +72,18 @@ def create_app(
         return dashboard_page()
 
     @app.get("/cases")
-    async def cases() -> dict[str, Any]:
-        return {"ok": True, "cases": store.list_cases()}
+    async def cases(page: int = 1, page_size: int = 40) -> dict[str, Any]:
+        page = max(page, 1)
+        page_size = min(max(page_size, 1), 100)
+        skip = (page - 1) * page_size
+        cases = store.list_cases(skip=skip, limit=page_size)
+        return {
+            "ok": True,
+            "cases": cases,
+            "page": page,
+            "page_size": page_size,
+            "has_more": len(cases) == page_size,
+        }
 
     @app.get("/cases/{email_id}")
     def case_detail(email_id: str) -> dict[str, Any]:
@@ -881,6 +891,11 @@ def _validate_correction(correction: dict[str, Any]) -> None:
         raise HTTPException(status_code=422, detail="defect_fields must be a list")
     if "decision" in correction and correction["decision"] not in {"accept", "confirm_mismatch", "false_alarm", "request_clarification"}:
         raise HTTPException(status_code=422, detail="Invalid review decision")
+    if correction.get("decision") == "false_alarm":
+        if not isinstance(correction.get("note"), str) or not correction["note"].strip():
+            raise HTTPException(status_code=422, detail="False-alarm overrides require an explanation")
+        if not isinstance(correction.get("supporting_evidence"), str) or not correction["supporting_evidence"].strip():
+            raise HTTPException(status_code=422, detail="False-alarm overrides require supporting evidence")
     for document_key in ("si_fields", "bl_fields"):
         if document_key in correction and not isinstance(correction[document_key], dict):
             raise HTTPException(status_code=422, detail=f"{document_key} must be an object")
@@ -905,7 +920,16 @@ def _apply_review_correction(report: dict[str, Any], correction: dict[str, Any])
     defects = [field for field in COMPARE_FIELDS if not values_match(field, si.get(field), bl.get(field))]
     decision = correction.get("decision")
     if decision == "false_alarm":
-        updated.update(status="OK", has_defect=False, defect_fields=[], review_reason=None)
+        original_defects = list(report.get("defect_fields", [])) or defects
+        updated.update(
+            status="NEEDS_REVIEW",
+            has_defect=bool(original_defects),
+            defect_fields=original_defects,
+            review_reason="operator_override_pending_release",
+            override_status="operator_override_not_verified",
+            override_explanation=correction["note"],
+            override_supporting_evidence=correction["supporting_evidence"],
+        )
     elif decision == "confirm_mismatch":
         updated.update(status="MISMATCH", has_defect=True, defect_fields=defects or correction.get("defect_fields", []), review_reason=None)
     elif decision == "request_clarification":

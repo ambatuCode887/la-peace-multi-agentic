@@ -46,6 +46,8 @@ export function App() {
   const [mobileInboxOpen, setMobileInboxOpen] = useState<boolean>(false);
   // Starts true: the first backend check may retry while a hosted backend wakes up.
   const [queueLoading, setQueueLoading] = useState<boolean>(true);
+  const [casePage, setCasePage] = useState(1);
+  const [hasMoreCases, setHasMoreCases] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   // Remembered between visits; storage can be unavailable (private windows), so it is best effort.
   const [inboxCollapsed, setInboxCollapsed] = useState<boolean>(() => {
@@ -76,7 +78,10 @@ export function App() {
     setQueueLoading(true);
     setQueueError(null);
     try {
-      const summaries = await api.getCases();
+      const result = await api.getCases(1);
+      const summaries = result.cases;
+      setCasePage(1);
+      setHasMoreCases(result.has_more);
       if (summaries.length > 0) {
         setCases((previous) =>
           summaries.map((summary) =>
@@ -88,7 +93,9 @@ export function App() {
         );
         setSelectedCaseId((current) => {
           try {
-            const urlParam = new URLSearchParams(window.location.search).get("case");
+            const urlParam = new URLSearchParams(window.location.search).get(
+              "case",
+            );
             if (urlParam && summaries.some((s) => s.email_id === urlParam)) {
               return urlParam;
             }
@@ -104,6 +111,20 @@ export function App() {
     } finally {
       setQueueLoading(false);
     }
+  };
+
+  const loadMoreCases = async () => {
+    if (!hasMoreCases || queueLoading) return;
+    const result = await api.getCases(casePage + 1);
+    setCases((previous) => {
+      const existingIds = new Set(previous.map((item) => item.id));
+      const additional = result.cases
+        .filter((summary) => !existingIds.has(summary.email_id))
+        .map((summary) => mapSummaryToShippingCase(summary));
+      return [...previous, ...additional];
+    });
+    setCasePage((page) => page + 1);
+    setHasMoreCases(result.has_more);
   };
 
   // Initial backend health check and live queue hydration.
@@ -273,6 +294,8 @@ export function App() {
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
           onRefreshInbox={refreshCases}
+          onLoadMore={loadMoreCases}
+          hasMoreCases={hasMoreCases}
           collapsed={inboxCollapsed}
           onToggleCollapsed={() => setInboxCollapsed((collapsed) => !collapsed)}
           mobileOpen={mobileInboxOpen}
@@ -309,12 +332,8 @@ export function App() {
                   />
                 )}
 
-                {/* The email this case came from: sender, subject and message (for comparison cases) */}
-                {currentCase &&
-                  currentCase.category === "BL_COMPARISON" &&
-                  currentCase.fields.length > 0 && (
-                    <EmailMessage currentCase={currentCase} />
-                  )}
+                {/* Keep the source email visible for every category so AI summaries remain auditable. */}
+                {currentCase && <EmailMessage currentCase={currentCase} />}
 
                 {/* Side-by-Side Blueprint Diff Comparator */}
                 {queueLoading && (

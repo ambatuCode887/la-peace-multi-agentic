@@ -42,6 +42,7 @@ export function ReviewPanel({
     ),
   );
   const [note, setNote] = useState("");
+  const [supportingEvidence, setSupportingEvidence] = useState("");
   const [decision, setDecision] = useState<ReviewDecision>(() =>
     currentCase.status === "MISMATCH" ? "confirm_mismatch" : "accept",
   );
@@ -119,6 +120,7 @@ export function ReviewPanel({
           .map((field) => field.key),
         decision,
         note,
+        supporting_evidence: supportingEvidence,
         si_fields: siFields,
         bl_fields: blFields,
       });
@@ -145,7 +147,7 @@ export function ReviewPanel({
       case "confirm_mismatch":
         return "Confirms the discrepancy as an active defect. The case is classified as MISMATCH and held from release.";
       case "false_alarm":
-        return "Manually overrides the discrepancy as an acceptable operational variance. The case is marked as OK.";
+        return "Records an operator override for an acceptable operational variance. Explanation and supporting evidence are required; the case remains NEEDS_REVIEW and is not treated as verified OK.";
       case "request_clarification":
         return "Holds the case under NEEDS_REVIEW status pending carrier clarification. Use the Email tab to notify the carrier.";
     }
@@ -228,6 +230,22 @@ export function ReviewPanel({
             placeholder="Document operator justification, carrier confirmations, or defect reasons..."
           />
         </div>
+
+        {decision === "false_alarm" && (
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide mb-1">
+              Supporting Evidence Required
+            </label>
+            <textarea
+              value={supportingEvidence}
+              onChange={(event) => setSupportingEvidence(event.target.value)}
+              rows={2}
+              className="w-full rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-2 text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
+              placeholder="Cite the approval, carrier email, or document evidence supporting this override..."
+              required
+            />
+          </div>
+        )}
 
         {/* Save Button */}
         <button

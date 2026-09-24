@@ -38,6 +38,8 @@ interface SidebarProps {
   statusFilter: VerificationStatus | "ALL";
   onStatusFilterChange: (status: VerificationStatus | "ALL") => void;
   onRefreshInbox?: () => Promise<void> | void;
+  onLoadMore?: () => Promise<void> | void;
+  hasMoreCases?: boolean;
   /** When true, the inbox shrinks to a slim rail so the case gets the full width. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -55,12 +57,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   statusFilter,
   onStatusFilterChange,
   onRefreshInbox,
+  onLoadMore,
+  hasMoreCases = false,
   collapsed = false,
   onToggleCollapsed,
   mobileOpen = false,
   onCloseMobile,
 }) => {
-  const [visibleCount, setVisibleCount] = useState<number>(40);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState<boolean>(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -392,7 +396,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const visibleCases = cases.slice(0, visibleCount);
+  const visibleCases = cases;
   const okCases = safeAll.filter(
     (c) => c.category === "BL_COMPARISON" && c.status === "PASS",
   );
@@ -490,400 +494,408 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-wide">
                 Inbox
               </h2>
-            <button
-              type="button"
-              id="sidebar-refresh-inbox"
-              data-testid="sidebar-refresh-inbox"
-              onClick={handleRefreshInbox}
-              disabled={isRefreshing || !onRefreshInbox}
-              aria-label="Scan and refresh live inbox"
-              title="Scan and refresh live inbox"
-              className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${
-                  isRefreshing
-                    ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
-                    : ""
-                }`}
-              />
-            </button>
-            {isRefreshing && (
-              <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse">
-                Scanning...
-              </span>
-            )}
-            {!isRefreshing && scanNotice && (
-              <span
-                role="status"
-                aria-live="polite"
-                className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
-              >
-                {scanNoticeTone === "success" ? (
-                  <Check className="w-3 h-3" />
-                ) : (
-                  <AlertTriangle className="w-3 h-3" />
-                )}{" "}
-                {scanNotice}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center space-x-1.5">
-            {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
-              <button
-                onClick={() => {
-                  onCategoryFilterChange("ALL");
-                  onStatusFilterChange("ALL");
-                }}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
-                title="Reset all filters"
-                data-testid="reset-filters"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset</span>
-              </button>
-            )}
-            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-semibold border border-[#345ec4]/30">
-              {cases.length} of {safeAll.length}
-            </span>
-            {onToggleCollapsed && (
               <button
                 type="button"
-                onClick={onToggleCollapsed}
-                className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-                title="Hide inbox"
-                aria-label="Hide inbox"
-                data-testid="collapse-inbox"
+                id="sidebar-refresh-inbox"
+                data-testid="sidebar-refresh-inbox"
+                onClick={handleRefreshInbox}
+                disabled={isRefreshing || !onRefreshInbox}
+                aria-label="Scan and refresh live inbox"
+                title="Scan and refresh live inbox"
+                className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
               >
-                <PanelLeftClose className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* The two filters sit side by side to save vertical space for the inbox list */}
-        <div className="grid grid-cols-2 gap-2">
-          {/* 1. Email Type Dropdown Button Selector */}
-          <div className="relative min-w-0" ref={typeDropdownRef}>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-              <span>Email Type</span>
-              <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
-                {safeAll.length} total
-              </span>
-            </label>
-
-            <button
-              id="category-dropdown-btn"
-              data-testid="category-dropdown-btn"
-              onClick={() => {
-                setTypeDropdownOpen(!typeDropdownOpen);
-                setStatusDropdownOpen(false);
-              }}
-              className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                typeDropdownOpen
-                  ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
-                  : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
-              }`}
-            >
-              <div className="flex items-center space-x-2 truncate">
-                <currentCategoryObj.icon
-                  className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
-                />
-                <span className="truncate">
-                  {currentCategoryObj.shortLabel}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1.5 shrink-0 ml-2">
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                    typeDropdownOpen ? "rotate-180" : ""
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${
+                    isRefreshing
+                      ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
+                      : ""
                   }`}
                 />
-              </div>
-            </button>
-
-            {/* Email Type Dropdown Menu */}
-            {typeDropdownOpen && (
-              <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                {categoryOptions.map((opt) => {
-                  const isSelected = categoryFilter === opt.value;
-                  const IconComponent = opt.icon;
-                  return (
-                    <button
-                      key={opt.value}
-                      data-testid={`category-option-${opt.value}`}
-                      onClick={() => {
-                        onCategoryFilterChange(opt.value);
-                        setTypeDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                        isSelected
-                          ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2 truncate">
-                        <IconComponent
-                          className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
-                        />
-                        <span className="truncate">{opt.label}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 shrink-0 ml-2">
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
-                          {opt.count}
-                        </span>
-                        {isSelected && (
-                          <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 2. Verification Status Dropdown Button Selector */}
-          <div className="relative min-w-0" ref={statusDropdownRef}>
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
-              <span>Status</span>
-              {!isStatusApplicable && (
-                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
-                  BL Verify only
+              </button>
+              {isRefreshing && (
+                <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse">
+                  Scanning...
                 </span>
               )}
-            </label>
+              {!isRefreshing && scanNotice && (
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${scanNoticeTone === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                >
+                  {scanNoticeTone === "success" ? (
+                    <Check className="w-3 h-3" />
+                  ) : (
+                    <AlertTriangle className="w-3 h-3" />
+                  )}{" "}
+                  {scanNotice}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-1.5">
+              {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
+                <button
+                  onClick={() => {
+                    onCategoryFilterChange("ALL");
+                    onStatusFilterChange("ALL");
+                  }}
+                  className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
+                  title="Reset all filters"
+                  data-testid="reset-filters"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset</span>
+                </button>
+              )}
+              <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-semibold border border-[#345ec4]/30">
+                {cases.length} of {safeAll.length}
+              </span>
+              {onToggleCollapsed && (
+                <button
+                  type="button"
+                  onClick={onToggleCollapsed}
+                  className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                  title="Hide inbox"
+                  aria-label="Hide inbox"
+                  data-testid="collapse-inbox"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
 
-            {isStatusApplicable ? (
+          {/* The two filters sit side by side to save vertical space for the inbox list */}
+          <div className="grid grid-cols-2 gap-2">
+            {/* 1. Email Type Dropdown Button Selector */}
+            <div className="relative min-w-0" ref={typeDropdownRef}>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
+                <span>Email Type</span>
+                <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold">
+                  {safeAll.length} total
+                </span>
+              </label>
+
               <button
-                id="status-dropdown-btn"
-                data-testid="status-dropdown-btn"
+                id="category-dropdown-btn"
+                data-testid="category-dropdown-btn"
                 onClick={() => {
-                  setStatusDropdownOpen(!statusDropdownOpen);
-                  setTypeDropdownOpen(false);
+                  setTypeDropdownOpen(!typeDropdownOpen);
+                  setStatusDropdownOpen(false);
                 }}
                 className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                  statusDropdownOpen
+                  typeDropdownOpen
                     ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
                     : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
                 }`}
               >
                 <div className="flex items-center space-x-2 truncate">
-                  <span
-                    className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
+                  <currentCategoryObj.icon
+                    className={`w-3.5 h-3.5 ${currentCategoryObj.color} shrink-0`}
                   />
-                  <span className="truncate">{currentStatusObj.label}</span>
+                  <span className="truncate">
+                    {currentCategoryObj.shortLabel}
+                  </span>
                 </div>
                 <div className="flex items-center space-x-1.5 shrink-0 ml-2">
                   <ChevronDown
                     className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                      statusDropdownOpen ? "rotate-180" : ""
+                      typeDropdownOpen ? "rotate-180" : ""
                     }`}
                   />
                 </div>
               </button>
-            ) : (
-              // Disabled state when category is non-BL (status does not apply)
-              <button
-                id="status-dropdown-btn"
-                disabled
-                className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
-                  <span className="truncate">Default</span>
-                </div>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
-                  N/A
-                </span>
-              </button>
-            )}
 
-            {/* Status Dropdown Menu (only renders when applicable) */}
-            {isStatusApplicable && statusDropdownOpen && (
-              <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                {statusOptions.map((opt) => {
-                  const isSelected = statusFilter === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      data-testid={`status-option-${opt.value}`}
-                      onClick={() => {
-                        onStatusFilterChange(opt.value);
-                        setStatusDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                        isSelected
-                          ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+              {/* Email Type Dropdown Menu */}
+              {typeDropdownOpen && (
+                <div className="absolute top-full left-0 w-60 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {categoryOptions.map((opt) => {
+                    const isSelected = categoryFilter === opt.value;
+                    const IconComponent = opt.icon;
+                    return (
+                      <button
+                        key={opt.value}
+                        data-testid={`category-option-${opt.value}`}
+                        onClick={() => {
+                          onCategoryFilterChange(opt.value);
+                          setTypeDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 truncate">
+                          <IconComponent
+                            className={`w-3.5 h-3.5 ${opt.color} shrink-0`}
+                          />
+                          <span className="truncate">{opt.label}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0 ml-2">
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-[#052464] text-slate-600 dark:text-slate-300 font-medium">
+                            {opt.count}
+                          </span>
+                          {isSelected && (
+                            <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Verification Status Dropdown Button Selector */}
+            <div className="relative min-w-0" ref={statusDropdownRef}>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 flex items-center justify-between">
+                <span>Status</span>
+                {!isStatusApplicable && (
+                  <span className="text-[9px] text-slate-400 dark:text-slate-500 font-normal italic">
+                    BL Verify only
+                  </span>
+                )}
+              </label>
+
+              {isStatusApplicable ? (
+                <button
+                  id="status-dropdown-btn"
+                  data-testid="status-dropdown-btn"
+                  onClick={() => {
+                    setStatusDropdownOpen(!statusDropdownOpen);
+                    setTypeDropdownOpen(false);
+                  }}
+                  className={`w-full px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                    statusDropdownOpen
+                      ? "bg-white dark:bg-[#091f52] border-[#345ec4] dark:border-[#5a82e2] ring-2 ring-[#345ec4]/20 shadow-xs"
+                      : "bg-slate-100/90 dark:bg-[#091f52]/40 hover:bg-slate-200/70 dark:hover:bg-[#091f52]/70 border-slate-200/80 dark:border-[#1a3d8e]/60 text-slate-800 dark:text-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <span
+                      className={`w-2 h-2 rounded-full ${currentStatusObj.color} shrink-0`}
+                    />
+                    <span className="truncate">{currentStatusObj.label}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 shrink-0 ml-2">
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                        statusDropdownOpen ? "rotate-180" : ""
                       }`}
-                    >
-                      <div className="flex items-center space-x-2 truncate">
-                        <span
-                          className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
-                        />
-                        <span className="truncate">{opt.label}</span>
-                      </div>
-                      <div className="flex items-center space-x-2 shrink-0 ml-2">
-                        <span
-                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
-                        >
-                          {opt.count}
-                        </span>
-                        {isSelected && (
-                          <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="border-t border-slate-100 pt-2.5 dark:border-[#1a3d8e]/40">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              {selectedOkIds.length} OK selected
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
-                className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7]"
-              >
-                Select all OK
-              </button>
-              <button
-                type="button"
-                onClick={() => setSelectedExportIds([])}
-                className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400"
-              >
-                Clear selection
-              </button>
+                    />
+                  </div>
+                </button>
+              ) : (
+                // Disabled state when category is non-BL (status does not apply)
+                <button
+                  id="status-dropdown-btn"
+                  disabled
+                  className="w-full px-2.5 py-2 rounded-xl text-xs font-medium flex items-center justify-between border border-slate-200/50 dark:border-[#1a3d8e]/30 bg-slate-50/70 dark:bg-[#091f52]/20 text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                  title="Verification statuses (Clean/Discrepancy/Review) only apply to Bill of Lading verification."
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
+                    <span className="truncate">Default</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/50 dark:bg-[#052464]/50 text-slate-500">
+                    N/A
+                  </span>
+                </button>
+              )}
+
+              {/* Status Dropdown Menu (only renders when applicable) */}
+              {isStatusApplicable && statusDropdownOpen && (
+                <div className="absolute top-full right-0 w-52 mt-1.5 z-50 bg-white/98 dark:bg-[#06163a]/98 backdrop-blur-md border border-slate-200 dark:border-[#1a3d8e] rounded-xl shadow-xl p-1.5 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                  {statusOptions.map((opt) => {
+                    const isSelected = statusFilter === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        data-testid={`status-option-${opt.value}`}
+                        onClick={() => {
+                          onStatusFilterChange(opt.value);
+                          setStatusDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#091f52] dark:text-white font-bold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#091f52]/60"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 truncate">
+                          <span
+                            className={`w-2 h-2 rounded-full ${opt.color} shrink-0`}
+                          />
+                          <span className="truncate">{opt.label}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0 ml-2">
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${opt.badgeBg}`}
+                          >
+                            {opt.count}
+                          </span>
+                          {isSelected && (
+                            <Check className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            <select
-              value={exportFormat}
-              onChange={(event) =>
-                setExportFormat(event.target.value as ExportFormat)
-              }
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200"
-              aria-label="Batch export format"
-            >
-              <option value="csv">CSV</option>
-              <option value="json">JSON</option>
-              <option value="pdf">PDF</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => void exportSelected()}
-              disabled={selectedOkIds.length === 0 || exporting}
-              className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {exporting ? "Exporting..." : "Export BL Draft"}
-            </button>
+          <div className="border-t border-slate-100 pt-2.5 dark:border-[#1a3d8e]/40">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                {selectedOkIds.length} OK selected
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
+                  className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7]"
+                >
+                  Select all OK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedExportIds([])}
+                  className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400"
+                >
+                  Clear selection
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <select
+                value={exportFormat}
+                onChange={(event) =>
+                  setExportFormat(event.target.value as ExportFormat)
+                }
+                className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200"
+                aria-label="Batch export format"
+              >
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="pdf">PDF</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void exportSelected()}
+                disabled={selectedOkIds.length === 0 || exporting}
+                className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {exporting ? "Exporting..." : "Export BL Draft"}
+              </button>
+            </div>
+            {exportNotice && (
+              <p
+                className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400"
+                role="status"
+              >
+                {exportNotice}
+              </p>
+            )}
           </div>
-          {exportNotice && (
-            <p
-              className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400"
-              role="status"
-            >
-              {exportNotice}
-            </p>
+        </div>
+
+        {/* Scrollable Cases List */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+          {visibleCases.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+              No cases match the selected filters.
+            </div>
+          ) : (
+            visibleCases.map((c) => {
+              const isSelected = c.id === selectedCaseId;
+              return (
+                <button
+                  key={c.id}
+                  data-case-id={c.id}
+                  onClick={() => {
+                    onSelectCase(c.id);
+                    if (onCloseMobile) onCloseMobile();
+                  }}
+                  className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-300 dark:border-b-[#1a3d8e] ${
+                    isSelected
+                      ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
+                      : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedOkIds.includes(c.id)}
+                    disabled={
+                      c.category !== "BL_COMPARISON" || c.status !== "PASS"
+                    }
+                    onChange={() => toggleExportSelection(c)}
+                    onClick={(event) => event.stopPropagation()}
+                    aria-label={`Select ${c.id} for Draft BL export`}
+                    className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30"
+                  />
+                  {/* Header Line: ID, Category Badge, Timestamp */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-[15px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        {c.id}
+                      </span>
+                      {getCategoryBadge(c.category)}
+                    </div>
+                    <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
+                      {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
+                        ? formatMalaysiaTime(c.timestamp, "compact")
+                        : c.timestamp.split(" ")[0]}
+                    </span>
+                  </div>
+
+                  {/* Vessel / Reference line + Status Badge */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
+                      <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                      <span className="truncate">
+                        {c.vessel !== "N/A" ? c.vessel : c.subject}
+                      </span>
+                    </div>
+                    {getStatusBadge(c)}
+                  </div>
+
+                  {/* Subject Preview */}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
+                    {c.subject}
+                  </p>
+                </button>
+              );
+            })
+          )}
+
+          {/* Load More Button */}
+          {hasMoreCases && (
+            <div className="p-3 text-center">
+              <button
+                onClick={async () => {
+                  if (!onLoadMore || loadingMore) return;
+                  setLoadingMore(true);
+                  try {
+                    await onLoadMore();
+                  } finally {
+                    setLoadingMore(false);
+                  }
+                }}
+                disabled={loadingMore}
+                className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
+              >
+                <span>{loadingMore ? "Loading..." : "Load more cases"}</span>
+                {!loadingMore && <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              <span className="text-[10px] text-slate-400 block mt-1">
+                Showing {cases.length} loaded cases
+              </span>
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Scrollable Cases List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
-        {visibleCases.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-            No cases match the selected filters.
-          </div>
-        ) : (
-          visibleCases.map((c) => {
-            const isSelected = c.id === selectedCaseId;
-            return (
-              <button
-                key={c.id}
-                data-case-id={c.id}
-                onClick={() => {
-                  onSelectCase(c.id);
-                  if (onCloseMobile) onCloseMobile();
-                }}
-                className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-300 dark:border-b-[#1a3d8e] ${
-                  isSelected
-                    ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
-                    : "hover:bg-slate-50 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedOkIds.includes(c.id)}
-                  disabled={
-                    c.category !== "BL_COMPARISON" || c.status !== "PASS"
-                  }
-                  onChange={() => toggleExportSelection(c)}
-                  onClick={(event) => event.stopPropagation()}
-                  aria-label={`Select ${c.id} for Draft BL export`}
-                  className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30"
-                />
-                {/* Header Line: ID, Category Badge, Timestamp */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <span className="text-[15px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
-                      {c.id}
-                    </span>
-                    {getCategoryBadge(c.category)}
-                  </div>
-                  <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                    {/^\d{4}-\d{2}-\d{2}T/.test(c.timestamp)
-                      ? formatMalaysiaTime(c.timestamp, "compact")
-                      : c.timestamp.split(" ")[0]}
-                  </span>
-                </div>
-
-                {/* Vessel / Reference line + Status Badge */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
-                    <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                    <span className="truncate">
-                      {c.vessel !== "N/A" ? c.vessel : c.subject}
-                    </span>
-                  </div>
-                  {getStatusBadge(c)}
-                </div>
-
-                {/* Subject Preview */}
-                <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
-                  {c.subject}
-                </p>
-              </button>
-            );
-          })
-        )}
-
-        {/* Load More Button */}
-        {cases.length > visibleCount && (
-          <div className="p-3 text-center">
-            <button
-              onClick={() => setVisibleCount((prev) => prev + 50)}
-              className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
-            >
-              <span>Load More (+50)</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[10px] text-slate-400 block mt-1">
-              Showing {Math.min(visibleCount, cases.length)} of {cases.length}{" "}
-              cases
-            </span>
-          </div>
-        )}
-      </div>
-    </aside>
-  </>
-);
+      </aside>
+    </>
+  );
 };
