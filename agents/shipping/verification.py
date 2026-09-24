@@ -129,21 +129,27 @@ def extract_shipment_fields(
         match = next(
             (
                 candidate for candidate in pattern.finditer(text)
-                if _parse_field(field, candidate.group(1)) is not None
+                if _parse_field(
+                    field,
+                    f"{candidate.group(0)} {candidate.group(1)}" if field == "gross_weight_kg" else candidate.group(1),
+                ) is not None
             ),
             None,
         )
         next_line = not match
         value = match.group(1) if match else _next_line_value(text, field)
-        raw_values[field] = value.strip() if value else None
         source_labels[field] = _source_label(field, match)
+        raw_values[field] = value.strip() if value else None
         if field == "notify_party" and value and re.fullmatch(
             r"(?i)party\s*/?\s*intermediate\s+consignee|party", value.strip()
         ):
             match = None
             next_line = True
             value = _next_line_value(text, field)
-        values[field] = _parse_field(field, value)
+        parse_value = value
+        if field == "gross_weight_kg" and value and source_labels[field]:
+            parse_value = f"{source_labels[field]} {value}"
+        values[field] = _parse_field(field, parse_value)
         if field in PARTY_FIELDS and isinstance(values[field], str):
             values[field] = _party_block(text, field, values[field])
         if values[field] is None:
@@ -238,7 +244,13 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
     ambiguous_fields: list[str] = []
     defects: list[str] = []
     for field in COMPARE_FIELDS:
-        resolution = _detect_field_ambiguity(field, si.fields[field], bl.fields[field])
+        resolution = _detect_field_ambiguity(
+            field,
+            si.fields[field],
+            bl.fields[field],
+            si.raw_values.get(field),
+            bl.raw_values.get(field),
+        )
         if resolution["status"] == "UNCERTAIN":
             ambiguous_fields.append(field)
             field_resolutions[field] = {
@@ -247,7 +259,10 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
             }
         elif resolution["status"] == "MISMATCH":
             defects.append(field)
-            field_resolutions[field] = {"source": "rule", "reason": "genuine_mismatch"}
+            field_resolutions[field] = {
+                "source": "rule",
+                "reason": str(resolution.get("reason", "genuine_mismatch")),
+            }
         else:
             field_resolutions[field] = {
                 "source": "rule",
@@ -525,13 +540,19 @@ def _parse_field(field: str, value: str | None) -> str | int | None:
             match = re.search(r"\b(\d+)\b", cleaned)
         return int(match.group(1)) if match else None
     if field == "gross_weight_kg":
-        # Handle OCR comma misread as dot or European thousands separator (e.g. 237.750 KG)
+        # Handle OCR comma misread as dot or European thousands separator (e.g. 237.750 KG).
         cleaned_weight = re.sub(r"(\d+)\.(\d{3})(?=\D|$)", r"\1\2", cleaned)
         match = re.search(r"([\d][\d, ]*(?:\.\d+)?)", cleaned_weight)
         if not match:
             return None
-        amount = float(match.group(1).replace(",", "").replace(" ", ""))
-        unit = _weight_unit(cleaned[match.end():])
+        amount_text = match.group(1)
+        if "," in amount_text and "." in amount_text and amount_text.rfind(",") > amount_text.rfind("."):
+            # 1.234,56 is decimal-comma notation; do not silently reinterpret it.
+            return None
+        amount = float(amount_text.replace(",", "").replace(" ", ""))
+        unit = _weight_unit(cleaned)
+        if unit is None:
+            return None
         return int(round(amount * {"kg": 1, "tonne": 1000, "lb": 0.45359237}[unit]))
     return cleaned.splitlines()[0].strip()
 
@@ -565,8 +586,15 @@ def _detect_field_ambiguity(
     field: str,
     si_value: str | int | None,
     bl_value: str | int | None,
+    si_raw_value: str | None = None,
+    bl_raw_value: str | None = None,
 ) -> dict[str, str]:
     """Route a field without guessing whether a near-match is legally equivalent."""
+    if field in {"port_of_loading", "port_of_discharge"}:
+        si_code = _port_code(si_raw_value or si_value)
+        bl_code = _port_code(bl_raw_value or bl_value)
+        if si_code and bl_code and si_code != bl_code:
+            return {"resolved_by": "rule", "status": "MISMATCH", "reason": "conflicting_port_codes"}
     if values_match(field, si_value, bl_value):
         reason = "exact_match" if si_value == bl_value else "normalized_match"
         return {"resolved_by": "rule", "status": "MATCH", "reason": reason}
@@ -578,6 +606,10 @@ def _detect_field_ambiguity(
 
     left = str(_normalized_field_value(field, si_value) or "")
     right = str(_normalized_field_value(field, bl_value) or "")
+    if field in {"port_of_loading", "port_of_discharge"}:
+        if left == right:
+            return {"resolved_by": "rule", "status": "MATCH", "reason": "normalized_match"}
+        return {"resolved_by": "rule", "status": "MISMATCH", "reason": "port_name_or_code_mismatch"}
     if min(len(left), len(right)) >= 5:
         ratio = SequenceMatcher(None, left, right).ratio()
         if ratio >= 0.85 or _edit_distance(left, right) <= 3:
@@ -603,12 +635,21 @@ def _edit_distance(left: str, right: str) -> int:
     return previous[-1]
 
 
-def _weight_unit(value: str) -> str:
+def _port_code(value: str | int | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    match = re.search(r"\(([A-Z]{5})\)\s*$", value.upper())
+    return match.group(1) if match else None
+
+
+def _weight_unit(value: str) -> str | None:
     if re.search(r"(?i)\b(?:mt|metric\s+tons?|tonnes?|tons?|t)\b", value):
         return "tonne"
     if re.search(r"(?i)\b(?:lb|lbs|pounds?)\b", value):
         return "lb"
-    return "kg"
+    if re.search(r"(?i)\b(?:kg|kgs|kilograms?)\b", value):
+        return "kg"
+    return None
 
 
 def _source_label(field: str, match: re.Match[str] | None) -> str | None:
@@ -632,7 +673,7 @@ def _ignored_differences(si: ExtractedShipment, bl: ExtractedShipment) -> list[d
         if field == "gross_weight_kg":
             si_unit = _weight_unit(si.raw_values.get(field) or "")
             bl_unit = _weight_unit(bl.raw_values.get(field) or "")
-            if si_unit != bl_unit:
+            if si_unit and bl_unit and si_unit != bl_unit:
                 ignored.append({
                     "field": field,
                     "reason": "unit_conversion",

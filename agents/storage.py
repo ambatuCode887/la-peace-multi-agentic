@@ -12,7 +12,7 @@ from agents.config import env
 class CaseStore:
     """Storage abstraction for inbox records and case metadata."""
 
-    def list_cases(self) -> list[dict[str, Any]]:
+    def list_cases(self, skip: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     def list_reports(self) -> list[dict[str, Any]]:
@@ -37,11 +37,14 @@ class FilesystemCaseStore(CaseStore):
     def __init__(self, root: Path):
         self.root = Path(root).expanduser().resolve()
 
-    def list_cases(self) -> list[dict[str, Any]]:
+    def list_cases(self, skip: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         if not self.root.is_dir():
             return items
-        for report_path in sorted(self.root.glob("*/report.json")):
+        report_paths = sorted(self.root.glob("*/report.json"))[skip:]
+        if limit is not None:
+            report_paths = report_paths[:limit]
+        for report_path in report_paths:
             report = _read_json(report_path, {})
             items.append({
                 "email_id": report.get("email_id", report_path.parent.name),
@@ -101,9 +104,12 @@ class MongoCaseStore(CaseStore):
         self.collection.create_index("email_id", unique=True)
         self.attachment_collection = self.database[f"{collection_name}_attachments"]
 
-    def list_cases(self) -> list[dict[str, Any]]:
+    def list_cases(self, skip: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
-        for record in self.collection.find({"_deleted": {"$ne": True}}).sort("updated_at", -1):
+        cursor = self.collection.find({"_deleted": {"$ne": True}}).sort("updated_at", -1).skip(skip)
+        if limit is not None:
+            cursor = cursor.limit(limit)
+        for record in cursor:
             payload = dict(record)
             payload.pop("_id", None)
             items.append({

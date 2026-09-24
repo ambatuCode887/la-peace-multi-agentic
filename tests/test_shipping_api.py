@@ -158,12 +158,14 @@ def test_case_queue_and_review_correction(tmp_path) -> None:
             "defect_fields": [],
             "decision": "false_alarm",
             "note": "Confirmed with operations.",
+                "supporting_evidence": "Operations email confirms the approved carrier alias.",
             "si_fields": {"shipper": "A"},
             "bl_fields": {"shipper": "A"},
         },
     )
     assert response.status_code == 200
-    assert response.json()["result"]["status"] == "OK"
+    assert response.json()["result"]["status"] == "NEEDS_REVIEW"
+    assert response.json()["result"]["override_status"] == "operator_override_not_verified"
 
 
 def test_chat_history_must_be_role_content_messages(tmp_path) -> None:
