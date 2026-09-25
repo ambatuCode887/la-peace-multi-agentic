@@ -43,6 +43,8 @@ interface CopilotDrawerProps {
   onReviewSaved?: (report: BackendReport) => void;
   draftToRestore?: DraftEmail | null;
   onDraftRestored?: () => void;
+  embeddedEmailOnly?: boolean;
+  onDraftCompleted?: () => void;
 }
 
 export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
@@ -54,6 +56,8 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   onReviewSaved,
   draftToRestore,
   onDraftRestored,
+  embeddedEmailOnly = false,
+  onDraftCompleted,
 }) => {
   const vesselTag =
     currentCase.vessel && currentCase.vessel !== "N/A"
@@ -427,6 +431,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       if (editingDraftId) {
         await outboxService.deleteDraft(editingDraftId).catch(() => undefined);
         setEditingDraftId(undefined);
+        onDraftCompleted?.();
       }
 
       setDispatchStatus("sent");
@@ -477,6 +482,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       if (editingDraftId) {
         await outboxService.deleteDraft(editingDraftId).catch(() => undefined);
         setEditingDraftId(undefined);
+        onDraftCompleted?.();
       }
       setDispatchStatus("scheduled");
       setDispatchFeedback(`Scheduled for ${new Date(scheduled.scheduled_at).toLocaleString()}.`);
@@ -496,7 +502,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       {/* Floating trigger button when drawer is closed */}
       <button
         onClick={onToggle}
-        className={`fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all duration-300 ease-in-out hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px] ${
+        className={`${embeddedEmailOnly ? "hidden" : "fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all duration-300 ease-in-out hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px]"} ${
           isOpen ? "opacity-0 pointer-events-none scale-90" : "opacity-100 pointer-events-auto scale-100"
         }`}
       >
@@ -512,7 +518,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
 
       {/* Mobile backdrop for drawer on < lg screens */}
       <div
-        className={`fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 ease-in-out ${
+        className={`${embeddedEmailOnly ? "hidden" : "fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 ease-in-out"} ${
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={onToggle}
@@ -521,14 +527,16 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
 
       {/* Aside drawer with synchronized smooth slide & width transition */}
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-md sm:w-[420px] lg:static lg:z-auto border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-dvh lg:h-[calc(100vh-4rem)] shadow-2xl lg:shadow-lg select-none transition-all duration-300 ease-in-out overflow-hidden ${
+        className={embeddedEmailOnly
+          ? "relative w-full max-w-none min-h-[560px] rounded-xl border border-slate-200/80 bg-white dark:bg-[#06163a] dark:border-[#1a3d8e]/60 flex flex-col shadow-sm overflow-hidden"
+          : `fixed inset-y-0 right-0 z-50 w-full max-w-md sm:w-[420px] lg:static lg:z-auto border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-dvh lg:h-[calc(100vh-4rem)] shadow-2xl lg:shadow-lg select-none transition-all duration-300 ease-in-out overflow-hidden ${
           isOpen
             ? "translate-x-0 opacity-100 lg:w-96 xl:w-[420px]"
             : "translate-x-full lg:translate-x-0 opacity-0 lg:w-0 lg:border-l-0 pointer-events-none"
         }`}
       >
         {/* Drawer Header */}
-        <div className="p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25">
+        <div className={`${embeddedEmailOnly ? "hidden" : "p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25"}`}>
           <div className="flex items-center space-x-2.5">
             <img
               src={lapeaceIcon}
@@ -559,7 +567,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="grid grid-cols-4 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-[11px] font-semibold">
+        <div className={`${embeddedEmailOnly ? "hidden" : "grid grid-cols-4 gap-1 p-2 bg-slate-100/70 dark:bg-[#091f52]/40 border-b border-slate-200/60 dark:border-[#1a3d8e]/60 text-[11px] font-semibold"}`}>
           <button
             onClick={() => onTabChange("summary")}
             className={`py-2 sm:py-1.5 rounded-lg text-center transition-all cursor-pointer ${
@@ -605,7 +613,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       </div>
 
       {/* Tab 1: AI Summary & RAG Guidance */}
-      {activeTab === "summary" && (
+      {!embeddedEmailOnly && activeTab === "summary" && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs select-text">
           {/* Confidence Score */}
           <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#eef3fc] via-indigo-50/40 to-white border border-[#345ec4]/20 dark:from-[#052464]/60 dark:via-[#0c1633] dark:to-[#052464]/20 dark:border-[#1a3d8e] shadow-xs">
@@ -757,7 +765,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       )}
 
       {/* Tab: Human Operator Review & Ground-Truth Corrections */}
-      {activeTab === "review" && (
+      {!embeddedEmailOnly && activeTab === "review" && (
         <div className="flex-1 overflow-y-auto p-4 select-text">
           <ReviewPanel
             key={currentCase.id}
@@ -995,7 +1003,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       )}
 
       {/* Tab 3: Interactive Assistant Chat (Live API chat) */}
-      {activeTab === "chat" && (
+      {!embeddedEmailOnly && activeTab === "chat" && (
         <div className="flex-1 flex flex-col h-full overflow-hidden select-text">
           {/* Messages list */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">

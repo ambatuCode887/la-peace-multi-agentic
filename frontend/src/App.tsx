@@ -39,6 +39,7 @@ export function App() {
     return list.length > 0 ? list[0] : null;
   });
   const [draftToRestore, setDraftToRestore] = useState<DraftEmail | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     return outboxService.subscribe(() => {
@@ -278,6 +279,7 @@ export function App() {
   const handleSelectDraft = async (draftSummary: DraftEmail) => {
     const draft = await outboxService.getDraft(draftSummary.id);
     if (!draft) return;
+    setSelectedDraftId(draft.id);
     setDraftToRestore(draft);
     setActiveMailboxFolder("DRAFTS");
     setActiveView("inbox");
@@ -417,9 +419,24 @@ export function App() {
                 </div>
               )
             ) : activeMailboxFolder === "DRAFTS" ? (
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
-                Select a draft from the Drafts folder to continue editing.
-              </div>
+              selectedDraftId && currentCase ? (
+                <CopilotDrawer
+                  key={selectedDraftId}
+                  currentCase={currentCase}
+                  isOpen
+                  onToggle={() => undefined}
+                  activeTab="email"
+                  onTabChange={() => undefined}
+                  draftToRestore={draftToRestore?.id === selectedDraftId ? draftToRestore : null}
+                  onDraftRestored={() => setDraftToRestore(null)}
+                  embeddedEmailOnly
+                  onDraftCompleted={() => setSelectedDraftId(null)}
+                />
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
+                  {selectedDraftId ? "Loading draft and its case…" : "Select a draft from the Drafts folder to continue editing."}
+                </div>
+              )
             ) : activeMailboxFolder === "SCHEDULED" ? (
               <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
                 Scheduled messages are listed here. Use the cancel control before delivery time to stop a message.
@@ -463,7 +480,7 @@ export function App() {
         </main>
 
         {/* Zone 3: AI Assistant & Operator Review Workspace (Right) */}
-        {activeView === "inbox" && currentCase && (
+        {activeView === "inbox" && currentCase && activeMailboxFolder !== "DRAFTS" && (
           <CopilotDrawer
             currentCase={currentCase}
             isOpen={drawerOpen}
