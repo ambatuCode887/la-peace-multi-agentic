@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 import { outboxService, type DispatchedEmail } from "../../services/outboxService";
+import { ExtractionTierBadge } from "../common/ExtractionTierBadge";
 
 interface SidebarProps {
   allCases?: ShippingCase[];
@@ -1090,15 +1091,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </span>
                     </div>
 
-                    {/* Vessel / Reference line + Status Badge */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[170px]">
+                    {/* Vessel / Reference line + Tier Badge & Status Badge */}
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[150px]">
                         <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
                         <span className="truncate">
                           {c.vessel !== "N/A" ? c.vessel : c.subject}
                         </span>
                       </div>
-                      {getStatusBadge(c)}
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        {c.category === "BL_COMPARISON" && (
+                          <ExtractionTierBadge shippingCase={c} size="xs" compact={true} showPopover={false} testId={`sidebar-tier-badge-${c.id}`} />
+                        )}
+                        {getStatusBadge(c)}
+                      </div>
                     </div>
 
                     {/* Subject Preview */}
