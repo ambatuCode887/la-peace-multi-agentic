@@ -15,6 +15,7 @@ import { API_BASE, api } from "../../services/api";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 import { formatSubject } from "../../utils/formatSubject";
 import { OperationalEmailHub } from "./OperationalEmailHub";
+import { ExtractionTierBadge } from "../common/ExtractionTierBadge";
 
 interface BlueprintComparatorProps {
   currentCase: ShippingCase;
@@ -488,6 +489,7 @@ export const BlueprintComparator: React.FC<BlueprintComparatorProps> = ({
             <span className="shrink-0 text-xs sm:text-sm font-mono font-bold px-2.5 py-1 rounded-lg bg-[#eef3fc] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] border border-[#345ec4]/30">
               {currentCase.id}
             </span>
+            <ExtractionTierBadge shippingCase={currentCase} size="sm" testId="comparator-tier-badge" />
             {subject.isReply && (
               <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                 Reply
