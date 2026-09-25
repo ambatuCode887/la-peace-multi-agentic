@@ -158,17 +158,35 @@ export function App() {
           });
         })
         .catch(() => undefined);
-
-      void api.getManagerReview(selectedCaseId).then((managerReview) => {
-        if (!managerReview) return;
-        setCases((prev) =>
-          prev.map((c) =>
-            c.id === selectedCaseId ? { ...c, managerReview } : c,
-          ),
-        );
-      });
     }
   }, [selectedCaseId, backendConnected]);
+
+  useEffect(() => {
+    const selectedCase = cases.find((item) => item.id === selectedCaseId);
+    if (
+      !backendConnected ||
+      !selectedCaseId ||
+      !drawerOpen ||
+      activeDrawerTab !== "summary" ||
+      selectedCase?.managerReview
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.getManagerReview(selectedCaseId).then((managerReview) => {
+      if (!cancelled && managerReview) {
+        setCases((previous) =>
+          previous.map((item) =>
+            item.id === selectedCaseId ? { ...item, managerReview } : item,
+          ),
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCaseId, backendConnected, drawerOpen, activeDrawerTab, cases]);
 
   const isStatusApplicable =
     categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";

@@ -299,6 +299,25 @@ Gross Weight (KG) | 341715
     assert document.fields["gross_weight_kg"] == 341715
 
 
+def test_unitless_xlsx_gross_weight_defaults_to_kg_only_for_known_workbook() -> None:
+    workbook = extract_shipment_fields(
+        "BL INSTRUCTION\nGROSS WEIGHT | 40176",
+        filename="attachments/email_302_SI.xlsx",
+    )
+    text_document = extract_shipment_fields(
+        "BILL OF LADING\nGROSS WEIGHT | 40176",
+        filename="document.txt",
+    )
+    unsupported_unit = extract_shipment_fields(
+        "BL INSTRUCTION\nGROSS WEIGHT | 40176 ST",
+        filename="attachments/email_302_SI.xlsx",
+    )
+
+    assert workbook.fields["gross_weight_kg"] == 40176
+    assert text_document.fields["gross_weight_kg"] is None
+    assert unsupported_unit.fields["gross_weight_kg"] is None
+
+
 def test_extracts_multilingual_table_labels() -> None:
     document = extract_shipment_fields(
         """BILL OF LADING (DRAFT)
