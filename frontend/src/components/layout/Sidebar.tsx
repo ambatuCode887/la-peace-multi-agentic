@@ -32,12 +32,16 @@ import {
   PenSquare,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
-import { outboxService, type DispatchedEmail } from "../../services/outboxService";
+import {
+  outboxService,
+  type DispatchedEmail,
+} from "../../services/outboxService";
 import { ExtractionTierBadge } from "../common/ExtractionTierBadge";
 
 interface SidebarProps {
   allCases?: ShippingCase[];
   cases: ShippingCase[];
+  unreadCaseIds?: string[];
   selectedCaseId: string;
   onSelectCase: (caseId: string) => void;
   categoryFilter: EmailCategory | "ALL";
@@ -66,6 +70,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({
   allCases,
   cases,
+  unreadCaseIds = [],
   selectedCaseId,
   onSelectCase,
   categoryFilter,
@@ -91,7 +96,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [internalRailCollapsed, setInternalRailCollapsed] = useState(false);
-  const railCollapsed = propRailCollapsed !== undefined ? propRailCollapsed : internalRailCollapsed;
+  const railCollapsed =
+    propRailCollapsed !== undefined ? propRailCollapsed : internalRailCollapsed;
   const handleToggleRail = () => {
     if (onToggleRail) {
       onToggleRail();
@@ -166,6 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const safeAll = allCases && allCases.length > 0 ? allCases : cases;
+  const unreadIdSet = new Set(unreadCaseIds);
+  const unreadCount = safeAll.filter((item) => unreadIdSet.has(item.id)).length;
 
   // Category counts across total dataset
   const blCount = safeAll.filter((c) => c.category === "BL_COMPARISON").length;
@@ -322,7 +330,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const currentFolder =
-    categoryFolders.find((f) => f.value === categoryFilter) || categoryFolders[0];
+    categoryFolders.find((f) => f.value === categoryFilter) ||
+    categoryFolders[0];
 
   const getCategoryBadge = (category: EmailCategory) => {
     switch (category) {
@@ -496,8 +505,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 data-testid="toggle-rail-btn"
                 onClick={handleToggleRail}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-                title={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
-                aria-label={railCollapsed ? "Expand folder labels" : "Collapse folder rail"}
+                title={
+                  railCollapsed
+                    ? "Expand folder labels"
+                    : "Collapse folder rail"
+                }
+                aria-label={
+                  railCollapsed
+                    ? "Expand folder labels"
+                    : "Collapse folder rail"
+                }
               >
                 {railCollapsed ? (
                   <ChevronRight className="w-4 h-4" />
@@ -509,8 +526,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {/* Operations Hub (Dashboard) Navigation Button */}
-          {onGoToDashboard && (
-            railCollapsed && !mobileOpen ? (
+          {onGoToDashboard &&
+            (railCollapsed && !mobileOpen ? (
               <div className="flex justify-center mb-1 w-full">
                 <button
                   type="button"
@@ -547,15 +564,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </span>
                 </button>
               </div>
-            )
-          )}
+            ))}
 
           {/* Divider between Operations Hub and Actions/Folders */}
-          <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+          <div
+            className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`}
+          />
 
           {/* Quick Compose Button */}
-          {onOpenCompose && (
-            railCollapsed && !mobileOpen ? (
+          {onOpenCompose &&
+            (railCollapsed && !mobileOpen ? (
               <div className="flex justify-center mb-1.5 w-full">
                 <button
                   type="button"
@@ -579,11 +597,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>Compose Email</span>
                 </button>
               </div>
-            )
-          )}
+            ))}
 
           {/* Divider between Actions and Inbound Folders */}
-          <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+          <div
+            className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`}
+          />
 
           {/* Folder Buttons List */}
           <nav
@@ -597,7 +616,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             {categoryFolders.map((folder) => {
-              const isSelected = activeMailboxFolder === "INBOX" && categoryFilter === folder.value;
+              const isSelected =
+                activeMailboxFolder === "INBOX" &&
+                categoryFilter === folder.value;
               const Icon = folder.icon;
 
               // Collapsed Icon-Only Mode on Desktop
@@ -677,7 +698,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             })}
 
             {/* Divider between Inbound Folders and Sent Mailbox */}
-            <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
+            <div
+              className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`}
+            />
 
             {/* SENT MAIL FOLDER BUTTON */}
             {railCollapsed && !mobileOpen ? (
@@ -748,401 +771,442 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* ======================================================== */}
         {!collapsed && (
           <div className="flex-1 flex flex-col min-w-0 md:w-80 lg:w-84 h-full bg-white dark:bg-[#06163a]">
-          {activeMailboxFolder === "SENT" ? (
-            <>
-              {/* Sent Mail Header */}
-              <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2 shrink-0">
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex items-center space-x-2 min-w-0">
-                    {onCloseMobile && (
-                      <button
-                        type="button"
-                        onClick={onCloseMobile}
-                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
-                        title="Close inbox"
-                        aria-label="Close inbox"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
-                    <div className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 flex items-center justify-center shrink-0">
-                      <Send className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
-                        Sent Mail
-                      </h2>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
-                    {sentEmails.length} sent
-                  </span>
-                </div>
-              </div>
-
-              {/* Scrollable Sent Messages List */}
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
-                {sentEmails.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-                    No sent emails logged yet.
-                  </div>
-                ) : (
-                  sentEmails.map((email) => {
-                    const isSelected = email.id === selectedSentId;
-                    return (
-                      <button
-                        key={email.id}
-                        data-sent-id={email.id}
-                        onClick={() => {
-                          if (onSelectSent) onSelectSent(email);
-                          if (onCloseMobile) onCloseMobile();
-                        }}
-                        className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
-                          isSelected
-                            ? "bg-emerald-50/70 border-l-4 border-l-emerald-600 dark:bg-emerald-950/40 dark:border-l-emerald-500"
-                            : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-1.5 min-w-0">
-                            <span className="text-[12px] font-bold text-slate-900 dark:text-white truncate max-w-[170px]">
-                              To: {email.to}
-                            </span>
-                            {email.attachments && email.attachments.length > 0 && (
-                              <Paperclip className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                            )}
-                          </div>
-                          <span className="ml-2 text-[10px] text-slate-400 font-mono shrink-0">
-                            {formatMalaysiaTime(email.sentAt, "compact")}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
-                            {email.subject}
-                          </span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/40 shrink-0">
-                            #{email.caseId}
-                          </span>
-                        </div>
-
-                        <p className="text-[11px] text-slate-400 dark:text-slate-400 line-clamp-1 leading-snug">
-                          {email.body}
-                        </p>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Message List Header */}
-              <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2 shrink-0">
-                {/* Folder Title Bar with Controls */}
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex items-center space-x-1.5 min-w-0">
-                {onCloseMobile && (
-                  <button
-                    type="button"
-                    onClick={onCloseMobile}
-                    className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
-                    title="Close inbox"
-                    aria-label="Close inbox"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-                <currentFolder.icon
-                  className={`w-4 h-4 ${currentFolder.color} shrink-0`}
-                />
-                <h2
-                  className="text-sm font-bold text-slate-900 dark:text-white truncate"
-                  title={currentFolder.label}
-                >
-                  <span className="hidden xl:inline">{currentFolder.label}</span>
-                  <span className="xl:hidden">{currentFolder.shortLabel}</span>
-                </h2>
-                <button
-                  type="button"
-                  id="sidebar-refresh-inbox"
-                  data-testid="sidebar-refresh-inbox"
-                  onClick={handleRefreshInbox}
-                  disabled={isRefreshing || !onRefreshInbox}
-                  aria-label="Scan and refresh live inbox"
-                  title="Scan and refresh live inbox"
-                  className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <RefreshCw
-                    className={`w-3.5 h-3.5 ${
-                      isRefreshing
-                        ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
-                        : ""
-                    }`}
-                  />
-                </button>
-                {isRefreshing && (
-                  <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse hidden sm:inline">
-                    Syncing...
-                  </span>
-                )}
-                {!isRefreshing && scanNotice && (
-                  <span
-                    role="status"
-                    aria-live="polite"
-                    className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${
-                      scanNoticeTone === "success"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-rose-600 dark:text-rose-400"
-                    }`}
-                  >
-                    {scanNoticeTone === "success" ? (
-                      <Check className="w-3 h-3" />
-                    ) : (
-                      <AlertTriangle className="w-3 h-3" />
-                    )}
-                    {scanNotice}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-1 shrink-0">
-                {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
-                  <button
-                    onClick={() => {
-                      onCategoryFilterChange("ALL");
-                      onStatusFilterChange("ALL");
-                    }}
-                    className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
-                    title="Reset all filters"
-                    data-testid="reset-filters"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span className="hidden sm:inline">Reset</span>
-                  </button>
-                )}
-                <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-bold border border-[#345ec4]/30">
-                  {cases.length} of {safeAll.length}
-                </span>
-                {onToggleCollapsed && (
-                  <button
-                    type="button"
-                    onClick={onToggleCollapsed}
-                    className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-                    title="Hide inbox sidebar"
-                    aria-label="Hide inbox sidebar"
-                    data-testid="collapse-inbox"
-                  >
-                    <PanelLeftClose className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Segmented Status Filter Bar (All, OK, Mismatch, Review) */}
-            {isStatusApplicable ? (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  <span>Status Filter</span>
-                </div>
-                <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#040e28] border border-slate-200/80 dark:border-[#1a3d8e]/60">
-                  {statusOptions.map((opt) => {
-                    const isSelected = statusFilter === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        data-testid={`status-pill-${opt.value}`}
-                        onClick={() => onStatusFilterChange(opt.value)}
-                        className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1 px-1 rounded-lg transition-all cursor-pointer ${
-                          isSelected
-                            ? "bg-white dark:bg-[#091f52] text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200/60 dark:border-[#1a3d8e]"
-                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-[#091f52]/40 font-medium"
-                        }`}
-                        title={`Filter by ${opt.label} status (${opt.count} cases)`}
-                      >
-                        <div className="flex items-center space-x-1">
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${opt.dotColor} shrink-0`}
-                          />
-                          <span className="text-[11px] leading-tight">
-                            {opt.shortLabel}
-                          </span>
-                        </div>
-                        <span className="text-[10px] opacity-75 font-mono">
-                          {opt.count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#040e28]/60 border border-slate-200/60 dark:border-[#1a3d8e]/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                <div className="flex items-center space-x-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                  <span className="font-medium">Default</span>
-                </div>
-                <span className="text-[10px] font-mono uppercase bg-slate-200/60 dark:bg-[#091f52] px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
-                  N/A
-                </span>
-              </div>
-            )}
-
-            {/* Batch Export Bar */}
-            <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  {selectedOkIds.length} OK selected
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedExportIds(okCases.map((c) => c.id))}
-                    className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7] cursor-pointer"
-                  >
-                    Select all OK
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedExportIds([])}
-                    className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400 cursor-pointer"
-                  >
-                    Clear selection
-                  </button>
-                </div>
-              </div>
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <select
-                  value={exportFormat}
-                  onChange={(event) =>
-                    setExportFormat(event.target.value as ExportFormat)
-                  }
-                  className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200 cursor-pointer"
-                  aria-label="Batch export format"
-                >
-                  <option value="csv">CSV</option>
-                  <option value="json">JSON</option>
-                  <option value="pdf">PDF</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void exportSelected()}
-                  disabled={selectedOkIds.length === 0 || exporting}
-                  className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
-                >
-                  {exporting ? "Exporting..." : "Export BL Draft"}
-                </button>
-              </div>
-              {exportNotice && (
-                <p
-                  className="mt-1 text-[10px] text-slate-500 dark:text-slate-400"
-                  role="status"
-                >
-                  {exportNotice}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Scrollable Cases List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
-            {visibleCases.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
-                No cases match the selected filters.
-              </div>
-            ) : (
-              visibleCases.map((c) => {
-                const isSelected = c.id === selectedCaseId;
-                return (
-                  <button
-                    key={c.id}
-                    data-case-id={c.id}
-                    onClick={() => {
-                      onSelectCase(c.id);
-                      if (onCloseMobile) onCloseMobile();
-                    }}
-                    className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
-                      isSelected
-                        ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
-                        : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedOkIds.includes(c.id)}
-                          disabled={
-                            c.category !== "BL_COMPARISON" || c.status !== "PASS"
-                          }
-                          onChange={() => toggleExportSelection(c)}
-                          onClick={(event) => event.stopPropagation()}
-                          aria-label={`Select ${c.id} for Draft BL export`}
-                          className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
-                        />
-                        <span className="text-[14px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
-                          {c.id}
-                        </span>
-                        {getCategoryBadge(c.category)}
+            {activeMailboxFolder === "SENT" ? (
+              <>
+                {/* Sent Mail Header */}
+                <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2 shrink-0">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      {onCloseMobile && (
+                        <button
+                          type="button"
+                          onClick={onCloseMobile}
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
+                          title="Close inbox"
+                          aria-label="Close inbox"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      <div className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/70 flex items-center justify-center shrink-0">
+                        <Send className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                       </div>
-                      <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
-                        {formatMalaysiaTime(c.timestamp, "compact")}
+                      <div>
+                        <h2 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">
+                          Sent Mail
+                        </h2>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                      {sentEmails.length} sent
+                    </span>
+                  </div>
+                </div>
+
+                {/* Scrollable Sent Messages List */}
+                <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+                  {sentEmails.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                      No sent emails logged yet.
+                    </div>
+                  ) : (
+                    sentEmails.map((email) => {
+                      const isSelected = email.id === selectedSentId;
+                      return (
+                        <button
+                          key={email.id}
+                          data-sent-id={email.id}
+                          onClick={() => {
+                            if (onSelectSent) onSelectSent(email);
+                            if (onCloseMobile) onCloseMobile();
+                          }}
+                          className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
+                            isSelected
+                              ? "bg-emerald-50/70 border-l-4 border-l-emerald-600 dark:bg-emerald-950/40 dark:border-l-emerald-500"
+                              : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5 min-w-0">
+                              <span className="text-[12px] font-bold text-slate-900 dark:text-white truncate max-w-[170px]">
+                                To: {email.to}
+                              </span>
+                              {email.attachments &&
+                                email.attachments.length > 0 && (
+                                  <Paperclip className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                                )}
+                            </div>
+                            <span className="ml-2 text-[10px] text-slate-400 font-mono shrink-0">
+                              {formatMalaysiaTime(email.sentAt, "compact")}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium truncate max-w-[175px]">
+                              {email.subject}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/40 shrink-0">
+                              #{email.caseId}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-slate-400 dark:text-slate-400 line-clamp-1 leading-snug">
+                            {email.body}
+                          </p>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Message List Header */}
+                <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 space-y-2 shrink-0">
+                  {/* Folder Title Bar with Controls */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center space-x-1.5 min-w-0">
+                      {onCloseMobile && (
+                        <button
+                          type="button"
+                          onClick={onCloseMobile}
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 md:hidden cursor-pointer"
+                          title="Close inbox"
+                          aria-label="Close inbox"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                      <currentFolder.icon
+                        className={`w-4 h-4 ${currentFolder.color} shrink-0`}
+                      />
+                      <h2
+                        className="text-sm font-bold text-slate-900 dark:text-white truncate"
+                        title={currentFolder.label}
+                      >
+                        <span className="hidden xl:inline">
+                          {currentFolder.label}
+                        </span>
+                        <span className="xl:hidden">
+                          {currentFolder.shortLabel}
+                        </span>
+                      </h2>
+                      <button
+                        type="button"
+                        id="sidebar-refresh-inbox"
+                        data-testid="sidebar-refresh-inbox"
+                        onClick={handleRefreshInbox}
+                        disabled={isRefreshing || !onRefreshInbox}
+                        aria-label="Scan and refresh live inbox"
+                        title="Scan and refresh live inbox"
+                        className="p-1 rounded-md text-slate-400 hover:text-[#345ec4] dark:hover:text-[#5a82e2] hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${
+                            isRefreshing
+                              ? "animate-spin text-[#345ec4] dark:text-[#5a82e2]"
+                              : ""
+                          }`}
+                        />
+                      </button>
+                      {isRefreshing && (
+                        <span className="text-[10px] text-[#345ec4] dark:text-[#5a82e2] font-semibold animate-pulse hidden sm:inline">
+                          Syncing...
+                        </span>
+                      )}
+                      {!isRefreshing && scanNotice && (
+                        <span
+                          role="status"
+                          aria-live="polite"
+                          className={`text-[10px] font-semibold flex items-center gap-0.5 animate-in fade-in ${
+                            scanNoticeTone === "success"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400"
+                          }`}
+                        >
+                          {scanNoticeTone === "success" ? (
+                            <Check className="w-3 h-3" />
+                          ) : (
+                            <AlertTriangle className="w-3 h-3" />
+                          )}
+                          {scanNotice}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-1 shrink-0">
+                      {(categoryFilter !== "ALL" || statusFilter !== "ALL") && (
+                        <button
+                          onClick={() => {
+                            onCategoryFilterChange("ALL");
+                            onStatusFilterChange("ALL");
+                          }}
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer flex items-center space-x-1 text-[11px]"
+                          title="Reset all filters"
+                          data-testid="reset-filters"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span className="hidden sm:inline">Reset</span>
+                        </button>
+                      )}
+                      <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[#eef3fc] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] font-bold border border-[#345ec4]/30">
+                        {cases.length} of {safeAll.length}
+                      </span>
+                      {unreadCount > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                          aria-label={`${unreadCount} unread emails`}
+                          title={`${unreadCount} unread emails`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
+                          {unreadCount} unread
+                        </span>
+                      )}
+                      {onToggleCollapsed && (
+                        <button
+                          type="button"
+                          onClick={onToggleCollapsed}
+                          className="hidden md:inline-flex p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
+                          title="Hide inbox sidebar"
+                          aria-label="Hide inbox sidebar"
+                          data-testid="collapse-inbox"
+                        >
+                          <PanelLeftClose className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Segmented Status Filter Bar (All, OK, Mismatch, Review) */}
+                  {isStatusApplicable ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        <span>Status Filter</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-slate-100 dark:bg-[#040e28] border border-slate-200/80 dark:border-[#1a3d8e]/60">
+                        {statusOptions.map((opt) => {
+                          const isSelected = statusFilter === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              data-testid={`status-pill-${opt.value}`}
+                              onClick={() => onStatusFilterChange(opt.value)}
+                              className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 py-1 px-1 rounded-lg transition-all cursor-pointer ${
+                                isSelected
+                                  ? "bg-white dark:bg-[#091f52] text-slate-900 dark:text-white shadow-xs font-bold border border-slate-200/60 dark:border-[#1a3d8e]"
+                                  : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-[#091f52]/40 font-medium"
+                              }`}
+                              title={`Filter by ${opt.label} status (${opt.count} cases)`}
+                            >
+                              <div className="flex items-center space-x-1">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${opt.dotColor} shrink-0`}
+                                />
+                                <span className="text-[11px] leading-tight">
+                                  {opt.shortLabel}
+                                </span>
+                              </div>
+                              <span className="text-[10px] opacity-75 font-mono">
+                                {opt.count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#040e28]/60 border border-slate-200/60 dark:border-[#1a3d8e]/40 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                        <span className="font-medium">Default</span>
+                      </div>
+                      <span className="text-[10px] font-mono uppercase bg-slate-200/60 dark:bg-[#091f52] px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                        N/A
                       </span>
                     </div>
+                  )}
 
-                    {/* Vessel / Reference line + Tier Badge & Status Badge */}
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[150px]">
-                        <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                        <span className="truncate">
-                          {c.vessel !== "N/A" ? c.vessel : c.subject}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-1.5 shrink-0">
-                        {c.category === "BL_COMPARISON" && (
-                          <ExtractionTierBadge shippingCase={c} size="xs" compact={true} showPopover={false} testId={`sidebar-tier-badge-${c.id}`} />
-                        )}
-                        {getStatusBadge(c)}
+                  {/* Batch Export Bar */}
+                  <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        {selectedOkIds.length} OK selected
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedExportIds(okCases.map((c) => c.id))
+                          }
+                          className="text-[10px] font-semibold text-[#345ec4] hover:underline dark:text-[#8ea9f7] cursor-pointer"
+                        >
+                          Select all OK
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedExportIds([])}
+                          className="text-[10px] font-semibold text-slate-500 hover:underline dark:text-slate-400 cursor-pointer"
+                        >
+                          Clear selection
+                        </button>
                       </div>
                     </div>
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <select
+                        value={exportFormat}
+                        onChange={(event) =>
+                          setExportFormat(event.target.value as ExportFormat)
+                        }
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 dark:border-[#1a3d8e]/60 dark:bg-[#091f52] dark:text-slate-200 cursor-pointer"
+                        aria-label="Batch export format"
+                      >
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                        <option value="pdf">PDF</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void exportSelected()}
+                        disabled={selectedOkIds.length === 0 || exporting}
+                        className="flex-1 rounded-lg bg-[#1a3d8e] px-2 py-1.5 text-[10px] font-bold text-white hover:bg-[#345ec4] disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
+                      >
+                        {exporting ? "Exporting..." : "Export BL Draft"}
+                      </button>
+                    </div>
+                    {exportNotice && (
+                      <p
+                        className="mt-1 text-[10px] text-slate-500 dark:text-slate-400"
+                        role="status"
+                      >
+                        {exportNotice}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-                    {/* Subject Preview */}
-                    <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
-                      {c.subject}
-                    </p>
-                  </button>
-                );
-              })
-            )}
+                {/* Scrollable Cases List */}
+                <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+                  {visibleCases.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                      No cases match the selected filters.
+                    </div>
+                  ) : (
+                    visibleCases.map((c) => {
+                      const isSelected = c.id === selectedCaseId;
+                      const isUnread = unreadIdSet.has(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          data-case-id={c.id}
+                          data-unread={isUnread}
+                          aria-label={`${c.id}${isUnread ? ", unread" : ", read"}`}
+                          onClick={() => {
+                            onSelectCase(c.id);
+                            if (onCloseMobile) onCloseMobile();
+                          }}
+                          className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
+                            isSelected
+                              ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
+                              : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedOkIds.includes(c.id)}
+                                disabled={
+                                  c.category !== "BL_COMPARISON" ||
+                                  c.status !== "PASS"
+                                }
+                                onChange={() => toggleExportSelection(c)}
+                                onClick={(event) => event.stopPropagation()}
+                                aria-label={`Select ${c.id} for Draft BL export`}
+                                className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
+                              />
+                              {isUnread && (
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <span
+                                className={`text-[14px] font-mono tracking-tight ${isUnread ? "font-extrabold text-slate-900 dark:text-white" : "font-medium text-slate-700 dark:text-slate-300"}`}
+                              >
+                                {c.id}
+                              </span>
+                              {getCategoryBadge(c.category)}
+                            </div>
+                            <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
+                              {formatMalaysiaTime(c.timestamp, "compact")}
+                            </span>
+                          </div>
 
-            {/* Load More Button */}
-            {hasMoreCases && (
-              <div className="p-3 text-center">
-                <button
-                  onClick={async () => {
-                    if (!onLoadMore || loadingMore) return;
-                    setLoadingMore(true);
-                    try {
-                      await onLoadMore();
-                    } finally {
-                      setLoadingMore(false);
-                    }
-                  }}
-                  disabled={loadingMore}
-                  className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
-                >
-                  <span>{loadingMore ? "Loading..." : "Load more cases"}</span>
-                  {!loadingMore && <ChevronDown className="w-3.5 h-3.5" />}
-                </button>
-                <span className="text-[10px] text-slate-400 block mt-1">
-                  Showing {cases.length} loaded cases
-                </span>
-              </div>
+                          {/* Vessel / Reference line + Tier Badge & Status Badge */}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[150px]">
+                              <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                              <span className="truncate">
+                                {c.vessel !== "N/A" ? c.vessel : c.subject}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              {c.category === "BL_COMPARISON" && (
+                                <ExtractionTierBadge
+                                  shippingCase={c}
+                                  size="xs"
+                                  compact={true}
+                                  showPopover={false}
+                                  testId={`sidebar-tier-badge-${c.id}`}
+                                />
+                              )}
+                              {getStatusBadge(c)}
+                            </div>
+                          </div>
+
+                          {/* Subject Preview */}
+                          <p
+                            className={`text-[11px] line-clamp-1 leading-snug ${isUnread ? "font-bold text-slate-800 dark:text-white" : "font-normal text-slate-500 dark:text-slate-300"}`}
+                          >
+                            {c.subject}
+                          </p>
+                        </button>
+                      );
+                    })
+                  )}
+
+                  {/* Load More Button */}
+                  {hasMoreCases && (
+                    <div className="p-3 text-center">
+                      <button
+                        onClick={async () => {
+                          if (!onLoadMore || loadingMore) return;
+                          setLoadingMore(true);
+                          try {
+                            await onLoadMore();
+                          } finally {
+                            setLoadingMore(false);
+                          }
+                        }}
+                        disabled={loadingMore}
+                        className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-[#091f52]/60 dark:hover:bg-[#1a3d8e]/60 text-slate-700 dark:text-slate-300 flex items-center justify-center space-x-1 transition-colors cursor-pointer border border-slate-200/60 dark:border-[#1a3d8e]/50"
+                      >
+                        <span>
+                          {loadingMore ? "Loading..." : "Load more cases"}
+                        </span>
+                        {!loadingMore && (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <span className="text-[10px] text-slate-400 block mt-1">
+                        Showing {cases.length} loaded cases
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-          </div>
-            </>
-          )}
           </div>
         )}
       </aside>

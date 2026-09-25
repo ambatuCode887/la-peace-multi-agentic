@@ -22,9 +22,47 @@ import {
 import type { BackendReport } from "./services/api";
 import { outboxService, type DispatchedEmail } from "./services/outboxService";
 
+interface InboxReadState {
+  initialized: boolean;
+  knownIds: string[];
+  unreadIds: string[];
+}
+
+const INBOX_READ_STATE_KEY = "shippingInboxReadState";
+
+function loadInboxReadState(): InboxReadState {
+  try {
+    const stored = localStorage.getItem(INBOX_READ_STATE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<InboxReadState>;
+      if (
+        typeof parsed.initialized === "boolean" &&
+        Array.isArray(parsed.knownIds) &&
+        Array.isArray(parsed.unreadIds)
+      ) {
+        return {
+          initialized: parsed.initialized,
+          knownIds: parsed.knownIds.filter(
+            (id): id is string => typeof id === "string",
+          ),
+          unreadIds: parsed.unreadIds.filter(
+            (id): id is string => typeof id === "string",
+          ),
+        };
+      }
+    }
+  } catch {
+    // Keep inbox read state in memory if browser storage is unavailable.
+  }
+  return { initialized: false, knownIds: [], unreadIds: [] };
+}
+
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
-  const [activeView, setActiveView] = useState<"dashboard" | "inbox">("dashboard");
+  const [inboxReadState, setInboxReadState] = useState(loadInboxReadState);
+  const [activeView, setActiveView] = useState<"dashboard" | "inbox">(
+    "dashboard",
+  );
   const [selectedCaseId, setSelectedCaseId] = useState<string>(() => {
     try {
       const param = new URLSearchParams(window.location.search).get("case");
@@ -32,11 +70,14 @@ export function App() {
     } catch {}
     return ALL_CASES[0]?.id || "email_001";
   });
-  const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT">("INBOX");
-  const [selectedSentEmail, setSelectedSentEmail] = useState<DispatchedEmail | null>(() => {
-    const list = outboxService.getSentEmails();
-    return list.length > 0 ? list[0] : null;
-  });
+  const [activeMailboxFolder, setActiveMailboxFolder] = useState<
+    "INBOX" | "SENT"
+  >("INBOX");
+  const [selectedSentEmail, setSelectedSentEmail] =
+    useState<DispatchedEmail | null>(() => {
+      const list = outboxService.getSentEmails();
+      return list.length > 0 ? list[0] : null;
+    });
 
   useEffect(() => {
     return outboxService.subscribe(() => {
@@ -57,7 +98,8 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
-  const [batchRuleCorrectionsOpen, setBatchRuleCorrectionsOpen] = useState(false);
+  const [batchRuleCorrectionsOpen, setBatchRuleCorrectionsOpen] =
+    useState(false);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "review" | "email" | "chat"
   >("summary");
@@ -79,6 +121,17 @@ export function App() {
   }, [inboxCollapsed]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(
+        INBOX_READ_STATE_KEY,
+        JSON.stringify(inboxReadState),
+      );
+    } catch {
+      // Read state remains available in memory for this session.
+    }
+  }, [inboxReadState]);
+
+  useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
@@ -98,6 +151,28 @@ export function App() {
       }
       const result = await api.getCases(1, 1000);
       const summaries = result.cases;
+      const incomingIds = summaries.map((summary) => summary.email_id);
+      setInboxReadState((current) => {
+        const knownIds = new Set(current.knownIds);
+        const unreadIds = new Set(current.unreadIds);
+        if (!current.initialized) {
+          incomingIds.forEach((id) => knownIds.add(id));
+          return {
+            initialized: true,
+            knownIds: Array.from(knownIds),
+            unreadIds: Array.from(unreadIds).filter((id) => knownIds.has(id)),
+          };
+        }
+        incomingIds.forEach((id) => {
+          if (!knownIds.has(id)) unreadIds.add(id);
+          knownIds.add(id);
+        });
+        return {
+          initialized: true,
+          knownIds: Array.from(knownIds),
+          unreadIds: Array.from(unreadIds),
+        };
+      });
       if (summaries.length > 0) {
         setCases((previous) =>
           summaries.map((summary) =>
@@ -153,7 +228,9 @@ export function App() {
             const exists = prev.some((c) => c.id === selectedCaseId);
             if (exists) {
               return prev.map((c) =>
-                c.id === selectedCaseId ? mapReportToShippingCase(report, c) : c,
+                c.id === selectedCaseId
+                  ? mapReportToShippingCase(report, c)
+                  : c,
               );
             }
             return [mapReportToShippingCase(report), ...prev];
@@ -234,6 +311,16 @@ export function App() {
     handleReport(report);
   };
 
+  const markInboxCaseRead = (id: string) => {
+    setInboxReadState((current) => ({
+      ...current,
+      knownIds: current.knownIds.includes(id)
+        ? current.knownIds
+        : [...current.knownIds, id],
+      unreadIds: current.unreadIds.filter((unreadId) => unreadId !== id),
+    }));
+  };
+
   const handleCategoryFilterChange = (cat: EmailCategory | "ALL") => {
     setCategoryFilter(cat);
     setStatusFilter("ALL");
@@ -267,6 +354,7 @@ export function App() {
   };
 
   const handleSelectCase = (id: string) => {
+    markInboxCaseRead(id);
     setActiveMailboxFolder("INBOX");
     setActiveView("inbox");
     setSelectedCaseId(id);
@@ -282,7 +370,7 @@ export function App() {
   const handleNavigateToInbox = (
     category: EmailCategory | "ALL" = "ALL",
     status: VerificationStatus | "ALL" = "ALL",
-    caseId?: string
+    caseId?: string,
   ) => {
     setActiveView("inbox");
     setActiveMailboxFolder("INBOX");
@@ -290,6 +378,7 @@ export function App() {
     setCategoryFilter(category);
     setStatusFilter(status);
     if (caseId) {
+      markInboxCaseRead(caseId);
       setSelectedCaseId(caseId);
     }
   };
@@ -325,6 +414,7 @@ export function App() {
         <Sidebar
           allCases={cases}
           cases={filteredCases}
+          unreadCaseIds={inboxReadState.unreadIds}
           selectedCaseId={currentCase?.id || ""}
           onSelectCase={handleSelectCase}
           categoryFilter={categoryFilter}
@@ -368,8 +458,8 @@ export function App() {
               activeView === "dashboard"
                 ? "max-w-7xl"
                 : inboxCollapsed
-                ? "max-w-6xl"
-                : "max-w-4xl"
+                  ? "max-w-6xl"
+                  : "max-w-4xl"
             }`}
           >
             {activeView === "dashboard" ? (
@@ -417,7 +507,8 @@ export function App() {
                 )}
                 {!queueLoading && !currentCase && !queueError && (
                   <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
-                    No backend cases are available yet. Process the inbox or refresh.
+                    No backend cases are available yet. Process the inbox or
+                    refresh.
                   </div>
                 )}
                 {currentCase && (
