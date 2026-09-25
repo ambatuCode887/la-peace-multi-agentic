@@ -72,6 +72,10 @@ docker run --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
 
 Open the Mailpit inbox at `http://localhost:8025`. Send test messages through SMTP at `127.0.0.1:1025`; the application polls Mailpit's API and imports new messages automatically. The backend uses `MAILPIT_URL=http://127.0.0.1:8025` by default.
 
+The case email composer sends through the same local SMTP server by default. Configure `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM` in the backend environment as needed. For an external SMTP provider, also set `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_STARTTLS=true` when required, then explicitly set `EMAIL_SEND_ENABLED=true`. External delivery is disabled unless that flag is enabled. The composer only sends after the user confirms; failed delivery is not added to Sent.
+
+Use **Save Draft** to keep an editable draft in that browser. Draft text is stored in browser storage and uploaded draft files in IndexedDB, so drafts are not shared between browsers or devices. Scheduled messages are stored by the backend (MongoDB when configured, otherwise the local filesystem), sent by its background worker even after the browser closes, and can be cancelled from **Scheduled** before delivery. The worker checks due jobs every 15 seconds. Scheduled messages support up to 8 MB of combined attachments; send-now messages support up to 20 MB.
+
 Example local test message:
 
 ```powershell

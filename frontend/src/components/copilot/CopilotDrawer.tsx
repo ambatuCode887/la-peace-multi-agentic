@@ -13,11 +13,13 @@ import {
   FileText,
   Trash2,
   Plus,
+  CalendarClock,
+  Save,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 import type { BackendReport } from "../../services/api";
 import { api, API_BASE } from "../../services/api";
-import { outboxService, type SentAttachment } from "../../services/outboxService";
+import { outboxService, type DraftEmail, type SentAttachment } from "../../services/outboxService";
 import { ReviewPanel } from "../review/ReviewPanel";
 
 /**
@@ -39,6 +41,8 @@ interface CopilotDrawerProps {
   activeTab: "summary" | "review" | "email" | "chat";
   onTabChange: (tab: "summary" | "review" | "email" | "chat") => void;
   onReviewSaved?: (report: BackendReport) => void;
+  draftToRestore?: DraftEmail | null;
+  onDraftRestored?: () => void;
 }
 
 export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
@@ -48,6 +52,8 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   activeTab,
   onTabChange,
   onReviewSaved,
+  draftToRestore,
+  onDraftRestored,
 }) => {
   const vesselTag =
     currentCase.vessel && currentCase.vessel !== "N/A"
@@ -71,14 +77,17 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [draftAttachments, setDraftAttachments] = useState<SentAttachment[]>([]);
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [editingDraftId, setEditingDraftId] = useState<string | undefined>();
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<
-    "idle" | "sending" | "sent" | "failed"
+    "idle" | "sending" | "sent" | "failed" | "scheduled"
   >("idle");
   const [dispatchFeedback, setDispatchFeedback] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const restoredDraftCaseRef = useRef<string | null>(null);
 
   // Dynamic auto-resizing of email body textarea (min 160px, max 300px)
   useEffect(() => {
@@ -100,6 +109,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         filename,
         size: 38400,
         ext,
+        caseAttachment: attPath,
         url: `${API_BASE}/cases/${encodeURIComponent(currentCase.id)}/attachments/${attPath.replace(/^\/+/, "")}`,
       };
     });
@@ -120,6 +130,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         filename: f.name,
         size: f.size,
         ext,
+        file: f,
       };
     });
     setDraftAttachments((prev) => [...prev, ...newAtts]);
@@ -132,6 +143,25 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
 
   // Reset or fetch email draft preview when case changes or email tab opens
   useEffect(() => {
+    if (draftToRestore) {
+      setDraftTo(draftToRestore.to);
+      setDraftSubject(draftToRestore.subject);
+      setDraftBody(draftToRestore.body);
+      setDraftAttachments(draftToRestore.attachments);
+      setScheduleAt(draftToRestore.scheduleAt || "");
+      setEditingDraftId(draftToRestore.id);
+      setDispatchFeedback(draftToRestore.attachments.some((attachment) => attachment.fileMissing)
+        ? "A saved upload could not be restored. Reattach it before sending."
+        : null);
+      setDispatchStatus("idle");
+      restoredDraftCaseRef.current = currentCase.id;
+      onDraftRestored?.();
+      return;
+    }
+    if (restoredDraftCaseRef.current === currentCase.id) {
+      restoredDraftCaseRef.current = null;
+      return;
+    }
     if (activeTab === "email") {
       setIsDraftLoading(true);
       setDispatchStatus("idle");
@@ -186,6 +216,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     currentCase.fields,
     vesselTag,
     activeTab,
+    draftToRestore,
   ]);
 
   const handleSendMessage = async (textToSend?: string) => {
@@ -337,51 +368,126 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     }
   };
 
+  const hasMissingUpload = draftAttachments.some((attachment) => attachment.fileMissing && !attachment.file);
+
+  const handleSaveDraft = async () => {
+    try {
+      const saved = await outboxService.saveDraft({
+        id: editingDraftId,
+        caseId: currentCase.id,
+        to: draftTo.trim(),
+        subject: draftSubject.trim(),
+        body: draftBody,
+        scheduleAt,
+        attachments: draftAttachments,
+      });
+      setEditingDraftId(saved.id);
+      setDispatchStatus("idle");
+      setDispatchFeedback(saved.attachments.some((attachment) => attachment.fileMissing)
+        ? "Draft saved; reattach the marked upload before sending."
+        : "Draft saved.");
+    } catch (error) {
+      setDispatchStatus("failed");
+      setDispatchFeedback(error instanceof Error ? error.message : "Could not save draft.");
+    }
+  };
+
   const handleDispatchEmail = async () => {
     if (!draftTo.trim() || !draftSubject.trim()) return;
+    if (hasMissingUpload) {
+      setDispatchStatus("failed");
+      setDispatchFeedback("Reattach the missing uploaded file before sending.");
+      return;
+    }
+    const recipient = draftTo.trim();
+    const confirmed = window.confirm(
+      `Send this email to ${recipient}${draftAttachments.length ? ` with ${draftAttachments.length} attachment(s)` : ''}?`,
+    );
+    if (!confirmed) return;
     setDispatchStatus("sending");
     setDispatchFeedback(null);
     try {
-      // 1. Persist to outbox store
-      outboxService.saveSentEmail({
+      const sent = await api.sendEmail({
         caseId: currentCase.id,
-        to: draftTo.trim() || currentCase.sender,
+        to: recipient,
+        subject: draftSubject.trim(),
+        body: draftBody,
+        attachments: draftAttachments,
+      });
+      outboxService.saveSentEmail({
+        id: sent.message_id,
+        sentAt: sent.sent_at,
+        caseId: currentCase.id,
+        to: recipient,
         subject: draftSubject.trim(),
         body: draftBody,
         attachments: draftAttachments,
         vessel: currentCase.vessel !== "N/A" ? currentCase.vessel : currentCase.subject,
       });
-
-      // 2. Submit case review correction to backend audit log
-      await api.submitReviewCorrection(currentCase.id, {
-        category: currentCase.category,
-        status: "NEEDS_REVIEW",
-        review_reason: "clarification_requested",
-        has_defect: currentCase.status === "MISMATCH",
-        defect_fields: currentCase.fields
-          .filter((f) => f.status === "mismatch")
-          .map((f) => f.key),
-        decision: "request_clarification",
-        note: draftSubject,
-      });
+      if (editingDraftId) {
+        await outboxService.deleteDraft(editingDraftId).catch(() => undefined);
+        setEditingDraftId(undefined);
+      }
 
       setDispatchStatus("sent");
-      setDispatchFeedback(
-        `Email sent to ${draftTo || currentCase.sender} and recorded in Sent mailbox & audit log.`,
-      );
+      setDispatchFeedback(sent.audit_logged
+        ? `Email sent to ${recipient} and recorded in Sent mailbox and case audit.`
+        : `Email sent to ${recipient}; the case audit could not be saved.`);
       setTimeout(() => {
         setDispatchStatus("idle");
         setDispatchFeedback(null);
       }, 5000);
-    } catch {
+    } catch (error) {
       setDispatchStatus("failed");
-      setDispatchFeedback(
-        `Failed to send email to ${draftTo || currentCase.sender}.`,
-      );
+      setDispatchFeedback(error instanceof Error
+        ? error.message
+        : `Failed to send email to ${recipient}.`);
       setTimeout(() => {
         setDispatchStatus("idle");
         setDispatchFeedback(null);
       }, 5000);
+    }
+  };
+
+  const handleScheduleEmail = async () => {
+    if (!draftTo.trim() || !draftSubject.trim() || !scheduleAt) return;
+    if (hasMissingUpload) {
+      setDispatchStatus("failed");
+      setDispatchFeedback("Reattach the missing uploaded file before scheduling.");
+      return;
+    }
+    const scheduledTime = new Date(scheduleAt);
+    if (Number.isNaN(scheduledTime.getTime()) || scheduledTime <= new Date()) {
+      setDispatchStatus("failed");
+      setDispatchFeedback("Choose a future date and time.");
+      return;
+    }
+    if (!window.confirm(`Schedule this email to ${draftTo.trim()} for ${scheduledTime.toLocaleString()}?`)) return;
+    setDispatchStatus("sending");
+    setDispatchFeedback(null);
+    try {
+      const scheduled = await api.scheduleEmail({
+        caseId: currentCase.id,
+        to: draftTo.trim(),
+        subject: draftSubject.trim(),
+        body: draftBody,
+        scheduledAt: scheduledTime.toISOString(),
+        attachments: draftAttachments,
+      });
+      if (editingDraftId) {
+        await outboxService.deleteDraft(editingDraftId).catch(() => undefined);
+        setEditingDraftId(undefined);
+      }
+      setDispatchStatus("scheduled");
+      setDispatchFeedback(`Scheduled for ${new Date(scheduled.scheduled_at).toLocaleString()}.`);
+      setScheduleAt("");
+      setTimeout(() => {
+        setDispatchStatus("idle");
+        setDispatchFeedback(null);
+      }, 5000);
+    } catch (error) {
+      setDispatchStatus("failed");
+      setDispatchFeedback(error instanceof Error ? error.message : "Could not schedule email.");
     }
   };
 
@@ -787,6 +893,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                         <span className="text-[10px] text-slate-400 font-mono">
                           ({att.size < 1024 ? `${att.size}B` : `${Math.round(att.size / 1024)}KB`})
                         </span>
+                        {att.fileMissing && <span className="text-[10px] text-rose-600">Reattach required</span>}
                       </div>
                       <button
                         type="button"
@@ -804,8 +911,40 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           </div>
 
           <button
+            type="button"
+            onClick={() => void handleSaveDraft()}
+            className="w-full py-2 rounded-xl border border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-[#091f52]/50 cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>Save Draft</span>
+          </button>
+
+          <div className="flex items-end gap-2">
+            <label className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Schedule for
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000 + 60000).toISOString().slice(0, 16)}
+                onChange={(event) => setScheduleAt(event.target.value)}
+                className="mt-1 block w-full min-w-0 rounded-lg border border-slate-200 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#05163a] px-2 py-2 text-xs font-medium normal-case text-slate-800 dark:text-slate-200"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void handleScheduleEmail()}
+              disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim() || !scheduleAt}
+              title="Schedule email"
+              className="h-9 px-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-100 cursor-pointer disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+            >
+              <CalendarClock className="w-3.5 h-3.5" />
+              <span>Schedule</span>
+            </button>
+          </div>
+
+          <button
             onClick={handleDispatchEmail}
-            disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim()}
+            disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim() || hasMissingUpload}
             className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-2 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
           >
             {dispatchStatus === "sending" ? (
@@ -822,6 +961,11 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               <>
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
                 <span>Failed to Send Email</span>
+              </>
+            ) : dispatchStatus === "scheduled" ? (
+              <>
+                <CalendarClock className="w-3.5 h-3.5 text-amber-200" />
+                <span>Email Scheduled</span>
               </>
             ) : (
               <>
