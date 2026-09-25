@@ -64,6 +64,9 @@ interface SidebarProps {
   selectedSentId?: string | null;
   onSelectSent?: (sentEmail: DispatchedEmail) => void;
   onSelectDraft?: (draft: DraftEmail) => void;
+  selectedScheduledId?: string | null;
+  onSelectScheduled?: (scheduledEmail: ScheduledEmailSummary) => void;
+  onScheduledCancelled?: (scheduledEmailId: string) => void;
   activeView?: "dashboard" | "inbox" | "benchmark";
   onGoToDashboard?: () => void;
   onGoToBenchmark?: () => void;
@@ -97,6 +100,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedSentId,
   onSelectSent,
   onSelectDraft,
+  selectedScheduledId,
+  onSelectScheduled,
+  onScheduledCancelled,
   activeView = "dashboard",
   onGoToDashboard,
   onGoToBenchmark,
@@ -134,6 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
   const [drafts, setDrafts] = useState<DraftEmail[]>(() => outboxService.getDrafts());
   const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmailSummary[]>([]);
+  const visibleScheduledEmails = scheduledEmails.filter((email) => email.status !== "sent");
   const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -178,6 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setScheduledEmails((current) => current.map((email) =>
         email.id === id ? { ...email, status: "cancelled" } : email,
       ));
+      onScheduledCancelled?.(id);
     } catch (error) {
       setScheduleNotice(error instanceof Error ? error.message : "Could not cancel scheduled email.");
     }
@@ -1070,15 +1078,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               {scheduleNotice && <p role="status" className="px-3 py-2 text-xs text-rose-600">{scheduleNotice}</p>}
               <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
-                {scheduledEmails.length === 0 ? (
+                {visibleScheduledEmails.length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500">No scheduled messages.</div>
-                ) : scheduledEmails.map((email) => (
-                  <div key={email.id} className="p-3 flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
+                ) : visibleScheduledEmails.map((email) => (
+                  <div key={email.id} className={`p-2 flex items-start gap-1 border-l-4 ${selectedScheduledId === email.id ? "border-amber-500 bg-amber-50/70 dark:bg-amber-950/30" : "border-transparent"}`}>
+                    <button
+                      type="button"
+                      data-scheduled-id={email.id}
+                      onClick={() => {
+                        onSelectScheduled?.(email);
+                        onCloseMobile?.();
+                      }}
+                      className="min-w-0 flex-1 p-1 text-left rounded-md hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                    >
                       <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">To: {email.to.join(", ")}</div>
                       <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 truncate">{email.subject}</div>
                       <div className="mt-1 text-[10px] text-slate-400">{formatMalaysiaTime(email.scheduled_at, "compact")} · {email.status}</div>
-                    </div>
+                    </button>
                     {email.status === "scheduled" && (
                       <button type="button" onClick={() => void handleCancelScheduledEmail(email.id)} title="Cancel scheduled email" aria-label="Cancel scheduled email" className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">
                         <X className="w-4 h-4" />

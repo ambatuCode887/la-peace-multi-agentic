@@ -20,7 +20,7 @@ import {
   mapReportToShippingCase,
   mapSummaryToShippingCase,
 } from "./services/api";
-import type { BackendReport } from "./services/api";
+import type { BackendReport, ScheduledEmailSummary } from "./services/api";
 import { outboxService, type DispatchedEmail, type DraftEmail } from "./services/outboxService";
 
 export function App() {
@@ -50,6 +50,7 @@ export function App() {
   });
   const [draftToRestore, setDraftToRestore] = useState<DraftEmail | null>(null);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [selectedScheduledEmail, setSelectedScheduledEmail] = useState<ScheduledEmailSummary | null>(null);
 
   useEffect(() => {
     return outboxService.subscribe(() => {
@@ -447,6 +448,18 @@ export function App() {
             setInboxCollapsed(false);
           }}
           onSelectDraft={(draft) => void handleSelectDraft(draft)}
+          selectedScheduledId={selectedScheduledEmail?.id || null}
+          onSelectScheduled={(email) => {
+            setSelectedScheduledEmail(email);
+            setActiveMailboxFolder("SCHEDULED");
+            setActiveView("inbox");
+            setInboxCollapsed(false);
+          }}
+          onScheduledCancelled={(id) => {
+            setSelectedScheduledEmail((email) =>
+              email?.id === id ? { ...email, status: "cancelled" } : email,
+            );
+          }}
           activeView={activeView}
           onGoToDashboard={handleGoToDashboard}
           onGoToBenchmark={handleGoToBenchmark}
@@ -511,9 +524,35 @@ export function App() {
                 </div>
               )
             ) : activeMailboxFolder === "SCHEDULED" ? (
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
-                Scheduled messages are listed here. Use the cancel control before delivery time to stop a message.
-              </div>
+              selectedScheduledEmail ? (
+                <article className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-slate-200/80 bg-white dark:border-[#1a3d8e]/60 dark:bg-[#06163a]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 dark:border-[#1a3d8e]/40">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold capitalize text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                        {selectedScheduledEmail.status}
+                      </span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Scheduled for {new Date(selectedScheduledEmail.scheduled_at).toLocaleString()}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">Case #{selectedScheduledEmail.case_id}</span>
+                  </div>
+                  <div className="border-b border-slate-100 p-4 dark:border-[#1a3d8e]/40">
+                    <h1 className="text-base font-bold text-slate-900 dark:text-white">{selectedScheduledEmail.subject}</h1>
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">To: {selectedScheduledEmail.to.join(", ")}</p>
+                  </div>
+                  <div className="min-h-48 whitespace-pre-wrap p-5 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                    {selectedScheduledEmail.body || "(No message body)"}
+                  </div>
+                  {selectedScheduledEmail.attachment_names.length > 0 && (
+                    <div className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 dark:border-[#1a3d8e]/40 dark:text-slate-400">
+                      Attachments: {selectedScheduledEmail.attachment_names.join(", ")}
+                    </div>
+                  )}
+                </article>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
+                  Select a scheduled email to view its content and delivery status.
+                </div>
+              )
             ) : (
               <>
                 {/* Conditional Discrepancy & Status Alert Banner */}
@@ -553,7 +592,7 @@ export function App() {
         </main>
 
         {/* Zone 3: AI Assistant & Operator Review Workspace (Right) */}
-        {activeView === "inbox" && currentCase && activeMailboxFolder !== "DRAFTS" && (
+        {activeView === "inbox" && currentCase && activeMailboxFolder === "INBOX" && (
           <CopilotDrawer
             currentCase={currentCase}
             isOpen={drawerOpen}
