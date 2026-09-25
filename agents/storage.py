@@ -52,6 +52,7 @@ class FilesystemCaseStore(CaseStore):
                 "status": report.get("status", "UNPROCESSED"),
                 "review_reason": report.get("review_reason"),
                 "deletable": _is_user_upload(report_path.parent, report_path.parent.name),
+                "mailpit_id": report.get("mailpit_id"),
                 "updated_at": datetime.fromtimestamp(
                     report_path.stat().st_mtime, tz=timezone.utc
                 ).isoformat(),
@@ -106,7 +107,19 @@ class MongoCaseStore(CaseStore):
 
     def list_cases(self, skip: int = 0, limit: int | None = None) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
-        cursor = self.collection.find({"_deleted": {"$ne": True}}).sort("updated_at", -1).skip(skip)
+        cursor = self.collection.find(
+            {"_deleted": {"$ne": True}},
+            {
+                "_id": 0,
+                "email_id": 1,
+                "category": 1,
+                "status": 1,
+                "review_reason": 1,
+                "deletable": 1,
+                "mailpit_id": 1,
+                "updated_at": 1,
+            },
+        ).sort("updated_at", -1).skip(skip)
         if limit is not None:
             cursor = cursor.limit(limit)
         for record in cursor:
@@ -118,6 +131,7 @@ class MongoCaseStore(CaseStore):
                 "status": payload.get("status", "UNPROCESSED"),
                 "review_reason": payload.get("review_reason"),
                 "deletable": payload.get("deletable", False),
+                "mailpit_id": payload.get("mailpit_id"),
                 "updated_at": payload.get("updated_at"),
             })
         return items

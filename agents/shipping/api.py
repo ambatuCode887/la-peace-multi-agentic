@@ -17,6 +17,7 @@ import httpx
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 from .exports import render_export
 from .tool import inspect_shipping_email
 from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
@@ -78,7 +79,7 @@ def create_app(
         page = max(page, 1)
         page_size = min(max(page_size, 1), 1000)
         skip = (page - 1) * page_size
-        cases = store.list_cases(skip=skip, limit=page_size)
+        cases = await run_in_threadpool(store.list_cases, skip=skip, limit=page_size)
         return {
             "ok": True,
             "cases": cases,
@@ -93,22 +94,45 @@ def create_app(
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 summaries = await _mailpit_summaries(client, base_url)
+                known_cases = await run_in_threadpool(store.list_cases)
+                known_case_ids = {
+                    str(case.get("email_id") or "") for case in known_cases
+                }
+                known_mailpit_cases = {
+                    str(case["mailpit_id"]): str(case.get("email_id") or "")
+                    for case in known_cases
+                    if case.get("mailpit_id")
+                }
                 imported = 0
                 for summary in summaries:
                     message_id = str(summary.get("ID") or summary.get("id") or "")
                     if not message_id:
                         continue
+                    known_email_id = known_mailpit_cases.get(message_id)
+                    if known_email_id and not known_email_id.startswith("mailpit_"):
+                        continue
                     detail_response = await client.get(f"{base_url}/api/v1/message/{message_id}")
                     detail_response.raise_for_status()
                     message = detail_response.json()
                     email_id = _mailpit_email_id(message_id, message)
-                    if store.get_case(email_id) is not None:
+                    if email_id in known_case_ids:
+                        known_mailpit_cases[message_id] = email_id
                         continue
                     hashed_id = f"mailpit_{hashlib.sha256(message_id.encode()).hexdigest()[:24]}"
-                    if hashed_id != email_id and _rename_mailpit_case(
-                        root, store, hashed_id, email_id, message_id
-                    ):
-                        continue
+                    if hashed_id != email_id and hashed_id in known_case_ids:
+                        renamed = await run_in_threadpool(
+                            _rename_mailpit_case,
+                            root,
+                            store,
+                            hashed_id,
+                            email_id,
+                            message_id,
+                        )
+                        if renamed:
+                            known_case_ids.discard(hashed_id)
+                            known_case_ids.add(email_id)
+                            known_mailpit_cases[message_id] = email_id
+                            continue
                     attachment_data: list[tuple[str, bytes]] = []
                     for attachment in message.get("Attachments", []):
                         part_id = str(attachment.get("PartID") or "")
@@ -120,7 +144,13 @@ def create_app(
                         )
                         part_response.raise_for_status()
                         attachment_data.append((filename, part_response.content))
-                    dataset_root = _save_mailpit_message(root, email_id, message, attachment_data)
+                    dataset_root = await run_in_threadpool(
+                        _save_mailpit_message,
+                        root,
+                        email_id,
+                        message,
+                        attachment_data,
+                    )
                     sender = _mailpit_address(message.get("From"))
                     subject = str(message.get("Subject") or "(No subject)")
                     body = str(message.get("Text") or message.get("text") or "")
@@ -139,7 +169,9 @@ def create_app(
                         "source": "mailpit",
                         "mailpit_id": message_id,
                     }
-                    store.save_report(placeholder)
+                    await run_in_threadpool(store.save_report, placeholder)
+                    known_case_ids.add(email_id)
+                    known_mailpit_cases[message_id] = email_id
                     background_tasks.add_task(
                         _process_received_case,
                         store,
@@ -846,6 +878,9 @@ def _process_received_case(
     try:
         report = inspect_shipping_email(email_id, str(dataset_root))
         report["source"] = "mailpit"
+        inbox_record = _read_json(dataset_root / "inbox" / f"{email_id}.json", {})
+        if inbox_record.get("mailpit_id"):
+            report["mailpit_id"] = inbox_record["mailpit_id"]
         if include_ai:
             try:
                 report["ai_analysis"] = analyze_shipping_case(report)

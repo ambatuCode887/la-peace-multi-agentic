@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from agents.shipping import api as shipping_api
@@ -32,6 +34,7 @@ class InMemoryCaseStore(CaseStore):
                 "status": report.get("status", "UNPROCESSED"),
                 "review_reason": report.get("review_reason"),
                 "deletable": False,
+                "mailpit_id": report.get("mailpit_id"),
                 "updated_at": report.get("updated_at"),
             }
             for report in self.reports.values()
@@ -48,6 +51,42 @@ class InMemoryCaseStore(CaseStore):
 
     def delete_case(self, email_id: str) -> bool:
         return self.reports.pop(email_id, None) is not None
+
+
+def test_case_list_does_not_block_other_api_routes(tmp_path) -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    class SlowListStore(InMemoryCaseStore):
+        def list_cases(self, *_args, **_kwargs) -> list[dict]:
+            started.set()
+            release.wait(timeout=3)
+            return super().list_cases()
+
+    async def check_routes() -> None:
+        application = create_app(tmp_path, case_store=SlowListStore())
+        transport = httpx.ASGITransport(app=application)
+        timer = threading.Timer(1, release.set)
+        timer.start()
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                cases_request = asyncio.create_task(client.get("/cases"))
+                started_wait = asyncio.create_task(asyncio.to_thread(started.wait, 1))
+                root_request = asyncio.create_task(client.get("/"))
+                root_response = await asyncio.wait_for(root_request, timeout=0.5)
+                assert await started_wait
+                assert root_response.status_code == 200
+                release.set()
+                cases_response = await asyncio.wait_for(cases_request, timeout=2)
+                assert cases_response.status_code == 200
+        finally:
+            release.set()
+            timer.cancel()
+
+    asyncio.run(check_routes())
 
 
 def test_upload_storage_creates_expected_dataset_shape(tmp_path) -> None:
@@ -257,6 +296,8 @@ def test_dashboard_exposes_process_inbox_control(tmp_path) -> None:
 
 
 def test_mailpit_sync_imports_new_message(tmp_path, monkeypatch) -> None:
+    detail_requests = 0
+
     class FakeResponse:
         def __init__(self, payload: dict, content: bytes = b"") -> None:
             self.payload = payload
@@ -276,16 +317,18 @@ def test_mailpit_sync_imports_new_message(tmp_path, monkeypatch) -> None:
             return None
 
         async def get(self, url: str, **kwargs):
+            nonlocal detail_requests
             if url.endswith("/messages"):
                 return FakeResponse({"messages": [{"ID": "mailpit-message-1"}]})
             if url.endswith("/part/2"):
                 return FakeResponse({}, b"attached document")
+            detail_requests += 1
             return FakeResponse({
                 "ID": "mailpit-message-1",
                 "From": {"Address": "demo@example.com"},
                 "Subject": "Mailpit test",
                 "Text": "This message came from Mailpit.",
-                "Attachments": [{"PartID": "2", "FileName": "document.txt"}],
+                "Attachments": [{"PartID": "2", "FileName": "email_600_SI.txt"}],
             })
 
     monkeypatch.setattr(shipping_api.httpx, "AsyncClient", lambda **kwargs: FakeClient())
@@ -296,9 +339,11 @@ def test_mailpit_sync_imports_new_message(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["imported"] == 1
     assert client.get("/cases").json()["cases"][0]["category"] != "UNPROCESSED"
-    attachment = next(tmp_path.rglob("document.txt"))
+    assert detail_requests == 1
+    attachment = next(tmp_path.rglob("email_600_SI.txt"))
     assert attachment.read_bytes() == b"attached document"
     assert client.post("/inbox/mailpit/sync").json()["imported"] == 0
+    assert detail_requests == 1
 
 
 def test_mailpit_summaries_fetches_all_pages() -> None:
