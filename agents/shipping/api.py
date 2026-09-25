@@ -20,7 +20,13 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from starlette.concurrency import run_in_threadpool
 from .exports import render_export
 from .tool import inspect_shipping_email
-from .actions import draft_correction_email, preview_ai_field_correction, preview_false_alarm, preview_targeted_reread
+from .actions import (
+    draft_correction_email,
+    preview_ai_field_correction,
+    preview_false_alarm,
+    preview_rule_correction,
+    preview_targeted_reread,
+)
 from .ui import dashboard_page
 from .ai import (
     AIUnavailable,
@@ -327,6 +333,23 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {"ok": True, "email_id": email_id, "preview": preview}
+
+    @app.post("/reviews/batch-rule-corrections/preview")
+    def batch_rule_correction_preview() -> dict[str, Any]:
+        reports = [
+            report
+            for report in store.list_reports()
+            if report.get("category") == "BL_COMPARISON"
+            and report.get("status") == "MISMATCH"
+            and report.get("defect_fields")
+        ]
+        results = [preview_rule_correction(report) for report in reports]
+        return {
+            "ok": True,
+            "total": len(results),
+            "ready": sum(result["ready"] for result in results),
+            "results": results,
+        }
 
     @app.get("/metrics")
     async def metrics() -> dict[str, Any]:

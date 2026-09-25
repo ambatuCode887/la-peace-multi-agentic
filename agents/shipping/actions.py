@@ -1,8 +1,94 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from .verification import COMPARE_FIELDS
+from .verification import COMPARE_FIELDS, values_match
+
+
+def _evidence_supports_value(value: str | int | None, evidence: str) -> bool:
+    if value is None or not evidence:
+        return False
+    if isinstance(value, int):
+        return re.search(rf"(?<!\d){value}(?!\d)", evidence) is not None
+    normalized_value = re.sub(r"[^A-Z0-9]", "", value.upper())
+    normalized_evidence = re.sub(r"[^A-Z0-9]", "", evidence.upper())
+    return len(normalized_value) >= 3 and normalized_value in normalized_evidence
+
+
+def preview_rule_correction(report: dict[str, Any]) -> dict[str, Any]:
+    """Propose extraction fixes only when both source snippets support one value."""
+    documents = report.get("documents", {})
+    si = documents.get("si", {})
+    bl = documents.get("bl", {})
+    si_fields = dict(si.get("fields", {}))
+    bl_fields = dict(bl.get("fields", {}))
+    changes: list[dict[str, Any]] = []
+    unresolved_fields: list[str] = []
+    source_evidence: dict[str, dict[str, str]] = {}
+
+    for field in report.get("defect_fields", []):
+        if field not in COMPARE_FIELDS:
+            unresolved_fields.append(field)
+            continue
+        si_value = si_fields.get(field)
+        bl_value = bl_fields.get(field)
+        si_evidence = str(
+            si.get("evidence_details", {}).get(field, {}).get("source_text")
+            or si.get("evidence", {}).get(field)
+            or ""
+        )
+        bl_evidence = str(
+            bl.get("evidence_details", {}).get(field, {}).get("source_text")
+            or bl.get("evidence", {}).get(field)
+            or ""
+        )
+        source_evidence[field] = {
+            "si": si_evidence[:600],
+            "bl": bl_evidence[:600],
+        }
+        if si_value is None or bl_value is None or values_match(field, si_value, bl_value):
+            unresolved_fields.append(field)
+            continue
+
+        si_supports_si = _evidence_supports_value(si_value, si_evidence)
+        si_supports_bl = _evidence_supports_value(bl_value, si_evidence)
+        bl_supports_si = _evidence_supports_value(si_value, bl_evidence)
+        bl_supports_bl = _evidence_supports_value(bl_value, bl_evidence)
+
+        if si_supports_bl and not si_supports_si and bl_supports_bl and not bl_supports_si:
+            si_fields[field] = bl_value
+            changes.append({
+                "field": field,
+                "document": "si",
+                "before": si_value,
+                "after": bl_value,
+                "reason": "Both source snippets support the BL value; the SI extraction conflicts with its own source text.",
+            })
+        elif si_supports_si and not si_supports_bl and bl_supports_si and not bl_supports_bl:
+            bl_fields[field] = si_value
+            changes.append({
+                "field": field,
+                "document": "bl",
+                "before": bl_value,
+                "after": si_value,
+                "reason": "Both source snippets support the SI value; the BL extraction conflicts with its own source text.",
+            })
+        else:
+            unresolved_fields.append(field)
+
+    defects = list(report.get("defect_fields", []))
+    return {
+        "email_id": report.get("email_id"),
+        "subject": report.get("subject", ""),
+        "defect_fields": defects,
+        "changes": changes,
+        "unresolved_fields": unresolved_fields,
+        "ready": bool(defects) and not unresolved_fields and len(changes) > 0,
+        "source_evidence": source_evidence,
+        "si_fields": si_fields,
+        "bl_fields": bl_fields,
+    }
 
 
 def draft_correction_email(report: dict[str, Any], requested_correction: str = "") -> dict[str, Any]:
