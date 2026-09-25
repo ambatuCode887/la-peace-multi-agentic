@@ -74,8 +74,6 @@ interface SidebarProps {
   onOpenBatchRuleCorrections?: () => void;
   mismatchCount?: number;
   onToggleRead?: (caseId: string) => void;
-  challengeFilterActive?: boolean;
-  onToggleChallengeFilter?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -111,8 +109,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenBatchRuleCorrections,
   mismatchCount = 0,
   onToggleRead,
-  challengeFilterActive = false,
-  onToggleChallengeFilter,
 }) => {
   const [sortBy, setSortBy] = useState<"date" | "sender" | "vessel" | "status" | "unread">("date");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
@@ -479,15 +475,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const challengeCasesCount = useMemo(() => {
-    return safeAll.filter((c) => c.isChallengeCase).length;
-  }, [safeAll]);
-
   const visibleCases = useMemo(() => {
-    let list = [...cases];
-    if (challengeFilterActive) {
-      list = list.filter((c) => c.isChallengeCase);
-    }
+    const list = [...cases];
     return list.sort((a, b) => {
       let cmp = 0;
       if (sortBy === "unread") {
@@ -522,7 +511,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       return sortOrder === "desc" ? -cmp : cmp;
     });
-  }, [cases, sortBy, sortOrder, challengeFilterActive]);
+  }, [cases, sortBy, sortOrder]);
   const okCases = safeAll.filter(
     (c) => c.category === "BL_COMPARISON" && c.status === "PASS",
   );
@@ -716,7 +705,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   type="button"
                   data-testid="sidebar-batch-rules-btn"
                   onClick={onOpenBatchRuleCorrections}
-                  title={`Batch Rule Corrections (${mismatchCount} cases)`}
+                  title={`Batch Edit (${mismatchCount} cases)`}
                   className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
                 >
                   <ListChecks className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -735,7 +724,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex items-center space-x-2 truncate">
                     <ListChecks className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="truncate">Rule Fixes</span>
+                    <span className="truncate">Batch Edit</span>
                   </div>
                   <span className="text-[10px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
                     {mismatchCount}
@@ -1292,31 +1281,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
 
-            {/* Industrial Edge Cases Quick Filter Pill */}
-            {challengeCasesCount > 0 && onToggleChallengeFilter && (
-              <div className="pt-2 border-t border-slate-100 dark:border-[#1a3d8e]/40">
-                <button
-                  type="button"
-                  data-testid="toggle-challenge-filter-btn"
-                  onClick={onToggleChallengeFilter}
-                  className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all cursor-pointer border ${
-                    challengeFilterActive
-                      ? "bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/60 shadow-xs"
-                      : "bg-slate-50 hover:bg-amber-50/70 dark:bg-[#040e28] dark:hover:bg-amber-950/40 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-[#1a3d8e]/60"
-                  }`}
-                  title="Filter to 6 curated industrial edge-case scenarios"
-                >
-                  <div className="flex items-center space-x-1.5 truncate">
-                    <span className="text-amber-500 text-sm">⭐</span>
-                    <span className="truncate">Industrial Edge Cases</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-extrabold border border-amber-500/40">
-                    {challengeFilterActive ? "Active (6)" : `${challengeCasesCount} cases`}
-                  </span>
-                </button>
-              </div>
-            )}
-
             {/* Batch Export Bar */}
             <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">
               <div className="flex items-center justify-between gap-2">
@@ -1441,16 +1405,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }`}>
                           {c.id}
                         </span>
-                        {c.isChallengeCase ? (
-                          <span
-                            title={c.challengeRationale || "Industrial Edge Case Challenge"}
-                            className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/40 shrink-0 flex items-center gap-0.5 shadow-2xs"
-                          >
-                            ⭐ {c.challengeBadge || "Challenge"}
-                          </span>
-                        ) : (
-                          getCategoryBadge(c.category)
-                        )}
+                        {getCategoryBadge(c.category)}
                       </div>
                       <span className={`shrink-0 text-[10px] font-mono ${
                         isUnread ? "font-bold text-slate-600 dark:text-slate-300" : "text-slate-400 font-normal"

@@ -694,14 +694,28 @@ export function mapReportToShippingCase(
       fields = Object.keys(FIELD_LABELS).map((key) => {
         const siDocument = report.documents?.si;
         const blDocument = report.documents?.bl;
-        const siVal =
-          siFields[key] !== undefined
-            ? String(siFields[key])
-            : existing?.fields?.find((f) => f.key === key)?.siValue || 'N/A';
-        const blVal =
-          blFields[key] !== undefined
-            ? String(blFields[key])
-            : existing?.fields?.find((f) => f.key === key)?.blValue || 'N/A';
+        const rawSi = siFields[key];
+        const rawBl = blFields[key];
+        const fallbackField = existing?.fields?.find(
+          (f) =>
+            f.key === key ||
+            (key === 'port_of_loading' && (f.key === 'pol' || f.key === 'port_of_loading')) ||
+            (key === 'port_of_discharge' && (f.key === 'pod' || f.key === 'port_of_discharge')) ||
+            (key === 'gross_weight_kg' && (f.key === 'weight' || f.key === 'gross_weight' || f.key === 'gross_weight_kg'))
+        );
+        const isValidVal = (v: any) =>
+          v !== undefined &&
+          v !== null &&
+          String(v).trim() !== '' &&
+          String(v).trim().toLowerCase() !== 'null' &&
+          String(v).trim().toLowerCase() !== 'n/a';
+
+        const siVal = isValidVal(rawSi)
+          ? String(rawSi)
+          : fallbackField?.siValue || 'N/A';
+        const blVal = isValidVal(rawBl)
+          ? String(rawBl)
+          : fallbackField?.blValue || 'N/A';
         const isDefect = defectSet.has(key);
         const resolution = fieldResolutions[key];
         const ocrAnalysis = ocrAnalyses.find((analysis) => analysis.field === key);
@@ -718,6 +732,8 @@ export function mapReportToShippingCase(
           } else {
             varianceNote = `Field marked as discrepancy between documents`;
           }
+        } else if (fallbackField?.varianceNote) {
+          varianceNote = fallbackField.varianceNote;
         }
 
         return {
@@ -732,9 +748,11 @@ export function mapReportToShippingCase(
             : resolution?.source === 'llm' || resolution?.source === 'human'
               ? 'review'
               : 'match',
-          resolutionSource: resolution?.source,
-          resolutionReason: resolution?.reason,
-          distortionNote: ocrAnalysis?.is_ocr_distortion ? ocrAnalysis.explanation : undefined,
+          resolutionSource: resolution?.source || fallbackField?.resolutionSource,
+          resolutionReason: resolution?.reason || fallbackField?.resolutionReason,
+          distortionNote: ocrAnalysis?.is_ocr_distortion
+            ? ocrAnalysis.explanation
+            : fallbackField?.distortionNote,
           siEvidence: siDocument?.evidence_details?.[key],
           blEvidence: blDocument?.evidence_details?.[key],
           siAlternateReadings: alternateReadings(siDocument),
