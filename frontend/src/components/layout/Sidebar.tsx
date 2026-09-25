@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type {
   ShippingCase,
   VerificationStatus,
@@ -30,6 +30,9 @@ import {
   Paperclip,
   LayoutDashboard,
   PenSquare,
+  Award,
+  ListChecks,
+  ArrowUpDown,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
 import { outboxService, type DispatchedEmail } from "../../services/outboxService";
@@ -58,9 +61,12 @@ interface SidebarProps {
   onMailboxFolderChange?: (folder: "INBOX" | "SENT") => void;
   selectedSentId?: string | null;
   onSelectSent?: (sentEmail: DispatchedEmail) => void;
-  activeView?: "dashboard" | "inbox";
+  activeView?: "dashboard" | "inbox" | "benchmark";
   onGoToDashboard?: () => void;
+  onGoToBenchmark?: () => void;
   onOpenCompose?: () => void;
+  onOpenBatchRuleCorrections?: () => void;
+  mismatchCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -87,8 +93,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectSent,
   activeView = "dashboard",
   onGoToDashboard,
+  onGoToBenchmark,
   onOpenCompose,
+  onOpenBatchRuleCorrections,
+  mismatchCount = 0,
 }) => {
+  const [sortBy, setSortBy] = useState<"date" | "sender" | "vessel" | "status">("date");
+  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [loadingMore, setLoadingMore] = useState(false);
   const [internalRailCollapsed, setInternalRailCollapsed] = useState(false);
   const railCollapsed = propRailCollapsed !== undefined ? propRailCollapsed : internalRailCollapsed;
@@ -406,7 +417,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const visibleCases = cases;
+  const visibleCases = useMemo(() => {
+    const list = [...cases];
+    return list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "date") {
+        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        cmp = timeA - timeB;
+        if (cmp === 0) cmp = a.id.localeCompare(b.id);
+      } else if (sortBy === "sender") {
+        cmp = (a.sender || "").localeCompare(b.sender || "");
+      } else if (sortBy === "vessel") {
+        const labelA = a.vessel || a.subject || "";
+        const labelB = b.vessel || b.subject || "";
+        cmp = labelA.localeCompare(labelB);
+      } else if (sortBy === "status") {
+        const priority: Record<string, number> = {
+          MISMATCH: 3,
+          REVIEW: 2,
+          PASS: 1,
+        };
+        const pA = priority[a.status] || 0;
+        const pB = priority[b.status] || 0;
+        cmp = pA - pB;
+      }
+      return sortOrder === "desc" ? -cmp : cmp;
+    });
+  }, [cases, sortBy, sortOrder]);
   const okCases = safeAll.filter(
     (c) => c.category === "BL_COMPARISON" && c.status === "PASS",
   );
@@ -508,7 +546,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* Operations Hub (Dashboard) Navigation Button */}
+          {/* Operations Dashboard Navigation Button */}
           {onGoToDashboard && (
             railCollapsed && !mobileOpen ? (
               <div className="flex justify-center mb-1 w-full">
@@ -540,10 +578,89 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <div className="flex items-center space-x-2 truncate">
                     <LayoutDashboard className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
-                    <span className="truncate">Operations Hub</span>
+                    <span className="truncate">Operations Dashboard</span>
                   </div>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-[#345ec4] dark:text-[#5a82e2] bg-white/70 dark:bg-[#091f52] px-1.5 py-0.5 rounded">
                     KPI
+                  </span>
+                </button>
+              </div>
+            )
+          )}
+
+          {/* AI Benchmark & Evaluation Navigation Button */}
+          {onGoToBenchmark && (
+            railCollapsed && !mobileOpen ? (
+              <div className="flex justify-center mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-benchmark-btn"
+                  onClick={onGoToBenchmark}
+                  title="AI Benchmark & Model Evaluation (Certified)"
+                  className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                    activeView === "benchmark"
+                      ? "bg-[#e8effd] dark:bg-[#052464] text-[#1a3d8e] dark:text-[#8ea9f7] ring-2 ring-[#345ec4]/40 font-bold shadow-xs"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"
+                  }`}
+                >
+                  <Award className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                </button>
+              </div>
+            ) : (
+              <div className="px-1.5 mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-benchmark-btn"
+                  onClick={onGoToBenchmark}
+                  className={`group w-full h-9 flex items-center justify-between text-left transition-all cursor-pointer rounded-xl px-2.5 text-xs ${
+                    activeView === "benchmark"
+                      ? "bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7] font-bold shadow-xs border-l-3 border-l-[#345ec4]"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-[#091f52]/40 font-medium"
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <Award className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                    <span className="truncate">AI Benchmark</span>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    CERTIFIED
+                  </span>
+                </button>
+              </div>
+            )
+          )}
+
+          {/* Batch Rule Corrections Button */}
+          {onOpenBatchRuleCorrections && mismatchCount > 0 && (
+            railCollapsed && !mobileOpen ? (
+              <div className="flex justify-center mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-batch-rules-btn"
+                  onClick={onOpenBatchRuleCorrections}
+                  title={`Batch Rule Corrections (${mismatchCount} cases)`}
+                  className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
+                >
+                  <ListChecks className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-emerald-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
+                    {mismatchCount}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div className="px-1.5 mb-1 w-full">
+                <button
+                  type="button"
+                  data-testid="sidebar-batch-rules-btn"
+                  onClick={onOpenBatchRuleCorrections}
+                  className="group w-full h-9 flex items-center justify-between text-left transition-all cursor-pointer rounded-xl px-2.5 text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/80 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-800/60 font-semibold"
+                >
+                  <div className="flex items-center space-x-2 truncate">
+                    <ListChecks className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="truncate">Rule Fixes</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-white bg-emerald-600 px-1.5 py-0.2 rounded-full">
+                    {mismatchCount}
                   </span>
                 </button>
               </div>
@@ -988,6 +1105,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </div>
             )}
+
+            {/* Outlook-Style Arrange & Sort Bar */}
+            <div className="pt-2 border-t border-slate-100 dark:border-[#1a3d8e]/40 flex items-center justify-between gap-1">
+              <div className="flex items-center space-x-1 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 shrink-0">
+                  Arrange:
+                </span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "date" | "sender" | "vessel" | "status")}
+                  aria-label="Arrange emails by field"
+                  className="text-[11px] font-semibold bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none cursor-pointer focus:ring-0 p-0 truncate"
+                >
+                  <option value="date" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Date</option>
+                  <option value="sender" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">From / Shipper</option>
+                  <option value="vessel" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Subject / Vessel</option>
+                  <option value="status" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Status</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                data-testid="sidebar-sort-order-btn"
+                onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+                className="flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#091f52] transition-colors cursor-pointer shrink-0"
+                title={sortOrder === "desc" ? "Sort: Newest / Descending (click to toggle)" : "Sort: Oldest / Ascending (click to toggle)"}
+              >
+                <span>{sortOrder === "desc" ? "Newest on Top" : "Oldest on Top"}</span>
+                <ArrowUpDown className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2]" />
+              </button>
+            </div>
 
             {/* Batch Export Bar */}
             <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">

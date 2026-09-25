@@ -466,7 +466,67 @@ export const api = {
     }
     return res.json();
   },
+
+  async getBenchmarkSummary(): Promise<BenchmarkResults> {
+    const res = await fetch(`${API_BASE}/api/benchmark/summary`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch benchmark summary: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async runBenchmarkSample(sampleSize = 20): Promise<BenchmarkResults> {
+    const res = await fetch(`${API_BASE}/api/benchmark/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sample_size: sampleSize }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to run live benchmark: ${res.statusText}`);
+    }
+    return res.json();
+  },
 };
+
+export interface BenchmarkTierScore {
+  tier_id: string;
+  name: string;
+  badge: string;
+  description: string;
+  evaluated_cases: number;
+  true_positives: number;
+  false_positives: number;
+  false_negatives: number;
+  true_negatives: number;
+  recall: number;
+  precision: number;
+  false_alarm_rate: number;
+  f1_score: number;
+  stp_rate: number;
+  avg_latency_s: number;
+  cost_per_1000_usd: number;
+  hallucination_risk: string;
+  scanned_pdf_recall: number;
+}
+
+export interface BenchmarkSummaryData {
+  top_recall: number;
+  lowest_false_alarm: number;
+  hybrid_speed_seconds: number;
+  hybrid_cost_per_1000: number;
+  cost_savings_vs_llm_pct: number;
+  speedup_vs_llm_factor: number;
+}
+
+export interface BenchmarkResults {
+  ok: boolean;
+  timestamp: string;
+  total_cases_evaluated: number;
+  ground_truth_total: number;
+  is_full_run: boolean;
+  summary: BenchmarkSummaryData;
+  tiers: BenchmarkTierScore[];
+}
 
 const FIELD_LABELS: Record<string, string> = {
   shipper: 'Shipper',
