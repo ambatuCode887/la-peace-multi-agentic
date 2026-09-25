@@ -263,6 +263,80 @@ def test_case_queue_and_review_correction(tmp_path) -> None:
     assert response.json()["result"]["override_status"] == "operator_override_not_verified"
 
 
+def test_review_accept_and_reject_statuses(tmp_path) -> None:
+    fields_si = {
+        "shipper": "APRIL PAPER COMPANY",
+        "consignee": "BUYER COMPANY",
+        "notify_party": "BUYER COMPANY",
+        "port_of_loading": "PORT KLANG, MALAYSIA",
+        "port_of_discharge": "MOMBASA, KENYA",
+        "container_count": 3,
+        "gross_weight_kg": 12000,
+    }
+    fields_bl = {**fields_si, "shipper": "OTHER PAPER COMPANY"}
+    reports = {
+        "email_accept_001": {
+            "email_id": "email_accept_001",
+            "category": "BL_COMPARISON",
+            "status": "MISMATCH",
+            "has_defect": True,
+            "defect_fields": ["shipper"],
+            "documents": {
+                "si": {"fields": fields_si},
+                "bl": {"fields": fields_bl},
+            },
+        },
+        "email_reject_001": {
+            "email_id": "email_reject_001",
+            "category": "BL_COMPARISON",
+            "status": "MISMATCH",
+            "has_defect": True,
+            "defect_fields": ["shipper"],
+            "documents": {
+                "si": {"fields": fields_si},
+                "bl": {"fields": fields_bl},
+            },
+        },
+    }
+    for email_id, report in reports.items():
+        case_root = tmp_path / email_id
+        case_root.mkdir()
+        (case_root / "report.json").write_text(json.dumps(report), encoding="utf-8")
+    client = TestClient(create_app(tmp_path))
+
+    accepted = client.post(
+        "/reviews/email_accept_001",
+        json={
+            "category": "BL_COMPARISON",
+            "status": "OK",
+            "review_reason": None,
+            "has_defect": False,
+            "defect_fields": [],
+            "decision": "accept",
+            "note": "Accepted reviewed correction.",
+            "si_fields": fields_si,
+            "bl_fields": fields_si,
+        },
+    )
+    rejected = client.post(
+        "/reviews/email_reject_001",
+        json={
+            "category": "BL_COMPARISON",
+            "status": "MISMATCH",
+            "review_reason": None,
+            "has_defect": True,
+            "defect_fields": ["shipper"],
+            "decision": "confirm_mismatch",
+            "note": "Keep for manual correction.",
+        },
+    )
+
+    assert accepted.status_code == 200
+    assert accepted.json()["result"]["status"] == "OK"
+    assert rejected.status_code == 200
+    assert rejected.json()["result"]["status"] == "MISMATCH"
+
+
 def test_chat_history_must_be_role_content_messages(tmp_path) -> None:
     case_root = tmp_path / "missing"
     (case_root / "inbox").mkdir(parents=True)

@@ -23,6 +23,26 @@ export interface BackendCaseSummary {
   deletable?: boolean;
 }
 
+export interface RuleCorrectionChange {
+  field: string;
+  document: 'si' | 'bl';
+  before: string | number;
+  after: string | number;
+  reason: string;
+}
+
+export interface RuleCorrectionProposal {
+  email_id: string;
+  subject: string;
+  defect_fields: string[];
+  changes: RuleCorrectionChange[];
+  unresolved_fields: string[];
+  ready: boolean;
+  source_evidence: Record<string, { si: string; bl: string }>;
+  si_fields: Record<string, any>;
+  bl_fields: Record<string, any>;
+}
+
 export interface CasesPage {
   cases: BackendCaseSummary[];
   page: number;
@@ -398,6 +418,21 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || 'Chat request failed');
+    }
+    return res.json();
+  },
+
+  async previewBatchRuleCorrections(): Promise<{
+    total: number;
+    ready: number;
+    results: RuleCorrectionProposal[];
+  }> {
+    const res = await fetch(`${API_BASE}/reviews/batch-rule-corrections/preview`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || 'Rule-based batch preview failed');
     }
     return res.json();
   },

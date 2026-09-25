@@ -12,6 +12,7 @@ import { BlueprintComparator } from "./components/verification/BlueprintComparat
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { OperationsDashboard } from "./components/dashboard/OperationsDashboard";
 import { SentEmailViewer } from "./components/verification/SentEmailViewer";
+import { BatchRuleCorrectionModal } from "./components/review/BatchRuleCorrectionModal";
 import { ALL_CASES } from "./data/allCases";
 import {
   api,
@@ -56,6 +57,7 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [batchRuleCorrectionsOpen, setBatchRuleCorrectionsOpen] = useState(false);
   const [activeDrawerTab, setActiveDrawerTab] = useState<
     "summary" | "review" | "email" | "chat"
   >("summary");
@@ -211,6 +213,9 @@ export function App() {
 
   const currentCase =
     cases.find((c) => c.id === selectedCaseId) || filteredCases[0] || cases[0];
+  const mismatchCount = cases.filter(
+    (item) => item.category === "BL_COMPARISON" && item.status === "MISMATCH",
+  ).length;
 
   const handleReport = (
     report: Parameters<typeof mapReportToShippingCase>[0],
@@ -307,6 +312,8 @@ export function App() {
         onSearchChange={setSearchQuery}
         backendConnected={backendConnected}
         activeView={activeView}
+        mismatchCount={mismatchCount}
+        onOpenBatchRuleCorrections={() => setBatchRuleCorrectionsOpen(true)}
         onGoToDashboard={handleGoToDashboard}
         mobileInboxOpen={mobileInboxOpen}
         onToggleMobileInbox={() => setMobileInboxOpen((prev) => !prev)}
@@ -436,6 +443,12 @@ export function App() {
           />
         )}
       </div>
+      {batchRuleCorrectionsOpen && (
+        <BatchRuleCorrectionModal
+          onClose={() => setBatchRuleCorrectionsOpen(false)}
+          onSaved={handleReviewSaved}
+        />
+      )}
     </div>
   );
 }
