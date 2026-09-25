@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type {
   ShippingCase,
   VerificationStatus,
@@ -33,6 +33,16 @@ export function App() {
     } catch {}
     return ALL_CASES[0]?.id || "email_001";
   });
+  const [readCaseIds, setReadCaseIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem("lapeace_read_case_ids");
+      if (saved) {
+        return new Set(JSON.parse(saved));
+      }
+    } catch {}
+    return new Set(["email_001"]);
+  });
+  const [challengeFilterActive, setChallengeFilterActive] = useState<boolean>(false);
   const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT" | "DRAFTS" | "SCHEDULED">("INBOX");
   const [selectedSentEmail, setSelectedSentEmail] = useState<DispatchedEmail | null>(() => {
     const list = outboxService.getSentEmails();
@@ -102,14 +112,20 @@ export function App() {
       const result = await api.getCases(1, 1000);
       const summaries = result.cases;
       if (summaries.length > 0) {
-        setCases((previous) =>
-          summaries.map((summary) =>
+        setCases((previous) => {
+          const mappedFromBackend = summaries.map((summary) =>
             mapSummaryToShippingCase(
               summary,
-              previous.find((item) => item.id === summary.email_id),
+              previous.find((item) => item.id === summary.email_id) ||
+              ALL_CASES.find((item) => item.id === summary.email_id),
             ),
-          ),
-        );
+          );
+          const backendIds = new Set(summaries.map((s) => s.email_id));
+          const challengeCasesNotInBackend = ALL_CASES.filter(
+            (c) => c.isChallengeCase && !backendIds.has(c.id)
+          );
+          return [...challengeCasesNotInBackend, ...mappedFromBackend];
+        });
         setSelectedCaseId((current) => {
           try {
             const urlParam = new URLSearchParams(window.location.search).get(
@@ -193,10 +209,18 @@ export function App() {
     };
   }, [selectedCaseId, backendConnected, drawerOpen, activeDrawerTab, cases]);
 
+  const casesWithRead = useMemo(() => {
+    return cases.map((c) => ({
+      ...c,
+      isRead: readCaseIds.has(c.id),
+    }));
+  }, [cases, readCaseIds]);
+
   const isStatusApplicable =
     categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
 
-  const filteredCases = cases.filter((c) => {
+  const filteredCases = casesWithRead.filter((c) => {
+    if (challengeFilterActive && !c.isChallengeCase) return false;
     const matchesCategory =
       categoryFilter === "ALL" || c.category === categoryFilter;
     const matchesStatus =
@@ -210,13 +234,32 @@ export function App() {
       c.vessel.toLowerCase().includes(q) ||
       c.subject.toLowerCase().includes(q) ||
       c.sender.toLowerCase().includes(q) ||
+      (c.challengeBadge && c.challengeBadge.toLowerCase().includes(q)) ||
       (c.statusNote && c.statusNote.toLowerCase().includes(q));
     return matchesCategory && matchesStatus && matchesSearch;
   });
 
-  const currentCase =
-    cases.find((c) => c.id === selectedCaseId) || filteredCases[0] || cases[0];
-  const mismatchCount = cases.filter(
+  const rawCurrentCase =
+    casesWithRead.find((c) => c.id === selectedCaseId) || filteredCases[0] || casesWithRead[0];
+  const currentCase = useMemo(() => {
+    if (!rawCurrentCase) return null;
+    if (rawCurrentCase.id.startsWith("email_edge_") && (!rawCurrentCase.fields || rawCurrentCase.fields.length === 0)) {
+      const fallback = ALL_CASES.find((c) => c.id === rawCurrentCase.id);
+      if (fallback) {
+        return {
+          ...rawCurrentCase,
+          category: "BL_COMPARISON" as EmailCategory,
+          fields: fallback.fields,
+          vessel: rawCurrentCase.vessel !== "N/A" ? rawCurrentCase.vessel : fallback.vessel,
+          voyageNumber: rawCurrentCase.voyageNumber !== "N/A" ? rawCurrentCase.voyageNumber : fallback.voyageNumber,
+          pol: rawCurrentCase.pol !== "N/A" ? rawCurrentCase.pol : fallback.pol,
+          pod: rawCurrentCase.pod !== "N/A" ? rawCurrentCase.pod : fallback.pod,
+        };
+      }
+    }
+    return rawCurrentCase;
+  }, [rawCurrentCase]);
+  const mismatchCount = casesWithRead.filter(
     (item) => item.category === "BL_COMPARISON" && item.status === "MISMATCH",
   ).length;
 
@@ -269,10 +312,38 @@ export function App() {
     setActiveDrawerTab("email");
   };
 
+  const markCaseRead = (id: string) => {
+    setReadCaseIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      try {
+        localStorage.setItem("lapeace_read_case_ids", JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handleToggleRead = (id: string) => {
+    setReadCaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      try {
+        localStorage.setItem("lapeace_read_case_ids", JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
+    });
+  };
+
   const handleSelectCase = (id: string) => {
     setActiveMailboxFolder("INBOX");
     setActiveView("inbox");
     setSelectedCaseId(id);
+    markCaseRead(id);
     setMobileInboxOpen(false);
   };
 
@@ -342,7 +413,7 @@ export function App() {
       <div className="flex flex-1 overflow-hidden relative">
         {/* Zone 1: Queue (Left ~336px or Mobile Drawer) */}
         <Sidebar
-          allCases={cases}
+          allCases={casesWithRead}
           cases={filteredCases}
           selectedCaseId={currentCase?.id || ""}
           onSelectCase={handleSelectCase}
@@ -379,9 +450,11 @@ export function App() {
           activeView={activeView}
           onGoToDashboard={handleGoToDashboard}
           onGoToBenchmark={handleGoToBenchmark}
-          onOpenCompose={handleOpenCompose}
           onOpenBatchRuleCorrections={() => setBatchRuleCorrectionsOpen(true)}
           mismatchCount={mismatchCount}
+          onToggleRead={handleToggleRead}
+          challengeFilterActive={challengeFilterActive}
+          onToggleChallengeFilter={() => setChallengeFilterActive((prev) => !prev)}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
@@ -397,7 +470,7 @@ export function App() {
           >
             {activeView === "dashboard" ? (
               <OperationsDashboard
-                cases={cases}
+                cases={casesWithRead}
                 onNavigateToInbox={handleNavigateToInbox}
                 onOpenCompose={handleOpenCompose}
               />
