@@ -257,7 +257,13 @@ def compare_shipments(si: ExtractedShipment, bl: ExtractedShipment) -> dict[str,
             si.raw_values.get(field),
             bl.raw_values.get(field),
         )
-        if resolution["status"] == "UNCERTAIN":
+        if resolution["status"] == "MATCH" and field in normalized_equivalences:
+            ambiguous_fields.append(field)
+            field_resolutions[field] = {
+                "source": "human",
+                "reason": "normalized_values_differ",
+            }
+        elif resolution["status"] == "UNCERTAIN":
             ambiguous_fields.append(field)
             field_resolutions[field] = {
                 "source": "llm",

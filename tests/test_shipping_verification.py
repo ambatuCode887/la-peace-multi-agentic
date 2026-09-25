@@ -142,8 +142,10 @@ Gross Weight: 22 MT
 
     result = compare_shipments(si, bl)
 
-    assert result["status"] == "OK"
+    assert result["status"] == "NEEDS_REVIEW"
     assert result["defect_fields"] == []
+    assert result["uncertain_fields"] == ["shipper"]
+    assert result["routing_telemetry"]["field_resolutions"]["shipper"]["source"] == "human"
     assert result["ignored_differences"] == [
         {"field": "shipper", "reason": "formatting_case_or_punctuation"},
         {"field": "port_of_loading", "reason": "equivalent_label"},
@@ -299,6 +301,46 @@ Gross Weight (KG) | 341715
     assert document.fields["gross_weight_kg"] == 341715
 
 
+def test_normalized_but_visibly_different_fields_require_human_review() -> None:
+    si = extract_shipment_fields(
+        """BILL OF LADING INSTRUCTION
+SHIPPER: APRIL, FINE PAPER TRADING
+CONSIGNEE: BUYER COMPANY
+NOTIFY PARTY: BUYER COMPANY
+PORT OF LOADING: SHANGHAI, CHINA
+PORT OF DISCHARGE: VALPARAISO, C HILE
+NO. OF CONTAINERS: 2 x 20'GP
+GROSS WEIGHT: 40,176 KG
+"""
+    )
+    bl = extract_shipment_fields(
+        """BILL OF LADING
+SHIPPER: APRIL FINE PAPER TRADING
+CONSIGNEE: BUYER COMPANY
+NOTIFY PARTY: BUYER COMPANY
+PORT OF LOADING: SHANGHAI, CHINA
+PORT OF DISCHARGE: VALPARAISO, CHILE
+NO. OF CONTAINERS: 2 x 20'GP
+GROSS WEIGHT: 40,176 KG
+"""
+    )
+
+    result = compare_shipments(si, bl)
+    resolutions = result["routing_telemetry"]["field_resolutions"]
+
+    assert result["status"] == "NEEDS_REVIEW"
+    assert result["uncertain_fields"] == ["port_of_discharge", "shipper"]
+    assert resolutions["shipper"] == {
+        "source": "human",
+        "reason": "normalized_values_differ",
+    }
+    assert resolutions["port_of_discharge"] == {
+        "source": "human",
+        "reason": "normalized_values_differ",
+    }
+    assert result["routing_telemetry"]["sent_to_llm"] == 0
+
+
 def test_unitless_xlsx_gross_weight_defaults_to_kg_only_for_known_workbook() -> None:
     workbook = extract_shipment_fields(
         "BL INSTRUCTION\nGROSS WEIGHT | 40176",
@@ -366,7 +408,7 @@ Berat Kasar (KG): 22.000 KG
 
     result = compare_shipments(si, bl)
 
-    assert result["status"] == "MISMATCH"
+    assert result["status"] == "NEEDS_REVIEW"
     assert result["defect_fields"] == ["container_count"]
     assert si.fields["gross_weight_kg"] == bl.fields["gross_weight_kg"] == 22000
 
@@ -425,7 +467,7 @@ Gross Weight(KGS): 18,500 KG
 
     result = compare_shipments(si, bl)
 
-    assert result["status"] == "MISMATCH"
+    assert result["status"] == "NEEDS_REVIEW"
     assert result["defect_fields"] == ["gross_weight_kg"]
 
 
