@@ -26,35 +26,13 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
   );
   const reviewFields = currentCase.fields.filter((f) => f.status === "review");
 
-  const challengeCallout = currentCase.isChallengeCase ? (
-    <div className="mb-3 px-3.5 sm:px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/40 flex items-center justify-between gap-3 shadow-2xs">
-      <div className="flex items-center space-x-2 min-w-0">
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white shrink-0 shadow-2xs">
-          ⭐ Challenge Scenario
-        </span>
-        <span className="text-xs font-bold text-amber-900 dark:text-amber-200 truncate">
-          {currentCase.challengeBadge}: {currentCase.challengeRationale}
-        </span>
-      </div>
-      {onOpenReview && (
-        <button
-          onClick={onOpenReview}
-          className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline shrink-0 cursor-pointer"
-        >
-          View Telemetry &rarr;
-        </button>
-      )}
-    </div>
-  ) : null;
 
   // 1. MISMATCH Alert
   if (currentCase.status === "MISMATCH") {
     const mismatchCount = mismatchedFields.length;
 
     return (
-      <>
-        {challengeCallout}
-        <div className="mb-4 px-3.5 sm:px-4 py-3 rounded-xl bg-rose-50/90 border border-rose-200/90 dark:bg-rose-950/40 dark:border-rose-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+      <div className="mb-4 px-3.5 sm:px-4 py-3 rounded-xl bg-rose-50/90 border border-rose-200/90 dark:bg-rose-950/40 dark:border-rose-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
         <div className="flex items-start sm:items-center space-x-2.5 min-w-0">
           <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5 sm:mt-0">
             <AlertCircle className="w-4 h-4" />
@@ -89,7 +67,6 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </button>
         </div>
       </div>
-    </>
     );
   }
 
@@ -100,9 +77,7 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
     );
 
     return (
-      <>
-        {challengeCallout}
-        <div className="mb-4 px-3.5 sm:px-4 py-3 rounded-xl bg-amber-50/90 border border-amber-200/90 dark:bg-amber-950/40 dark:border-amber-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+      <div className="mb-4 px-3.5 sm:px-4 py-3 rounded-xl bg-amber-50/90 border border-amber-200/90 dark:bg-amber-950/40 dark:border-amber-900/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
         <div className="flex items-start sm:items-center space-x-2.5 min-w-0">
           <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0">
             <AlertTriangle className="w-4 h-4" />
@@ -133,7 +108,6 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
           </span>
         )}
       </div>
-    </>
     );
   }
 
@@ -169,9 +143,6 @@ export const DiscrepancyBanner: React.FC<DiscrepancyBannerProps> = ({
       );
     }
 
-    if (challengeCallout) {
-      return challengeCallout;
-    }
     // Clean pass: nothing for the reviewer to decide, so no bar here.
     return null;
   }

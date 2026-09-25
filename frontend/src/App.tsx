@@ -25,7 +25,13 @@ import { outboxService, type DispatchedEmail, type DraftEmail } from "./services
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
-  const [activeView, setActiveView] = useState<"dashboard" | "inbox" | "benchmark">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "inbox" | "benchmark">(() => {
+    try {
+      const param = new URLSearchParams(window.location.search).get("case");
+      if (param) return "inbox";
+    } catch {}
+    return "dashboard";
+  });
   const [selectedCaseId, setSelectedCaseId] = useState<string>(() => {
     try {
       const param = new URLSearchParams(window.location.search).get("case");
@@ -42,7 +48,6 @@ export function App() {
     } catch {}
     return new Set(["email_001"]);
   });
-  const [challengeFilterActive, setChallengeFilterActive] = useState<boolean>(false);
   const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT" | "DRAFTS" | "SCHEDULED">("INBOX");
   const [selectedSentEmail, setSelectedSentEmail] = useState<DispatchedEmail | null>(() => {
     const list = outboxService.getSentEmails();
@@ -222,7 +227,6 @@ export function App() {
     categoryFilter === "ALL" || categoryFilter === "BL_COMPARISON";
 
   const filteredCases = casesWithRead.filter((c) => {
-    if (challengeFilterActive && !c.isChallengeCase) return false;
     const matchesCategory =
       categoryFilter === "ALL" || c.category === categoryFilter;
     const matchesStatus =
@@ -245,7 +249,13 @@ export function App() {
     casesWithRead.find((c) => c.id === selectedCaseId) || filteredCases[0] || casesWithRead[0];
   const currentCase = useMemo(() => {
     if (!rawCurrentCase) return null;
-    if (rawCurrentCase.id.startsWith("email_edge_") && (!rawCurrentCase.fields || rawCurrentCase.fields.length === 0)) {
+    const hasValidFields =
+      rawCurrentCase.fields &&
+      rawCurrentCase.fields.length > 0 &&
+      rawCurrentCase.fields.some(
+        (f) => f.siValue && !["", "null", "n/a"].includes(String(f.siValue).trim().toLowerCase())
+      );
+    if (rawCurrentCase.id.startsWith("email_edge_") && !hasValidFields) {
       const fallback = ALL_CASES.find((c) => c.id === rawCurrentCase.id);
       if (fallback) {
         return {
@@ -373,13 +383,11 @@ export function App() {
   const handleGoToDashboard = () => {
     setActiveView("dashboard");
     setInboxCollapsed(true);
-    setRailCollapsed(true);
   };
 
   const handleGoToBenchmark = () => {
     setActiveView("benchmark");
     setInboxCollapsed(true);
-    setRailCollapsed(true);
   };
 
   const handleNavigateToInbox = (
@@ -476,8 +484,6 @@ export function App() {
           onOpenBatchRuleCorrections={() => setBatchRuleCorrectionsOpen(true)}
           mismatchCount={mismatchCount}
           onToggleRead={handleToggleRead}
-          challengeFilterActive={challengeFilterActive}
-          onToggleChallengeFilter={() => setChallengeFilterActive((prev) => !prev)}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}

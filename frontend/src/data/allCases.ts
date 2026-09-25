@@ -97,12 +97,16 @@ export const ALL_CASES: ShippingCase[] = [
     "sender": "feeder-docs@pelayaran-samudera.co.id",
     "timestamp": "2026-03-24T09:30:00Z",
     "category": "BL_COMPARISON",
-    "status": "PASS",
-    "statusNote": "Tier 3 Multimodal Vision resolved low-res OCR bleed on container TGHU8192036 using ISO 6346 check-digit verification.",
+    "status": "NEEDS_REVIEW",
+    "statusNote": "Tier 3 scan review: low-resolution feeder scan flagged for operator confirmation.",
     "vessel": "SAMUDERA INDAH",
     "voyageNumber": "V.112S",
     "pol": "TANJUNG PRIOK, JAKARTA (IDJKT)",
     "pod": "SINGAPORE (SGSIN)",
+    "attachments": [
+      "attachments/email_edge_002_SI.pdf",
+      "attachments/email_edge_002_BL.pdf"
+    ],
     "isChallengeCase": true,
     "challengeBadge": "Vision OCR",
     "challengeRationale": "Optical scan bleed: digit 8 read as B in standard OCR ('TGHUB192036'). Tier 1 extracts 0 text, Tier 2 flags low confidence. Tier 3 Multimodal Vision validates ISO 6346 checksum and confirms TGHU8192036.",
@@ -132,7 +136,7 @@ export const ALL_CASES: ShippingCase[] = [
         "status": "match"
       },
       {
-        "key": "pol",
+        "key": "port_of_loading",
         "label": "Port of Loading",
         "siValue": "TANJUNG PRIOK, JAKARTA (IDJKT)",
         "blValue": "TANJUNG PRIOK, JAKARTA (IDJKT)",
@@ -140,7 +144,7 @@ export const ALL_CASES: ShippingCase[] = [
         "status": "match"
       },
       {
-        "key": "pod",
+        "key": "port_of_discharge",
         "label": "Port of Discharge",
         "siValue": "SINGAPORE (SGSIN)",
         "blValue": "SINGAPORE (SGSIN)",
@@ -148,19 +152,16 @@ export const ALL_CASES: ShippingCase[] = [
         "status": "match"
       },
       {
-        "key": "container_number",
-        "label": "Container Number",
-        "siValue": "TGHU8192036",
-        "blValue": "TGHU8192036 (Resolved via Vision)",
+        "key": "container_count",
+        "label": "Container Count",
+        "siValue": "1 X 20GP",
+        "blValue": "1 X 20GP",
         "match": true,
-        "distortionNote": "OCR confusion '8' vs 'B' resolved via ISO 6346 modulo 11 checksum",
-        "status": "match",
-        "resolutionSource": "llm",
-        "resolutionReason": "vision_multimodal_reconciliation"
+        "status": "match"
       },
       {
-        "key": "gross_weight",
-        "label": "Gross Weight",
+        "key": "gross_weight_kg",
+        "label": "Gross Weight (KG)",
         "siValue": "21,800.00 KG",
         "blValue": "21,800.00 KG",
         "match": true,

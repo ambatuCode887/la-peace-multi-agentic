@@ -6,9 +6,6 @@ import { AttachmentViewerModal } from "./AttachmentViewerModal";
 import type { OriginalAttachment } from "./AttachmentViewerModal";
 import {
   Sparkles,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
   Copy,
   Check,
   ChevronDown,
@@ -32,23 +29,10 @@ interface ExtractedLogistics {
   isUrgentKeyword: boolean;
 }
 
-interface UrgencyAssessment {
-  level: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-  badgeText: string;
-  badgeBg: string;
-  title: string;
-  slaWindow: string;
-  riskNote: string;
-}
-
 interface SummaryPoint {
   label: string;
   text: string;
   highlight?: boolean;
-  urgencyBadge?: {
-    text: string;
-    classes: string;
-  };
 }
 
 export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
@@ -118,75 +102,6 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
     };
   }, [textToScan]);
 
-  // Urgency & Operational Risk Categorization
-  const urgency: UrgencyAssessment = useMemo(() => {
-    if (currentCase.category === "SPAM") {
-      return {
-        level: "LOW",
-        badgeText: "Low Urgency",
-        badgeBg: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700",
-        title: "Quarantined / Filtered Spam",
-        slaWindow: "No SLA Required",
-        riskNote: "Unsolicited marketing or non-operational email; safe to archive or ignore.",
-      };
-    }
-
-    if (extracted.isUrgentKeyword || extracted.hasDemurrageOrTHC) {
-      return {
-        level: "CRITICAL",
-        badgeText: "Critical Urgency",
-        badgeBg: "bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800",
-        title: "Imminent Risk / Demurrage Exposure",
-        slaWindow: "Immediate Dispatch (< 2h SLA)",
-        riskNote: extracted.hasDemurrageOrTHC
-          ? "Demurrage, detention, or disputed terminal charges flagged; risk of ongoing daily penalties."
-          : "Counterparty indicated urgent timeline or closing cut-off; prompt handling required to prevent delay.",
-      };
-    }
-
-    if (currentCase.category === "DOCUMENT_CHASE") {
-      return {
-        level: "HIGH",
-        badgeText: "High Urgency",
-        badgeBg: "bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800",
-        title: "Awaiting Draft Bill of Lading",
-        slaWindow: "Standard Chaser Window (< 4h SLA)",
-        riskNote: "Shipper is actively following up for the draft B/L to review terms before vessel departure.",
-      };
-    }
-
-    if (currentCase.category === "INVOICE_QUERY") {
-      return {
-        level: "HIGH",
-        badgeText: "High Urgency",
-        badgeBg: "bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800",
-        title: "Invoice & Charge Clarification",
-        slaWindow: "Billing Reconciliation (< 8h SLA)",
-        riskNote: "Customer requires breakdown or amendment before authorizing invoice settlement.",
-      };
-    }
-
-    if (currentCase.category === "SI_REQUEST") {
-      return {
-        level: "MEDIUM",
-        badgeText: "Medium Urgency",
-        badgeBg: "bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-800",
-        title: "Shipping Instruction Processing",
-        slaWindow: "Vessel Cut-Off Window (< 12h SLA)",
-        riskNote: "Shipping Instructions received for booking; queue for B/L draft generation before closing.",
-      };
-    }
-
-    return {
-      level: "LOW",
-      badgeText: "Low Urgency",
-      badgeBg: "bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800",
-      title: "Routine Operational Communication",
-      slaWindow: "Customer Service Window (< 24h SLA)",
-      riskNote: "General operational communication without immediate financial or gate penalty.",
-    };
-  }, [currentCase.category, extracted]);
-
   // Point-Form AI Summary Generation
   const aiSummary = useMemo(() => {
     // 1. Core Executive Takeaway
@@ -248,18 +163,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
       });
     }
 
-    // Bullet 3: Risk & Urgency Assessment (with prominent color-coded badge)
-    points.push({
-      label: "Urgency Assessment",
-      text: `${urgency.riskNote} Target response window: ${urgency.slaWindow}.`,
-      highlight: urgency.level === "CRITICAL" || urgency.level === "HIGH",
-      urgencyBadge: {
-        text: urgency.badgeText,
-        classes: urgency.badgeBg,
-      },
-    });
-
-    // Bullet 4: Prescriptive Next Step
+    // Bullet 3: Prescriptive Next Step
     let nextStep = "";
     if (currentCase.category === "DOCUMENT_CHASE") {
       nextStep = "Generate draft Bill of Lading in carrier manifest system and reply to sender with attached draft PDF.";
@@ -272,14 +176,14 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
     } else {
       nextStep = "Review inquiry and provide operational status update or route to port handling specialist.";
     }
-    points.push({ label: "Recommended Next Step", text: nextStep });
+    points.push({ label: "Action Required", text: nextStep, highlight: true });
 
     return { executiveTakeaway, points };
-  }, [currentCase.category, extracted, urgency]);
+  }, [currentCase.category, extracted]);
 
   const copySummaryText = () => {
-    const textToCopy = `[${urgency.badgeText}] ${currentCase.subject}\n\nSummary:\n${aiSummary.executiveTakeaway}\n\nKey Points:\n${aiSummary.points
-      .map((p) => `• ${p.label}: ${p.urgencyBadge ? `[${p.urgencyBadge.text}] ` : ""}${p.text}`)
+    const textToCopy = `[${currentCase.category}] ${currentCase.subject}\n\nSummary:\n${aiSummary.executiveTakeaway}\n\nKey Points:\n${aiSummary.points
+      .map((p) => `• ${p.label}: ${p.text}`)
       .join("\n")}`;
     navigator.clipboard.writeText(textToCopy);
     setCopiedSummary(true);
@@ -319,39 +223,7 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* 1. TOP URGENCY & SLA STATUS BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 px-4 rounded-xl bg-white dark:bg-[#06163a] border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs">
-        <div className="flex items-center space-x-2.5">
-          <span
-            className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold border ${urgency.badgeBg}`}
-          >
-            {urgency.level === "CRITICAL" ? (
-              <AlertTriangle className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-            ) : urgency.level === "HIGH" ? (
-              <Clock className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-            ) : (
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-            )}
-            {urgency.badgeText}
-          </span>
-          <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-            {urgency.title}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-3 text-xs text-slate-500 dark:text-slate-400">
-          <div className="flex items-center space-x-1.5">
-            <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-medium">{urgency.slaWindow}</span>
-          </div>
-          <span>•</span>
-          <span className="font-mono text-[11px] text-slate-400">
-            Status: <strong className="text-slate-600 dark:text-slate-300">OK (No BL Comparison)</strong>
-          </span>
-        </div>
-      </div>
-
-      {/* 2. MODERN GMAIL-STYLE EMAIL VIEWER (Raw email shown first and in full by default) */}
+      {/* 1. MODERN GMAIL-STYLE EMAIL VIEWER (Raw email shown first and in full by default) */}
       <div className="rounded-2xl bg-white dark:bg-[#06163a] border border-slate-200/80 dark:border-[#1a3d8e]/60 shadow-xs overflow-hidden">
         {/* Email Header Bar */}
         <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#1a3d8e]/40 space-y-3">
@@ -555,13 +427,6 @@ export const OperationalEmailHub: React.FC<OperationalEmailHubProps> = ({
                     <strong className="text-slate-900 dark:text-white font-semibold mr-1.5">
                       {point.label}:
                     </strong>
-                    {point.urgencyBadge && (
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold border mr-2 align-middle ${point.urgencyBadge.classes}`}
-                      >
-                        {point.urgencyBadge.text}
-                      </span>
-                    )}
                     <span className={point.highlight ? "font-medium text-slate-900 dark:text-slate-100" : ""}>
                       {point.text}
                     </span>
