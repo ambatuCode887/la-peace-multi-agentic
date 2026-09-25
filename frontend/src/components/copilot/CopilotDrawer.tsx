@@ -17,7 +17,7 @@ import {
   Save,
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
-import type { BackendReport } from "../../services/api";
+import type { BackendReport, ScheduledEmailSummary } from "../../services/api";
 import { api, API_BASE } from "../../services/api";
 import { outboxService, type DraftEmail, type SentAttachment } from "../../services/outboxService";
 import { ReviewPanel } from "../review/ReviewPanel";
@@ -45,6 +45,7 @@ interface CopilotDrawerProps {
   onDraftRestored?: () => void;
   embeddedEmailOnly?: boolean;
   onDraftCompleted?: () => void;
+  onScheduledCreated?: (scheduledEmail: ScheduledEmailSummary) => void;
 }
 
 export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
@@ -58,6 +59,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   onDraftRestored,
   embeddedEmailOnly = false,
   onDraftCompleted,
+  onScheduledCreated,
 }) => {
   const vesselTag =
     currentCase.vessel && currentCase.vessel !== "N/A"
@@ -479,6 +481,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         scheduledAt: scheduledTime.toISOString(),
         attachments: draftAttachments,
       });
+      onScheduledCreated?.(scheduled);
       if (editingDraftId) {
         await outboxService.deleteDraft(editingDraftId).catch(() => undefined);
         setEditingDraftId(undefined);

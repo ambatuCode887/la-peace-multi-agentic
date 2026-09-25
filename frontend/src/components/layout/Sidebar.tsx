@@ -60,6 +60,7 @@ interface SidebarProps {
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
   activeMailboxFolder?: "INBOX" | "SENT" | "DRAFTS" | "SCHEDULED";
+  scheduledRefreshKey?: number;
   onMailboxFolderChange?: (folder: "INBOX" | "SENT" | "DRAFTS" | "SCHEDULED") => void;
   selectedSentId?: string | null;
   onSelectSent?: (sentEmail: DispatchedEmail) => void;
@@ -96,6 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   mobileOpen = false,
   onCloseMobile,
   activeMailboxFolder = "INBOX",
+  scheduledRefreshKey = 0,
   onMailboxFolderChange,
   selectedSentId,
   onSelectSent,
@@ -176,7 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       unsubscribe();
       window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [scheduledRefreshKey]);
 
   const handleCancelScheduledEmail = async (id: string) => {
     setScheduleNotice(null);

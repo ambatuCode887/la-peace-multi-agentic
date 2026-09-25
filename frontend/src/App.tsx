@@ -51,6 +51,7 @@ export function App() {
   const [draftToRestore, setDraftToRestore] = useState<DraftEmail | null>(null);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [selectedScheduledEmail, setSelectedScheduledEmail] = useState<ScheduledEmailSummary | null>(null);
+  const [scheduledRefreshKey, setScheduledRefreshKey] = useState(0);
 
   useEffect(() => {
     return outboxService.subscribe(() => {
@@ -281,6 +282,14 @@ export function App() {
     handleReport(report);
   };
 
+  const handleScheduledCreated = (email: ScheduledEmailSummary) => {
+    setSelectedScheduledEmail(email);
+    setActiveMailboxFolder("SCHEDULED");
+    setActiveView("inbox");
+    setInboxCollapsed(false);
+    setScheduledRefreshKey((current) => current + 1);
+  };
+
   const handleCategoryFilterChange = (cat: EmailCategory | "ALL") => {
     setCategoryFilter(cat);
     setStatusFilter("ALL");
@@ -435,6 +444,7 @@ export function App() {
           mobileOpen={mobileInboxOpen}
           onCloseMobile={() => setMobileInboxOpen(false)}
           activeMailboxFolder={activeMailboxFolder}
+          scheduledRefreshKey={scheduledRefreshKey}
           onMailboxFolderChange={(folder) => {
             setActiveMailboxFolder(folder);
             setActiveView("inbox");
@@ -517,6 +527,7 @@ export function App() {
                   onDraftRestored={() => setDraftToRestore(null)}
                   embeddedEmailOnly
                   onDraftCompleted={() => setSelectedDraftId(null)}
+                  onScheduledCreated={handleScheduledCreated}
                 />
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
@@ -600,6 +611,7 @@ export function App() {
             activeTab={activeDrawerTab}
             onTabChange={setActiveDrawerTab}
             onReviewSaved={handleReviewSaved}
+            onScheduledCreated={handleScheduledCreated}
             draftToRestore={draftToRestore}
             onDraftRestored={() => setDraftToRestore(null)}
           />
