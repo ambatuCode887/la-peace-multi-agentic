@@ -11,7 +11,14 @@ from .verification import (
 	write_submission,
 )
 from .tool import inspect_shipping_email, run_shipping_verification
-from .api import app as shipping_api, create_app
+
+
+def __getattr__(name: str):
+	if name == "create_app":
+		from .api import create_app
+
+		return create_app
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
 	"DatasetAdapter",
@@ -28,6 +35,5 @@ __all__ = [
 	"write_submission",
 	"run_shipping_verification",
 	"inspect_shipping_email",
-	"shipping_api",
 	"create_app",
 ]
