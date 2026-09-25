@@ -334,14 +334,43 @@ def create_app(
         return {"email_id": email_id, "cases": matches[:10]}
 
     @app.post("/email/send")
-    def send_email(
-        case_id: str = Form(...),
+    async def send_email(
         to: str = Form(...),
         subject: str = Form(...),
         body: str = Form(""),
+        case_id: str | None = Form(None),
         case_attachment_names: str = Form("[]"),
         attachments: list[UploadFile] = File(default=[]),
     ) -> dict[str, Any]:
+        if not case_id:
+            attachment_payload: list[tuple[str, bytes, str | None]] = []
+            total_size = 0
+            for attachment in attachments:
+                content = await attachment.read(MAX_UPLOAD_BYTES - total_size + 1)
+                total_size += len(content)
+                if total_size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Email attachments exceed 20 MB")
+                attachment_payload.append((
+                    Path(attachment.filename or "attachment").name,
+                    content,
+                    attachment.content_type,
+                ))
+            try:
+                message_id = await run_in_threadpool(
+                    deliver_email,
+                    to,
+                    subject,
+                    body,
+                    attachment_payload,
+                )
+            except EmailDeliveryConfigurationError as error:
+                raise HTTPException(status_code=503, detail=str(error)) from error
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+            except EmailDeliveryError as error:
+                raise HTTPException(status_code=502, detail=str(error)) from error
+            return {"ok": True, "to": to.strip(), "message_id": message_id}
+
         report = store.get_case(case_id)
         if report is None:
             raise HTTPException(status_code=404, detail="Case report not found")
@@ -703,40 +732,6 @@ def create_app(
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {"ok": True, "email_id": email_id, "preview": preview}
 
-    @app.post("/email/send")
-    async def send_email(
-        to: str = Form(...),
-        subject: str = Form(...),
-        body: str = Form(""),
-        attachments: list[UploadFile] = File(default=[]),
-    ) -> dict[str, Any]:
-        attachment_payload: list[tuple[str, bytes, str | None]] = []
-        total_size = 0
-        for attachment in attachments:
-            content = await attachment.read(MAX_UPLOAD_BYTES - total_size + 1)
-            total_size += len(content)
-            if total_size > MAX_UPLOAD_BYTES:
-                raise HTTPException(status_code=413, detail="Email attachments exceed 20 MB")
-            attachment_payload.append((
-                Path(attachment.filename or "attachment").name,
-                content,
-                attachment.content_type,
-            ))
-        try:
-            message_id = await run_in_threadpool(
-                deliver_email,
-                to,
-                subject,
-                body,
-                attachment_payload,
-            )
-        except EmailDeliveryConfigurationError as error:
-            raise HTTPException(status_code=503, detail=str(error)) from error
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from error
-        except EmailDeliveryError as error:
-            raise HTTPException(status_code=502, detail=str(error)) from error
-        return {"ok": True, "to": to.strip(), "message_id": message_id}
 
     @app.post("/reviews/batch-rule-corrections/preview")
     def batch_rule_correction_preview() -> dict[str, Any]:

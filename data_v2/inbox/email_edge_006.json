@@ -1,0 +1,10 @@
+{
+  "email_id": "email_edge_006",
+  "from": "dangerous-cargo@hapag-lloyd.com",
+  "subject": "HAZMAT DECLARATION VERIFICATION _ VALPARAISO EXPRESS V.622W _ UN1993 ETHANOL SOLUTION",
+  "body": "Hapag-Lloyd Dangerous Goods Operations:\n\nPlease inspect the attached Draft BL for booking HL-908129 on VALPARAISO EXPRESS V.622W carrying Flammable Liquid. Ensure statutory IMDG hazard classifications (Class 3 / UN 1993 / Flashpoint) appear verbatim on the final B/L face before container loading.\n\nRegards,\nHapag-Lloyd Special Cargo Desk",
+  "attachments": [
+    "attachments/email_edge_006_SI.txt",
+    "attachments/email_edge_006_BL.txt"
+  ]
+}

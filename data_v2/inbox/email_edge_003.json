@@ -1,0 +1,10 @@
+{
+  "email_id": "email_edge_003",
+  "from": "bl.ocean@cma-cgm.com",
+  "subject": "BL DRAFT CONFIRMATION _ APL SAVANNAH V.094W _ DISCHARGE PTP TERMINAL 2",
+  "body": "Dear Averis Team,\n\nPlease review Draft BL for booking SINF9021882 on APL SAVANNAH V.094W. Port of discharge is printed as PTP Terminal 2 per ocean carrier terminal routing schedule. Please confirm.\n\nWarm regards,\nClara Dupont\nCMA CGM Documentation Centre",
+  "attachments": [
+    "attachments/email_edge_003_SI.txt",
+    "attachments/email_edge_003_BL.txt"
+  ]
+}

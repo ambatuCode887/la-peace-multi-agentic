@@ -1,0 +1,10 @@
+{
+  "email_id": "email_edge_001",
+  "from": "operations@evergreen-marine.com",
+  "subject": "DRAFT BL & VGM WEIGHBRIDGE _ EVER GIVEN V.0421E _ TANJUNG PELEPAS _ 5RSG-9901",
+  "body": "Dear Documentation Desk,\n\nPlease find attached the final Shipping Instruction and Draft Bill of Lading for order 5RSG-9901 aboard EVER GIVEN V.0421E. Note that container tare weight was adjusted at the terminal weighbridge under SOLAS VGM rules (+70 KG dunnage). Please confirm issuance.\n\nBest Regards,\nCapt. H. Tanaka\nEvergreen Marine Operations",
+  "attachments": [
+    "attachments/email_edge_001_SI.txt",
+    "attachments/email_edge_001_BL.txt"
+  ]
+}

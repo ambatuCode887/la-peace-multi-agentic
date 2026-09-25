@@ -294,6 +294,7 @@ export const api = {
     return res.json();
   },
 
+
   async getCaseDetail(emailId: string): Promise<BackendReport> {
     const res = await fetch(`${API_BASE}/cases/${encodeURIComponent(emailId)}`);
     if (!res.ok) throw new Error(`Failed to fetch case ${emailId}: ${res.statusText}`);
@@ -670,7 +671,9 @@ export function mapReportToShippingCase(
   managerReview?: ManagerReview | null
 ): ShippingCase {
   const category: EmailCategory =
-    existing?.category || (report.category as EmailCategory) || 'BL_COMPARISON';
+    report.email_id?.startsWith('email_edge_') || existing?.id?.startsWith('email_edge_')
+      ? 'BL_COMPARISON'
+      : existing?.category || (report.category as EmailCategory) || 'BL_COMPARISON';
   const isBl = category === 'BL_COMPARISON';
 
   // Only BL_COMPARISON cases have paired SI vs BL fields
@@ -740,6 +743,8 @@ export function mapReportToShippingCase(
           blReaderAgreement: blDocument?.reader_agreement?.[key],
         };
       });
+    } else if (existing?.fields && existing.fields.length > 0) {
+      fields = existing.fields;
     }
   }
 
@@ -846,6 +851,9 @@ export function mapReportToShippingCase(
         }
       : existing?.routingTelemetry,
     ocrDistortionAnalysis: report.ocr_distortion_analysis || existing?.ocrDistortionAnalysis,
+    isChallengeCase: existing?.isChallengeCase,
+    challengeBadge: existing?.challengeBadge,
+    challengeRationale: existing?.challengeRationale,
     auditTrail: existing?.auditTrail || [
       {
         time: 'Just now',
@@ -860,7 +868,10 @@ export function mapSummaryToShippingCase(
   summary: BackendCaseSummary,
   existing?: ShippingCase,
 ): ShippingCase {
-  const category = (summary.category as EmailCategory) || existing?.category || 'GENERAL';
+  const category =
+    summary.email_id.startsWith('email_edge_') || existing?.id?.startsWith('email_edge_')
+      ? 'BL_COMPARISON'
+      : (summary.category as EmailCategory) || existing?.category || 'GENERAL';
   const status: VerificationStatus =
     summary.status === 'OK'
       ? 'PASS'
@@ -887,6 +898,9 @@ export function mapSummaryToShippingCase(
     attachments: existing?.attachments || [],
     promptInjectionDetected: existing?.promptInjectionDetected,
     promptInjectionMatches: existing?.promptInjectionMatches,
+    isChallengeCase: existing?.isChallengeCase,
+    challengeBadge: existing?.challengeBadge,
+    challengeRationale: existing?.challengeRationale,
     aiAnalysis: {
       summary: 'AI review summary is available after opening the case detail.',
       recommendation: 'Open the case to inspect the deterministic result.',

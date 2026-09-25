@@ -29,7 +29,6 @@ import {
   Send,
   Paperclip,
   LayoutDashboard,
-  PenSquare,
   Award,
   ListChecks,
   ArrowUpDown,
@@ -68,9 +67,11 @@ interface SidebarProps {
   activeView?: "dashboard" | "inbox" | "benchmark";
   onGoToDashboard?: () => void;
   onGoToBenchmark?: () => void;
-  onOpenCompose?: () => void;
   onOpenBatchRuleCorrections?: () => void;
   mismatchCount?: number;
+  onToggleRead?: (caseId: string) => void;
+  challengeFilterActive?: boolean;
+  onToggleChallengeFilter?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -99,11 +100,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeView = "dashboard",
   onGoToDashboard,
   onGoToBenchmark,
-  onOpenCompose,
   onOpenBatchRuleCorrections,
   mismatchCount = 0,
+  onToggleRead,
+  challengeFilterActive = false,
+  onToggleChallengeFilter,
 }) => {
-  const [sortBy, setSortBy] = useState<"date" | "sender" | "vessel" | "status">("date");
+  const [sortBy, setSortBy] = useState<"date" | "sender" | "vessel" | "status" | "unread">("date");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [loadingMore, setLoadingMore] = useState(false);
   const [internalRailCollapsed, setInternalRailCollapsed] = useState(false);
@@ -466,11 +469,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const challengeCasesCount = useMemo(() => {
+    return safeAll.filter((c) => c.isChallengeCase).length;
+  }, [safeAll]);
+
   const visibleCases = useMemo(() => {
-    const list = [...cases];
+    let list = [...cases];
+    if (challengeFilterActive) {
+      list = list.filter((c) => c.isChallengeCase);
+    }
     return list.sort((a, b) => {
       let cmp = 0;
-      if (sortBy === "date") {
+      if (sortBy === "unread") {
+        const uA = a.isRead ? 1 : 0;
+        const uB = b.isRead ? 1 : 0;
+        cmp = uA - uB; // 0 (unread) first
+        if (cmp === 0) {
+          const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          cmp = timeB - timeA;
+        }
+      } else if (sortBy === "date") {
         const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
         const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
         cmp = timeA - timeB;
@@ -493,7 +512,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       return sortOrder === "desc" ? -cmp : cmp;
     });
-  }, [cases, sortBy, sortOrder]);
+  }, [cases, sortBy, sortOrder, challengeFilterActive]);
   const okCases = safeAll.filter(
     (c) => c.category === "BL_COMPARISON" && c.status === "PASS",
   );
@@ -716,39 +735,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )
           )}
 
-          {/* Divider between Operations Hub and Actions/Folders */}
-          <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
-
-          {/* Quick Compose Button */}
-          {onOpenCompose && (
-            railCollapsed && !mobileOpen ? (
-              <div className="flex justify-center mb-1.5 w-full">
-                <button
-                  type="button"
-                  data-testid="sidebar-compose-btn"
-                  onClick={onOpenCompose}
-                  title="Compose New Email"
-                  className="w-9 h-9 rounded-xl bg-gradient-to-r from-[#052464] to-[#345ec4] text-white flex items-center justify-center shadow-xs hover:shadow-[#345ec4]/30 cursor-pointer hover:scale-105 transition-all"
-                >
-                  <PenSquare className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="px-1.5 mb-1.5 w-full">
-                <button
-                  type="button"
-                  data-testid="sidebar-compose-btn"
-                  onClick={onOpenCompose}
-                  className="w-full h-9 px-3 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white text-xs font-bold flex items-center justify-center space-x-2 shadow-xs cursor-pointer hover:scale-[1.02] transition-all"
-                >
-                  <PenSquare className="w-3.5 h-3.5" />
-                  <span>Compose Email</span>
-                </button>
-              </div>
-            )
-          )}
-
-          {/* Divider between Actions and Inbound Folders */}
+          {/* Divider between Operations Hub and Inbound Folders */}
           <div className={`border-t border-slate-200/80 dark:border-[#1a3d8e]/50 my-1.5 ${railCollapsed && !mobileOpen ? "w-8 self-center" : "w-full"}`} />
 
           {/* Folder Buttons List */}
@@ -1263,11 +1250,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "date" | "sender" | "vessel" | "status")}
+                  onChange={(e) => setSortBy(e.target.value as "date" | "sender" | "vessel" | "status" | "unread")}
                   aria-label="Arrange emails by field"
                   className="text-[11px] font-semibold bg-transparent text-slate-700 dark:text-slate-200 border-none outline-none cursor-pointer focus:ring-0 p-0 truncate"
                 >
                   <option value="date" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Date</option>
+                  <option value="unread" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Unread First</option>
                   <option value="sender" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">From / Shipper</option>
                   <option value="vessel" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Subject / Vessel</option>
                   <option value="status" className="bg-white dark:bg-[#06183e] text-slate-800 dark:text-slate-200">Status</option>
@@ -1285,6 +1273,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <ArrowUpDown className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2]" />
               </button>
             </div>
+
+            {/* Industrial Edge Cases Quick Filter Pill */}
+            {challengeCasesCount > 0 && onToggleChallengeFilter && (
+              <div className="pt-2 border-t border-slate-100 dark:border-[#1a3d8e]/40">
+                <button
+                  type="button"
+                  data-testid="toggle-challenge-filter-btn"
+                  onClick={onToggleChallengeFilter}
+                  className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all cursor-pointer border ${
+                    challengeFilterActive
+                      ? "bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/60 shadow-xs"
+                      : "bg-slate-50 hover:bg-amber-50/70 dark:bg-[#040e28] dark:hover:bg-amber-950/40 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-[#1a3d8e]/60"
+                  }`}
+                  title="Filter to 6 curated industrial edge-case scenarios"
+                >
+                  <div className="flex items-center space-x-1.5 truncate">
+                    <span className="text-amber-500 text-sm">⭐</span>
+                    <span className="truncate">Industrial Edge Cases</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-extrabold border border-amber-500/40">
+                    {challengeFilterActive ? "Active (6)" : `${challengeCasesCount} cases`}
+                  </span>
+                </button>
+              </div>
+            )}
 
             {/* Batch Export Bar */}
             <div className="border-t border-slate-100 pt-2 dark:border-[#1a3d8e]/40">
@@ -1351,22 +1364,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ) : (
               visibleCases.map((c) => {
                 const isSelected = c.id === selectedCaseId;
+                const isUnread = !c.isRead;
                 return (
                   <button
                     key={c.id}
                     data-case-id={c.id}
+                    data-is-unread={isUnread ? "true" : "false"}
                     onClick={() => {
                       onSelectCase(c.id);
                       if (onCloseMobile) onCloseMobile();
                     }}
-                    className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer bg-white dark:bg-[#06163a] border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
+                    className={`w-full text-left p-3 transition-all flex flex-col space-y-1.5 cursor-pointer border-b border-b-slate-100 dark:border-b-[#1a3d8e]/50 ${
                       isSelected
-                        ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/60 dark:border-l-[#5a82e2]"
-                        : "hover:bg-slate-50/80 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent"
+                        ? "bg-[#eef3fc] border-l-4 border-l-[#345ec4] dark:bg-[#091f52]/70 dark:border-l-[#5a82e2]"
+                        : isUnread
+                        ? "bg-white dark:bg-[#071a42] hover:bg-blue-50/30 dark:hover:bg-[#091f52]/40 border-l-4 border-l-blue-500"
+                        : "bg-slate-50/40 dark:bg-[#06163a]/60 hover:bg-slate-100/70 dark:hover:bg-[#091f52]/20 border-l-4 border-l-transparent opacity-90"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        {/* Read / Unread Indicator Dot (interactive toggle) */}
+                        <button
+                          type="button"
+                          data-testid={`toggle-read-${c.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (onToggleRead) onToggleRead(c.id);
+                          }}
+                          title={isUnread ? "Unread (click to mark as read)" : "Read (click to mark as unread)"}
+                          aria-label={isUnread ? `Mark ${c.id} as read` : `Mark ${c.id} as unread`}
+                          className="p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-[#091f52] transition-colors cursor-pointer shrink-0"
+                        >
+                          <span
+                            className={`block w-2 h-2 rounded-full transition-all ${
+                              isUnread
+                                ? "bg-blue-600 dark:bg-blue-400 ring-2 ring-blue-500/30 shadow-xs"
+                                : "border border-slate-300 dark:border-slate-600 hover:border-slate-400"
+                            }`}
+                          />
+                        </button>
+
                         <input
                           type="checkbox"
                           checked={selectedOkIds.includes(c.id)}
@@ -1378,20 +1416,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           aria-label={`Select ${c.id} for Draft BL export`}
                           className="h-3.5 w-3.5 shrink-0 accent-[#345ec4] disabled:cursor-not-allowed disabled:opacity-30 cursor-pointer"
                         />
-                        <span className="text-[14px] font-mono font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        <span className={`text-[13px] font-mono tracking-tight shrink-0 ${
+                          isUnread
+                            ? "font-extrabold text-slate-900 dark:text-white"
+                            : "font-semibold text-slate-600 dark:text-slate-300"
+                        }`}>
                           {c.id}
                         </span>
-                        {getCategoryBadge(c.category)}
+                        {c.isChallengeCase ? (
+                          <span
+                            title={c.challengeRationale || "Industrial Edge Case Challenge"}
+                            className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/40 shrink-0 flex items-center gap-0.5 shadow-2xs"
+                          >
+                            ⭐ {c.challengeBadge || "Challenge"}
+                          </span>
+                        ) : (
+                          getCategoryBadge(c.category)
+                        )}
                       </div>
-                      <span className="ml-2 min-w-0 truncate text-[10px] text-slate-400 font-mono">
+                      <span className={`shrink-0 text-[10px] font-mono ${
+                        isUnread ? "font-bold text-slate-600 dark:text-slate-300" : "text-slate-400 font-normal"
+                      }`}>
                         {formatMalaysiaTime(c.timestamp, "compact")}
                       </span>
                     </div>
 
                     {/* Vessel / Reference line + Tier Badge & Status Badge */}
                     <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex items-center space-x-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium truncate max-w-[150px]">
-                        <Ship className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2] shrink-0" />
+                      <div className={`flex items-center space-x-1.5 text-xs truncate max-w-[150px] ${
+                        isUnread ? "font-bold text-slate-900 dark:text-white" : "font-medium text-slate-600 dark:text-slate-300"
+                      }`}>
+                        <Ship className={`w-3.5 h-3.5 shrink-0 ${isUnread ? "text-blue-600 dark:text-blue-400" : "text-[#345ec4] dark:text-[#5a82e2]"}`} />
                         <span className="truncate">
                           {c.vessel !== "N/A" ? c.vessel : c.subject}
                         </span>
@@ -1405,7 +1460,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
 
                     {/* Subject Preview */}
-                    <p className="text-[11px] text-slate-500 dark:text-slate-300 line-clamp-1 leading-snug">
+                    <p className={`text-[11px] line-clamp-1 leading-snug transition-colors ${
+                      isUnread
+                        ? "font-bold text-slate-900 dark:text-slate-100"
+                        : "font-normal text-slate-500 dark:text-slate-400"
+                    }`}>
                       {c.subject}
                     </p>
                   </button>

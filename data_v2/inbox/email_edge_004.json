@@ -1,0 +1,10 @@
+{
+  "email_id": "email_edge_004",
+  "from": "logistics@orient-star.com.my",
+  "subject": "DRAFT BL INCOTERM DISPUTE _ MAERSK KINLOSS V.2601 _ CIF VS COLLECT",
+  "body": "CRITICAL ATTENTION: Draft BL for PO 88129 shows FREIGHT COLLECT. This cargo was booked under CIF Rotterdam terms where ocean freight MUST be FREIGHT PREPAID by the shipper. If issued collect, consignee cannot clear goods without paying carrier twice. Revert with amended draft!\n\nBest,\nMarcus Wong\nOrient Star Forwarding",
+  "attachments": [
+    "attachments/email_edge_004_SI.txt",
+    "attachments/email_edge_004_BL.txt"
+  ]
+}

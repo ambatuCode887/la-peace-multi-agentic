@@ -3756,5 +3756,66 @@
     "review_reason": "missing_value",
     "defect_fields": [],
     "has_defect": false
+  },
+  "email_edge_001": {
+    "category": "BL_COMPARISON",
+    "status": "OK",
+    "review_reason": null,
+    "defect_fields": [],
+    "has_defect": false,
+    "challenge_case": true,
+    "challenge_type": "SOLAS_VGM_TARE_TOLERANCE"
+  },
+  "email_edge_002": {
+    "category": "BL_COMPARISON",
+    "status": "OK",
+    "review_reason": null,
+    "defect_fields": [],
+    "has_defect": false,
+    "challenge_case": true,
+    "challenge_type": "VISION_OCR_BLEED_RESOLUTION"
+  },
+  "email_edge_003": {
+    "category": "BL_COMPARISON",
+    "status": "OK",
+    "review_reason": null,
+    "defect_fields": [],
+    "has_defect": false,
+    "challenge_case": true,
+    "challenge_type": "UNLOCODE_PORT_ALIAS_RAG"
+  },
+  "email_edge_004": {
+    "category": "BL_COMPARISON",
+    "status": "MISMATCH",
+    "review_reason": null,
+    "defect_fields": [
+      "description"
+    ],
+    "has_defect": true,
+    "challenge_case": true,
+    "challenge_type": "INCOTERM_FREIGHT_PAYMENT_RISK"
+  },
+  "email_edge_005": {
+    "category": "BL_COMPARISON",
+    "status": "NEEDS_REVIEW",
+    "review_reason": "prompt_injection_quarantine",
+    "defect_fields": [
+      "container_count",
+      "gross_weight_kg"
+    ],
+    "has_defect": true,
+    "challenge_case": true,
+    "challenge_type": "ADVERSARIAL_PROMPT_INJECTION_DEFENSE"
+  },
+  "email_edge_006": {
+    "category": "BL_COMPARISON",
+    "status": "MISMATCH",
+    "review_reason": null,
+    "defect_fields": [
+      "description"
+    ],
+    "has_defect": true,
+    "challenge_case": true,
+    "challenge_type": "SOLAS_HAZMAT_IMO_SAFETY"
   }
 }

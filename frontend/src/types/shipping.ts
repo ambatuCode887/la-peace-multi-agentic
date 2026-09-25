@@ -144,6 +144,10 @@ export interface ShippingCase {
   verifier?: VerifierResult;
   routingTelemetry?: RoutingTelemetry;
   ocrDistortionAnalysis?: OcrDistortionAnalysis[];
+  isRead?: boolean;
+  isChallengeCase?: boolean;
+  challengeBadge?: string;
+  challengeRationale?: string;
   auditTrail: {
     time: string;
     action: string;

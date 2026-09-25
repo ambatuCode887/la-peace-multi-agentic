@@ -9,6 +9,17 @@ export interface SentAttachment {
   fileStored?: boolean;
 }
 
+export interface ThreadReply {
+  id: string;
+  sender: string;
+  senderName: string;
+  senderType: 'recipient' | 'operator';
+  to: string;
+  timestamp: string;
+  body: string;
+  attachments?: SentAttachment[];
+}
+
 export interface DispatchedEmail {
   id: string;
   caseId: string;
@@ -19,6 +30,7 @@ export interface DispatchedEmail {
   attachments: SentAttachment[];
   vessel?: string;
   status: 'SENT' | 'DELIVERED';
+  replies?: ThreadReply[];
 }
 
 export interface DraftEmail {
@@ -37,6 +49,37 @@ const DRAFT_STORAGE_KEY = 'la_peace_email_drafts_v1';
 const DRAFT_DB_NAME = 'la-peace-email-drafts';
 const DRAFT_DB_STORE = 'attachments';
 
+const DEFAULT_SENT_EMAILS: DispatchedEmail[] = [
+  {
+    id: "sent_seed_001",
+    caseId: "email_edge_001",
+    to: "operations@evergreen-marine.com",
+    subject: "CLARIFICATION REQUEST: SOLAS VGM Tare Tolerance Check _ EVER GIVEN V.0421E",
+    body: "Dear Evergreen Operations Desk,\n\nWe are reviewing the draft Bill of Lading and Shipping Instruction for booking 5RSG-9901 aboard EVER GIVEN V.0421E. Our multi-tier verification flagged a 70 KG weighbridge variance between documents (26,450 KG SI vs 26,520 KG BL).\n\nUnder SOLAS Chapter VI Reg 2 guidelines, this 0.26% difference is within physical dunnage tare tolerance. Please verify if terminal timber dunnage was applied during container stuffing so we may authorize release.\n\nBest Regards,\nDocumentation Operations Desk\nLa Peace Shipping Systems",
+    sentAt: new Date(Date.now() - 3600000 * 3).toISOString(),
+    attachments: [
+      {
+        filename: "5RSG-9901_SOLAS_Tare_Analysis.pdf",
+        size: 142850,
+        ext: "pdf",
+      },
+    ],
+    vessel: "EVER GIVEN",
+    status: "DELIVERED",
+    replies: [
+      {
+        id: "reply_seed_001",
+        sender: "operations@evergreen-marine.com",
+        senderName: "Capt. H. Tanaka (Evergreen Marine)",
+        senderType: "recipient",
+        to: "docs@shipping.com",
+        timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
+        body: "Good day Operations Desk,\n\nConfirmed. The +70 KG variance corresponds to certified timber dunnage added during terminal stuffing at Tanjung Pelepas under SOLAS VGM rules. The Draft BL gross weight of 26,520 KG is correct and approved. Please proceed with final document release.\n\nBest Regards,\nCapt. H. Tanaka\nEvergreen Marine Operations Desk",
+      },
+    ],
+  },
+];
+
 class OutboxService {
   private listeners: Array<() => void> = [];
 
@@ -45,7 +88,7 @@ class OutboxService {
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SENT_EMAILS));
         }
       } catch (err) {
         console.warn('LocalStorage unavailable for outbox:', err);
@@ -58,12 +101,15 @@ class OutboxService {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored) as DispatchedEmail[];
+        const parsed = JSON.parse(stored) as DispatchedEmail[];
+        if (parsed.length > 0) return parsed;
       }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SENT_EMAILS));
+      return DEFAULT_SENT_EMAILS;
     } catch (err) {
       console.warn('Failed to parse outbox storage:', err);
     }
-    return [];
+    return DEFAULT_SENT_EMAILS;
   }
 
   public saveSentEmail(email: Omit<DispatchedEmail, 'id' | 'sentAt' | 'status'> & { id?: string; sentAt?: string }): DispatchedEmail {
@@ -97,6 +143,37 @@ class OutboxService {
 
   public getSentCount(): number {
     return this.getSentEmails().length;
+  }
+
+  public addReplyToSentEmail(
+    emailId: string,
+    reply: Omit<ThreadReply, 'id' | 'timestamp'> & { id?: string; timestamp?: string }
+  ): DispatchedEmail | undefined {
+    const list = this.getSentEmails();
+    const target = list.find((e) => e.id === emailId);
+    if (!target) return undefined;
+
+    const fullReply: ThreadReply = {
+      id: reply.id || `reply_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      sender: reply.sender,
+      senderName: reply.senderName,
+      senderType: reply.senderType,
+      to: reply.to,
+      timestamp: reply.timestamp || new Date().toISOString(),
+      body: reply.body,
+      attachments: reply.attachments || [],
+    };
+
+    if (!target.replies) target.replies = [];
+    target.replies.push(fullReply);
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    } catch (err) {
+      console.warn('Failed to persist thread reply:', err);
+    }
+    this.notifyListeners();
+    return target;
   }
 
   public getDrafts(): DraftEmail[] {
