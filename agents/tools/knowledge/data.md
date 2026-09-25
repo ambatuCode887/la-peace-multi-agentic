@@ -17,6 +17,7 @@ The standard comparison fields are shipper, consignee, notify party, port of loa
 - Port of discharge: POD, port of discharge, discharge port, destination port.
 - Container count: container count, number of containers, containers, packages, quantity of containers.
 - Gross weight: gross weight, gross wt, gross mass, weight in kilograms, kgs, KG.
+- Goods description: goods description, cargo description, description of goods, commodity, product description.
 
 Aliases identify candidate fields only. They do not prove that two values are equivalent.
 
@@ -59,3 +60,7 @@ Compare the named port and UN/LOCODE for the port of loading and port of dischar
 ### Gross-weight mismatch
 
 Normalize both gross weights to kilograms and compare the normalized values. Confirm the unit and the evidence line before escalating. A difference that remains after KG, MT, or LB conversion is a real mismatch and requires human review.
+
+### Goods description mismatch
+
+Compare the complete cargo or goods description on the SI and BL, including material, grade, size, brand, packaging, and qualifiers. Differences in capitalization, whitespace, or punctuation alone may be formatting differences, but do not assume that changed product attributes or omitted qualifiers are equivalent. Preserve both source values and request confirmation when the difference could change the cargo identity or handling requirements.

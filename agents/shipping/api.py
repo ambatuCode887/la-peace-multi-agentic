@@ -1410,6 +1410,7 @@ _FIELD_TERMS = {
     "port_of_loading": {"port mismatch", "port of loading", "loading port", "locode"},
     "port_of_discharge": {"port mismatch", "port of discharge", "discharge port", "locode"},
     "gross_weight_kg": {"gross weight", "gross wt", "kilograms", "kg", "mt", "lb"},
+    "description": {"description", "goods description", "cargo description", "description of goods", "commodity", "product description"},
 }
 # Phrases from the knowledge file's own headings, so the section about this field ranks first.
 _FIELD_SECTION_TERMS = {
@@ -1420,6 +1421,7 @@ _FIELD_SECTION_TERMS = {
     "port_of_loading": {"port mismatch", "un/locode"},
     "port_of_discharge": {"port mismatch", "un/locode"},
     "gross_weight_kg": {"gross-weight mismatch", "normalize both gross weights"},
+    "description": {"goods description mismatch", "cargo or goods description"},
 }
 _REASON_TERMS = {
     "unreadable": ({"ocr", "re-read", "unreadable", "low-confidence"}, {"ocr can confuse", "targeted re-read"}),
@@ -1552,6 +1554,7 @@ async def _run_manager_review(email_id: str, dataset_root: Path) -> dict[str, An
         "port_of_loading": "Compare the port name and UN/LOCODE on both documents. A different loading port requires human review before release.",
         "port_of_discharge": "Compare the port name and UN/LOCODE on both documents. A different discharge port requires human review before release.",
         "gross_weight_kg": "Normalize both gross weights to kilograms and verify the units and evidence lines. A difference remaining after conversion is a real mismatch.",
+        "description": "Compare the complete goods description, including material, grade, size, brand, packaging, and qualifiers. Preserve both source values and request confirmation if cargo identity or handling requirements could differ.",
     }
     if status == "OK":
         action = "No further action is required unless a reviewer identifies new evidence."

@@ -1109,6 +1109,30 @@ def test_manager_review_cites_only_the_section_for_the_mismatched_field(tmp_path
     assert not review["citations"][0]["excerpt"].startswith("tail of")
 
 
+def test_manager_review_cites_goods_description_guidance(tmp_path, monkeypatch) -> None:
+    chunk = {
+        "text": (
+            "### Goods description mismatch\n"
+            "Compare the complete cargo or goods description, including material, grade, "
+            "size, brand, packaging, and qualifiers. Preserve both source values."
+        ),
+        "source": "data.md",
+        "chunk_index": 10,
+        "score": 0.81,
+    }
+    review = _review(
+        tmp_path,
+        monkeypatch,
+        {"status": "MISMATCH", "category": "BL_COMPARISON", "defect_fields": ["description"]},
+        results=[chunk],
+    )
+
+    assert review["guidance_applicable"] is True
+    assert len(review["citations"]) == 1
+    assert review["citations"][0]["excerpt"].startswith("Goods description mismatch")
+    assert any("complete goods description" in item for item in review["field_guidance"])
+
+
 def test_manager_review_for_ambiguity_cites_the_ambiguous_field_first(tmp_path, monkeypatch) -> None:
     review = _review(
         tmp_path, monkeypatch,

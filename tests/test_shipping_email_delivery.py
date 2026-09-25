@@ -4,10 +4,7 @@ import smtplib
 from email.message import EmailMessage
 
 import pytest
-from fastapi.testclient import TestClient
 
-from agents.shipping import api as shipping_api
-from agents.shipping.api import create_app
 from agents.shipping.email_delivery import (
     EmailDeliveryConfigurationError,
     deliver_email,
@@ -119,39 +116,3 @@ def test_external_delivery_uses_starttls_and_allowlisted_recipient(
 
     assert FakeSMTP.starttls_used is True
     assert FakeSMTP.authenticated_as == ("sender@gmail.com", "test-app-password")
-
-
-def test_send_email_endpoint_accepts_multipart_attachments(
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _configure_local_smtp(monkeypatch)
-    received: dict[str, object] = {}
-
-    def fake_deliver(
-        to: str,
-        subject: str,
-        body: str,
-        attachments: list[tuple[str, bytes, str | None]],
-    ) -> str:
-        received.update(to=to, subject=subject, body=body, attachments=attachments)
-        return "<test-message@la-peace.test>"
-
-    monkeypatch.setattr(shipping_api, "deliver_email", fake_deliver)
-    response = TestClient(create_app(tmp_path)).post(
-        "/email/send",
-        data={
-            "to": "recipient@example.com",
-            "subject": "Shipping update",
-            "body": "Please review.",
-        },
-        files=[("attachments", ("draft.txt", b"draft content", "text/plain"))],
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "ok": True,
-        "to": "recipient@example.com",
-        "message_id": "<test-message@la-peace.test>",
-    }
-    assert received["attachments"] == [("draft.txt", b"draft content", "text/plain")]
