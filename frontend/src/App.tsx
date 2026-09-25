@@ -11,6 +11,7 @@ import { EmailMessage } from "./components/verification/EmailMessage";
 import { BlueprintComparator } from "./components/verification/BlueprintComparator";
 import { CopilotDrawer } from "./components/copilot/CopilotDrawer";
 import { OperationsDashboard } from "./components/dashboard/OperationsDashboard";
+import { BenchmarkScoreboard } from "./components/evaluation/BenchmarkScoreboard";
 import { SentEmailViewer } from "./components/verification/SentEmailViewer";
 import { BatchRuleCorrectionModal } from "./components/review/BatchRuleCorrectionModal";
 import { ALL_CASES } from "./data/allCases";
@@ -24,7 +25,7 @@ import { outboxService, type DispatchedEmail } from "./services/outboxService";
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
-  const [activeView, setActiveView] = useState<"dashboard" | "inbox">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "inbox" | "benchmark">("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string>(() => {
     try {
       const param = new URLSearchParams(window.location.search).get("case");
@@ -279,6 +280,12 @@ export function App() {
     setRailCollapsed(true);
   };
 
+  const handleGoToBenchmark = () => {
+    setActiveView("benchmark");
+    setInboxCollapsed(true);
+    setRailCollapsed(true);
+  };
+
   const handleNavigateToInbox = (
     category: EmailCategory | "ALL" = "ALL",
     status: VerificationStatus | "ALL" = "ALL",
@@ -310,10 +317,7 @@ export function App() {
         onToggleDarkMode={() => setDarkMode((prev) => !prev)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        backendConnected={backendConnected}
         activeView={activeView}
-        mismatchCount={mismatchCount}
-        onOpenBatchRuleCorrections={() => setBatchRuleCorrectionsOpen(true)}
         onGoToDashboard={handleGoToDashboard}
         mobileInboxOpen={mobileInboxOpen}
         onToggleMobileInbox={() => setMobileInboxOpen((prev) => !prev)}
@@ -358,14 +362,17 @@ export function App() {
           }}
           activeView={activeView}
           onGoToDashboard={handleGoToDashboard}
+          onGoToBenchmark={handleGoToBenchmark}
           onOpenCompose={handleOpenCompose}
+          onOpenBatchRuleCorrections={() => setBatchRuleCorrectionsOpen(true)}
+          mismatchCount={mismatchCount}
         />
 
         {/* Zone 2: Main Operational Canvas (Center) */}
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-[#f5f8ff]/70 dark:bg-[#05163a]/90">
           <div
             className={`mx-auto transition-[max-width] duration-200 ${
-              activeView === "dashboard"
+              activeView === "dashboard" || activeView === "benchmark"
                 ? "max-w-7xl"
                 : inboxCollapsed
                 ? "max-w-6xl"
@@ -378,6 +385,8 @@ export function App() {
                 onNavigateToInbox={handleNavigateToInbox}
                 onOpenCompose={handleOpenCompose}
               />
+            ) : activeView === "benchmark" ? (
+              <BenchmarkScoreboard />
             ) : activeMailboxFolder === "SENT" ? (
               selectedSentEmail ? (
                 <SentEmailViewer

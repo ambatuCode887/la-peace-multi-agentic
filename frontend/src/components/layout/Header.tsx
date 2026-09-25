@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Sun, Moon, Menu, X, ListChecks } from "lucide-react";
+import { Search, Sun, Moon, Menu, X } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 
 interface HeaderProps {
@@ -7,10 +7,7 @@ interface HeaderProps {
   onToggleDarkMode: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  backendConnected?: boolean;
-  activeView?: "dashboard" | "inbox";
-  mismatchCount?: number;
-  onOpenBatchRuleCorrections?: () => void;
+  activeView?: "dashboard" | "inbox" | "benchmark";
   onGoToDashboard?: () => void;
   onToggleMobileInbox?: () => void;
   mobileInboxOpen?: boolean;
@@ -21,10 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   searchQuery,
   onSearchChange,
-  backendConnected = false,
   activeView = "dashboard",
-  mismatchCount = 0,
-  onOpenBatchRuleCorrections,
   onGoToDashboard,
   onToggleMobileInbox,
   mobileInboxOpen = false,
@@ -104,20 +98,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center space-x-1.5 sm:space-x-3">
-          {backendConnected && activeView === "inbox" && mismatchCount > 0 && (
-            <button
-              type="button"
-              onClick={onOpenBatchRuleCorrections}
-              aria-label={`Review rule-based corrections for ${mismatchCount} mismatched cases`}
-              title="Preview deterministic, source-evidence-backed corrections"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200 dark:hover:bg-emerald-900/60 sm:px-3"
-            >
-              <ListChecks className="h-4 w-4" />
-              <span className="hidden sm:inline">Rule fixes</span>
-              <span>{mismatchCount}</span>
-            </button>
-          )}
-
           {/* Mobile Search Toggle Button */}
           <button
             type="button"

@@ -392,6 +392,25 @@ def create_app(
         snapshot = append_snapshot(root.parent / "evaluation-history.json", label, result)
         return {"ok": True, "snapshot": snapshot}
 
+    @app.get("/api/benchmark/summary")
+    async def get_benchmark_summary() -> dict[str, Any]:
+        """Return certified multi-tier benchmark results."""
+        artifacts_path = Path("artifacts/benchmark_results.json")
+        if artifacts_path.is_file():
+            try:
+                return json.loads(artifacts_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        from agents.eval.benchmark import run_benchmark
+        return await run_in_threadpool(run_benchmark, sample_size=None, save=True)
+
+    @app.post("/api/benchmark/run")
+    async def run_live_benchmark(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Execute interactive live benchmark run on a specified sample size."""
+        sample_size = (payload or {}).get("sample_size", 20)
+        from agents.eval.benchmark import run_benchmark
+        return await run_in_threadpool(run_benchmark, sample_size=sample_size, save=False)
+
     @app.post("/inbox/process")
     def process_inbox(payload: dict[str, Any] | None = None) -> dict[str, Any]:
         # A plain `def` runs in a worker thread, so the dashboard stays responsive meanwhile.
@@ -619,7 +638,16 @@ def _ground_truth_path() -> Path:
     configured = env("SHIPPING_GROUND_TRUTH_PATH", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
-    return Path.home() / "Downloads" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json"
+    candidates = [
+        Path("data_v2/ground_truth.json").resolve(),
+        Path(__file__).resolve().parents[2] / "data_v2" / "ground_truth.json",
+        Path(__file__).resolve().parents[2] / "problem_statement_AverisXMonash" / "Hackathon Problem Statement" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json",
+        Path.home() / "Downloads" / "sdoc-hackathon-docker" / "data_v2" / "ground_truth.json",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
 
 
 def _materialize_mongo_case(store: MongoCaseStore, email_id: str, dataset_root: Path) -> None:

@@ -385,11 +385,14 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
     }
   };
 
-  if (!isOpen) {
-    return (
+  return (
+    <>
+      {/* Floating trigger button when drawer is closed */}
       <button
         onClick={onToggle}
-        className="fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px]"
+        className={`fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all duration-300 ease-in-out hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px] ${
+          isOpen ? "opacity-0 pointer-events-none scale-90" : "opacity-100 pointer-events-auto scale-100"
+        }`}
       >
         <img
           src={lapeaceIcon}
@@ -400,18 +403,24 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         <span className="text-xs font-bold hidden sm:inline">Open Review & AI Workspace</span>
         <span className="text-xs font-bold sm:hidden">AI & Review</span>
       </button>
-    );
-  }
 
-  return (
-    <>
       {/* Mobile backdrop for drawer on < lg screens */}
       <div
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden"
+        className={`fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 ease-in-out ${
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
         onClick={onToggle}
         aria-hidden="true"
       />
-      <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-md sm:w-[420px] lg:static lg:z-auto lg:w-96 xl:w-[420px] border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-dvh lg:h-[calc(100vh-4rem)] shadow-2xl lg:shadow-lg select-none">
+
+      {/* Aside drawer with synchronized smooth slide & width transition */}
+      <aside
+        className={`fixed inset-y-0 right-0 z-50 w-full max-w-md sm:w-[420px] lg:static lg:z-auto border-l border-slate-200/80 bg-white/95 dark:bg-[#06163a]/95 dark:border-[#1a3d8e]/60 flex flex-col h-dvh lg:h-[calc(100vh-4rem)] shadow-2xl lg:shadow-lg select-none transition-all duration-300 ease-in-out overflow-hidden ${
+          isOpen
+            ? "translate-x-0 opacity-100 lg:w-96 xl:w-[420px]"
+            : "translate-x-full lg:translate-x-0 opacity-0 lg:w-0 lg:border-l-0 pointer-events-none"
+        }`}
+      >
         {/* Drawer Header */}
         <div className="p-4 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between bg-slate-50/50 dark:bg-[#091f52]/25">
           <div className="flex items-center space-x-2.5">

@@ -169,21 +169,16 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50/70 dark:bg-[#030d24] text-slate-800 dark:text-slate-100 p-4 sm:p-6 lg:p-8 space-y-6 select-none max-w-7xl mx-auto">
-      {/* 1. Header Banner & Operational Quick Actions */}
+      {/* 1. Header Banner & Operational Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-[#1a3d8e]/50">
-        <div>
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-xl bg-[#052464] text-white">
-              <Anchor className="w-5 h-5 text-[#8ea9f7]" />
-            </div>
-            <div>
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center space-x-2">
-                <span>Shipping Operations Command</span>
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                Maritime documentation verification, discrepancy resolution & carrier exception management
-              </p>
-            </div>
+        <div className="flex items-center space-x-2.5">
+          <div className="p-2 rounded-xl bg-[#052464] text-white">
+            <Anchor className="w-5 h-5 text-[#8ea9f7]" />
+          </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center space-x-2">
+              <span>Operations Dashboard</span>
+            </h2>
           </div>
         </div>
 
@@ -278,29 +273,6 @@ export const OperationsDashboard: React.FC<OperationsDashboardProps> = ({
               </div>
             )}
           </div>
-
-          {/* Quick Compose Communication CTA */}
-          <button
-            type="button"
-            onClick={onOpenCompose}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-[#06163a] border border-slate-300 dark:border-[#1a3d8e] text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#091f52] transition-colors cursor-pointer"
-            title="Open email composer in review workspace"
-          >
-            <Mail className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-            <span>Compose Dispatch</span>
-          </button>
-
-          {/* Open Verification Desk Primary CTA */}
-          <button
-            type="button"
-            data-testid="go-to-inbox-btn"
-            onClick={() => onNavigateToInbox("ALL", "ALL")}
-            className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white hover:shadow-md hover:shadow-[#345ec4]/25 transition-all cursor-pointer"
-          >
-            <Inbox className="w-4 h-4" />
-            <span>Open Verification Desk</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
