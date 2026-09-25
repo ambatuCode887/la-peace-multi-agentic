@@ -58,6 +58,12 @@ export interface VerificationUpload {
   attachments: File[];
 }
 
+export interface OutgoingEmailAttachment {
+  filename: string;
+  file?: File;
+  url?: string;
+}
+
 export interface BackendReport {
   email_id: string;
   category: string;
@@ -269,6 +275,42 @@ export const api = {
     const res = await fetch(`${API_BASE}/inbox/mailpit/sync`, { method: 'POST' });
     if (!res.ok) throw new Error(`Mailpit sync failed: ${res.statusText}`);
     return res.json();
+  },
+
+  async sendEmail(
+    to: string,
+    subject: string,
+    body: string,
+    attachments: OutgoingEmailAttachment[] = [],
+  ): Promise<{ ok: boolean; to: string; message_id: string }> {
+    const form = new FormData();
+    form.append('to', to);
+    form.append('subject', subject);
+    form.append('body', body);
+    for (const attachment of attachments) {
+      let file = attachment.file;
+      if (!file && attachment.url) {
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`Could not load attachment ${attachment.filename}`);
+        }
+        const content = await response.blob();
+        file = new File([content], attachment.filename, {
+          type: content.type || 'application/octet-stream',
+        });
+      }
+      if (file) form.append('attachments', file, attachment.filename);
+    }
+
+    const response = await fetch(`${API_BASE}/email/send`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || 'Email delivery failed');
+    }
+    return response.json();
   },
 
   async getCaseDetail(emailId: string): Promise<BackendReport> {

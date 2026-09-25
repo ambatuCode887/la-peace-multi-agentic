@@ -16,8 +16,15 @@ import {
 } from "lucide-react";
 import lapeaceIcon from "../../assets/lapeace_icon.png";
 import type { BackendReport } from "../../services/api";
-import { api, API_BASE } from "../../services/api";
-import { outboxService, type SentAttachment } from "../../services/outboxService";
+import {
+  api,
+  API_BASE,
+  type OutgoingEmailAttachment,
+} from "../../services/api";
+import {
+  outboxService,
+  type SentAttachment,
+} from "../../services/outboxService";
 import { ReviewPanel } from "../review/ReviewPanel";
 
 /**
@@ -28,7 +35,8 @@ import { ReviewPanel } from "../review/ReviewPanel";
 function usesGuidance(shippingCase: ShippingCase): boolean {
   return (
     shippingCase.managerReview?.guidance_applicable ??
-    (shippingCase.category === "BL_COMPARISON" && shippingCase.status !== "PASS")
+    (shippingCase.category === "BL_COMPARISON" &&
+      shippingCase.status !== "PASS")
   );
 }
 
@@ -39,6 +47,10 @@ interface CopilotDrawerProps {
   activeTab: "summary" | "review" | "email" | "chat";
   onTabChange: (tab: "summary" | "review" | "email" | "chat") => void;
   onReviewSaved?: (report: BackendReport) => void;
+}
+
+interface DraftAttachment extends SentAttachment {
+  file?: File;
 }
 
 export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
@@ -70,7 +82,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [draftTo, setDraftTo] = useState("");
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
-  const [draftAttachments, setDraftAttachments] = useState<SentAttachment[]>([]);
+  const [draftAttachments, setDraftAttachments] = useState<DraftAttachment[]>(
+    [],
+  );
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<
     "idle" | "sending" | "sent" | "failed"
@@ -91,7 +105,8 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   }, [draftBody, activeTab]);
 
   const handleAttachCaseDocuments = () => {
-    if (!currentCase.attachments || currentCase.attachments.length === 0) return;
+    if (!currentCase.attachments || currentCase.attachments.length === 0)
+      return;
     const newAtts: SentAttachment[] = currentCase.attachments.map((attPath) => {
       const filename = attPath.split("/").pop() || attPath;
       const parts = filename.split(".");
@@ -120,6 +135,7 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         filename: f.name,
         size: f.size,
         ext,
+        file: f,
       };
     });
     setDraftAttachments((prev) => [...prev, ...newAtts]);
@@ -127,7 +143,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   };
 
   const handleRemoveAttachment = (indexToRemove: number) => {
-    setDraftAttachments((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setDraftAttachments((prev) =>
+      prev.filter((_, idx) => idx !== indexToRemove),
+    );
   };
 
   // Reset or fetch email draft preview when case changes or email tab opens
@@ -339,44 +357,62 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
 
   const handleDispatchEmail = async () => {
     if (!draftTo.trim() || !draftSubject.trim()) return;
+    if (!window.confirm(`Send this email to ${draftTo.trim()}?`)) return;
     setDispatchStatus("sending");
     setDispatchFeedback(null);
     try {
-      // 1. Persist to outbox store
+      await api.sendEmail(
+        draftTo.trim(),
+        draftSubject.trim(),
+        draftBody,
+        draftAttachments as OutgoingEmailAttachment[],
+      );
+
+      const outboxAttachments = draftAttachments.map(
+        ({ file: _file, ...attachment }) => attachment,
+      );
       outboxService.saveSentEmail({
         caseId: currentCase.id,
-        to: draftTo.trim() || currentCase.sender,
+        to: draftTo.trim(),
         subject: draftSubject.trim(),
         body: draftBody,
-        attachments: draftAttachments,
-        vessel: currentCase.vessel !== "N/A" ? currentCase.vessel : currentCase.subject,
+        attachments: outboxAttachments,
+        vessel:
+          currentCase.vessel !== "N/A"
+            ? currentCase.vessel
+            : currentCase.subject,
       });
 
-      // 2. Submit case review correction to backend audit log
-      await api.submitReviewCorrection(currentCase.id, {
-        category: currentCase.category,
-        status: "NEEDS_REVIEW",
-        review_reason: "clarification_requested",
-        has_defect: currentCase.status === "MISMATCH",
-        defect_fields: currentCase.fields
-          .filter((f) => f.status === "mismatch")
-          .map((f) => f.key),
-        decision: "request_clarification",
-        note: draftSubject,
-      });
+      let auditNotice = "";
+      try {
+        await api.submitReviewCorrection(currentCase.id, {
+          category: currentCase.category,
+          status: "NEEDS_REVIEW",
+          review_reason: "clarification_requested",
+          has_defect: currentCase.status === "MISMATCH",
+          defect_fields: currentCase.fields
+            .filter((f) => f.status === "mismatch")
+            .map((f) => f.key),
+          decision: "request_clarification",
+          note: draftSubject,
+        });
+      } catch {
+        auditNotice =
+          " The email was delivered, but the case audit update failed.";
+      }
 
       setDispatchStatus("sent");
       setDispatchFeedback(
-        `Email sent to ${draftTo || currentCase.sender} and recorded in Sent mailbox & audit log.`,
+        `Email accepted for delivery to ${draftTo.trim()} and recorded in Sent.${auditNotice}`,
       );
       setTimeout(() => {
         setDispatchStatus("idle");
         setDispatchFeedback(null);
       }, 5000);
-    } catch {
+    } catch (error) {
       setDispatchStatus("failed");
       setDispatchFeedback(
-        `Failed to send email to ${draftTo || currentCase.sender}.`,
+        `Failed to send email to ${draftTo.trim()}: ${error instanceof Error ? error.message : "Email delivery failed."}`,
       );
       setTimeout(() => {
         setDispatchStatus("idle");
@@ -391,7 +427,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       <button
         onClick={onToggle}
         className={`fixed right-4 bottom-4 sm:right-6 sm:bottom-6 z-40 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] text-white shadow-xl hover:shadow-[#345ec4]/30 flex items-center space-x-2 transition-all duration-300 ease-in-out hover:scale-105 border border-[#5a82e2]/40 cursor-pointer min-h-[44px] ${
-          isOpen ? "opacity-0 pointer-events-none scale-90" : "opacity-100 pointer-events-auto scale-100"
+          isOpen
+            ? "opacity-0 pointer-events-none scale-90"
+            : "opacity-100 pointer-events-auto scale-100"
         }`}
       >
         <img
@@ -400,14 +438,18 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           className="w-5 h-5 object-contain drop-shadow"
           style={{ imageRendering: "pixelated" }}
         />
-        <span className="text-xs font-bold hidden sm:inline">Open Review & AI Workspace</span>
+        <span className="text-xs font-bold hidden sm:inline">
+          Open Review & AI Workspace
+        </span>
         <span className="text-xs font-bold sm:hidden">AI & Review</span>
       </button>
 
       {/* Mobile backdrop for drawer on < lg screens */}
       <div
         className={`fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 lg:hidden transition-opacity duration-300 ease-in-out ${
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          isOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
         }`}
         onClick={onToggle}
         aria-hidden="true"
@@ -457,481 +499,497 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
           <button
             onClick={() => onTabChange("summary")}
             className={`py-2 sm:py-1.5 rounded-lg text-center transition-all cursor-pointer ${
-            activeTab === "summary"
-              ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
-              : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
-          }`}
-        >
-          Analysis
-        </button>
-        <button
-          onClick={() => onTabChange("review")}
-          className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
-            activeTab === "review"
-              ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
-              : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
-          }`}
-        >
-          Review
-        </button>
-        <button
-          type="button"
-          data-testid="copilot-tab-email"
-          onClick={() => onTabChange("email")}
-          className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
-            activeTab === "email"
-              ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
-              : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
-          }`}
-        >
-          Email
-        </button>
-        <button
-          onClick={() => onTabChange("chat")}
-          className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
-            activeTab === "chat"
-              ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
-              : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
-          }`}
-        >
-          Q&A
-        </button>
-      </div>
+              activeTab === "summary"
+                ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
+            }`}
+          >
+            Analysis
+          </button>
+          <button
+            onClick={() => onTabChange("review")}
+            className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
+              activeTab === "review"
+                ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
+            }`}
+          >
+            Review
+          </button>
+          <button
+            type="button"
+            data-testid="copilot-tab-email"
+            onClick={() => onTabChange("email")}
+            className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
+              activeTab === "email"
+                ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
+            }`}
+          >
+            Email
+          </button>
+          <button
+            onClick={() => onTabChange("chat")}
+            className={`py-1.5 rounded-lg text-center transition-all cursor-pointer ${
+              activeTab === "chat"
+                ? "bg-white dark:bg-[#1a3d8e] text-[#1a3d8e] dark:text-white shadow-xs font-bold"
+                : "text-slate-500 hover:text-slate-900 dark:text-slate-400"
+            }`}
+          >
+            Q&A
+          </button>
+        </div>
 
-      {/* Tab 1: AI Summary & RAG Guidance */}
-      {activeTab === "summary" && (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs select-text">
-          {/* Confidence Score */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#eef3fc] via-indigo-50/40 to-white border border-[#345ec4]/20 dark:from-[#052464]/60 dark:via-[#0c1633] dark:to-[#052464]/20 dark:border-[#1a3d8e] shadow-xs">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                {currentCase.aiAnalysis.model === "Deterministic ETL extraction"
-                  ? "Extraction Confidence"
-                  : "AI Confidence Score"}
-              </span>
-              <span className="font-mono font-bold text-[#345ec4] dark:text-[#5a82e2] text-sm">
-                {currentCase.aiAnalysis.confidence !== undefined
-                  ? `${currentCase.aiAnalysis.confidence}%`
-                  : "Not provided"}
-              </span>
+        {/* Tab 1: AI Summary & RAG Guidance */}
+        {activeTab === "summary" && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs select-text">
+            {/* Confidence Score */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#eef3fc] via-indigo-50/40 to-white border border-[#345ec4]/20 dark:from-[#052464]/60 dark:via-[#0c1633] dark:to-[#052464]/20 dark:border-[#1a3d8e] shadow-xs">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  {currentCase.aiAnalysis.model ===
+                  "Deterministic ETL extraction"
+                    ? "Extraction Confidence"
+                    : "AI Confidence Score"}
+                </span>
+                <span className="font-mono font-bold text-[#345ec4] dark:text-[#5a82e2] text-sm">
+                  {currentCase.aiAnalysis.confidence !== undefined
+                    ? `${currentCase.aiAnalysis.confidence}%`
+                    : "Not provided"}
+                </span>
+              </div>
+              <div className="w-full h-2 bg-slate-200/80 dark:bg-[#05163a] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-[#345ec4] to-[#5a82e2] rounded-full transition-all duration-500"
+                  style={{
+                    width: `${currentCase.aiAnalysis.confidence ?? 0}%`,
+                  }}
+                ></div>
+              </div>
             </div>
-            <div className="w-full h-2 bg-slate-200/80 dark:bg-[#05163a] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#345ec4] to-[#5a82e2] rounded-full transition-all duration-500"
-                style={{ width: `${currentCase.aiAnalysis.confidence ?? 0}%` }}
-              ></div>
-            </div>
-          </div>
 
-          {/* Real RAG Knowledge Citations from backend manager review */}
-          {usesGuidance(currentCase) &&
-            currentCase.managerReview?.retrieved_guidance &&
-            currentCase.managerReview.retrieved_guidance.length > 0 && (
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center justify-between">
-                  <span className="flex items-center space-x-1.5">
-                    <BookOpen className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
-                    <span>RAG Knowledge Retrieval Citations</span>
-                  </span>
-                  <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7]">
-                    {currentCase.managerReview.route || "human_review"}
-                  </span>
-                </h4>
-                <div className="space-y-1.5">
-                  {currentCase.managerReview.retrieved_guidance.map(
-                    (guidance, gIdx) => {
-                      const citation =
-                        currentCase.managerReview?.citations?.[gIdx];
-                      return (
-                        <div
-                          key={gIdx}
-                          className="text-slate-600 dark:text-slate-300 leading-relaxed bg-[#eef3fc]/60 dark:bg-[#091f52]/40 p-2.5 rounded-xl border border-[#345ec4]/25 text-[11px]"
+            {/* Real RAG Knowledge Citations from backend manager review */}
+            {usesGuidance(currentCase) &&
+              currentCase.managerReview?.retrieved_guidance &&
+              currentCase.managerReview.retrieved_guidance.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <BookOpen className="w-3.5 h-3.5 text-[#345ec4] dark:text-[#5a82e2]" />
+                      <span>RAG Knowledge Retrieval Citations</span>
+                    </span>
+                    <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded bg-[#e8effd] text-[#1a3d8e] dark:bg-[#052464] dark:text-[#8ea9f7]">
+                      {currentCase.managerReview.route || "human_review"}
+                    </span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {currentCase.managerReview.retrieved_guidance.map(
+                      (guidance, gIdx) => {
+                        const citation =
+                          currentCase.managerReview?.citations?.[gIdx];
+                        return (
+                          <div
+                            key={gIdx}
+                            className="text-slate-600 dark:text-slate-300 leading-relaxed bg-[#eef3fc]/60 dark:bg-[#091f52]/40 p-2.5 rounded-xl border border-[#345ec4]/25 text-[11px]"
+                          >
+                            <p>📖 {guidance}</p>
+                            {citation && (
+                              <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                                Source: {citation.source}
+                                {citation.chunk_index != null
+                                  ? ` · section ${citation.chunk_index + 1}`
+                                  : ""}
+                                {citation.relevance !== undefined
+                                  ? ` · relevance ${Math.round(citation.relevance * 100)}%`
+                                  : ""}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {usesGuidance(currentCase) &&
+              currentCase.managerReview?.field_guidance &&
+              currentCase.managerReview.field_guidance.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5">
+                    Recommended checks
+                  </h4>
+                  <div className="space-y-1.5">
+                    {currentCase.managerReview.field_guidance.map(
+                      (rule, rIdx) => (
+                        <p
+                          key={rIdx}
+                          className="text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-[#091f52]/30 p-2.5 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40 text-[11px]"
                         >
-                          <p>📖 {guidance}</p>
-                          {citation && (
-                            <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                              Source: {citation.source}
-                              {citation.chunk_index != null
-                                ? ` · section ${citation.chunk_index + 1}`
-                                : ""}
-                              {citation.relevance !== undefined
-                                ? ` · relevance ${Math.round(citation.relevance * 100)}%`
-                                : ""}
-                            </p>
-                          )}
+                          {rule}
+                        </p>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+
+            {currentCase.managerReview &&
+              (!currentCase.managerReview.available ||
+                (usesGuidance(currentCase) &&
+                  !currentCase.managerReview.retrieved_guidance?.length)) && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                  <div className="font-bold">RAG guidance unavailable</div>
+                  <div className="mt-1">
+                    {currentCase.managerReview.reason ||
+                      "No matching knowledge chunks were returned from Qdrant."}
+                  </div>
+                </div>
+              )}
+
+            {/* Verifier Rulings */}
+            {currentCase.verifier?.rulings &&
+              currentCase.verifier.rulings.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center space-x-1.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Discrepancy Verifier Rulings</span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {currentCase.verifier.rulings.map((r, rIdx) => (
+                      <div
+                        key={rIdx}
+                        className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200/60 dark:border-[#1a3d8e]/40 space-y-1 text-[11px]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold uppercase">
+                            {r.field.replace(/_/g, " ")}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              r.ruling === "CONFIRMED_DISCREPANCY"
+                                ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                                : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                            }`}
+                          >
+                            {r.ruling}
+                          </span>
                         </div>
-                      );
-                    },
-                  )}
-                </div>
-              </div>
-            )}
-
-          {usesGuidance(currentCase) &&
-            currentCase.managerReview?.field_guidance &&
-            currentCase.managerReview.field_guidance.length > 0 && (
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5">
-                  Recommended checks
-                </h4>
-                <div className="space-y-1.5">
-                  {currentCase.managerReview.field_guidance.map((rule, rIdx) => (
-                    <p
-                      key={rIdx}
-                      className="text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-[#091f52]/30 p-2.5 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40 text-[11px]"
-                    >
-                      {rule}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          {currentCase.managerReview &&
-            (!currentCase.managerReview.available ||
-              (usesGuidance(currentCase) &&
-                !currentCase.managerReview.retrieved_guidance?.length)) && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-                <div className="font-bold">RAG guidance unavailable</div>
-                <div className="mt-1">
-                  {currentCase.managerReview.reason ||
-                    "No matching knowledge chunks were returned from Qdrant."}
-                </div>
-              </div>
-            )}
-
-          {/* Verifier Rulings */}
-          {currentCase.verifier?.rulings &&
-            currentCase.verifier.rulings.length > 0 && (
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1.5 flex items-center space-x-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Discrepancy Verifier Rulings</span>
-                </h4>
-                <div className="space-y-1.5">
-                  {currentCase.verifier.rulings.map((r, rIdx) => (
-                    <div
-                      key={rIdx}
-                      className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200/60 dark:border-[#1a3d8e]/40 space-y-1 text-[11px]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-bold uppercase">
-                          {r.field.replace(/_/g, " ")}
-                        </span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                            r.ruling === "CONFIRMED_DISCREPANCY"
-                              ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                          }`}
-                        >
-                          {r.ruling}
-                        </span>
+                        <p className="text-slate-600 dark:text-slate-400">
+                          {r.reason}
+                        </p>
                       </div>
-                      <p className="text-slate-600 dark:text-slate-400">
-                        {r.reason}
-                      </p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-          {/* Recommended Action */}
-          <div>
-            <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1">
-              Recommended Next Action
-            </h4>
-            <p className="text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-[#091f52]/30 p-3 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40">
-              {currentCase.managerReview?.recommended_next_action ||
-                currentCase.aiAnalysis.recommendation}
-            </p>
+            {/* Recommended Action */}
+            <div>
+              <h4 className="font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Recommended Next Action
+              </h4>
+              <p className="text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-[#091f52]/30 p-3 rounded-xl border border-slate-200/60 dark:border-[#1a3d8e]/40">
+                {currentCase.managerReview?.recommended_next_action ||
+                  currentCase.aiAnalysis.recommendation}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Tab: Human Operator Review & Ground-Truth Corrections */}
-      {activeTab === "review" && (
-        <div className="flex-1 overflow-y-auto p-4 select-text">
-          <ReviewPanel
-            key={currentCase.id}
-            currentCase={currentCase}
-            onSaved={(report) => {
-              if (onReviewSaved) onReviewSaved(report);
-            }}
-            onSwitchToEmail={() => onTabChange("email")}
-          />
-        </div>
-      )}
+        {/* Tab: Human Operator Review & Ground-Truth Corrections */}
+        {activeTab === "review" && (
+          <div className="flex-1 overflow-y-auto p-4 select-text">
+            <ReviewPanel
+              key={currentCase.id}
+              currentCase={currentCase}
+              onSaved={(report) => {
+                if (onReviewSaved) onReviewSaved(report);
+              }}
+              onSwitchToEmail={() => onTabChange("email")}
+            />
+          </div>
+        )}
 
-      {/* Tab: Outbound Clarification Email Draft (Live Action Preview) */}
-      {activeTab === "email" && (
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs select-text">
-          <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-            <span className="flex items-center space-x-2 font-semibold">
-              <Mail className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
-              <span>Auto-Generated Clarification Email</span>
-            </span>
-            {isDraftLoading && (
-              <span className="flex items-center space-x-1 text-[10px] text-slate-400">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Loading preview...</span>
+        {/* Tab: Outbound Clarification Email Draft (Live Action Preview) */}
+        {activeTab === "email" && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs select-text">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+              <span className="flex items-center space-x-2 font-semibold">
+                <Mail className="w-4 h-4 text-[#345ec4] dark:text-[#5a82e2]" />
+                <span>Auto-Generated Clarification Email</span>
               </span>
-            )}
-          </div>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileInputChange}
-            multiple
-            className="hidden"
-          />
-
-          <div className="p-3.5 bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200 dark:border-[#1a3d8e]/50 rounded-2xl space-y-3 shadow-xs">
-            {/* TO Input Field */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                To:
-              </label>
-              <input
-                type="text"
-                value={draftTo}
-                onChange={(e) => setDraftTo(e.target.value)}
-                placeholder="recipient@carrier.com"
-                className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-mono font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
-              />
+              {isDraftLoading && (
+                <span className="flex items-center space-x-1 text-[10px] text-slate-400">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Loading preview...</span>
+                </span>
+              )}
             </div>
 
-            {/* SUBJECT Input Field */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                Subject:
-              </label>
-              <input
-                type="text"
-                value={draftSubject}
-                onChange={(e) => setDraftSubject(e.target.value)}
-                placeholder="Discrepancy Clarification Required..."
-                className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
-              />
-            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
+              multiple
+              className="hidden"
+            />
 
-            {/* BODY Dynamic Textarea */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Message Body:
+            <div className="p-3.5 bg-slate-50 dark:bg-[#091f52]/40 border border-slate-200 dark:border-[#1a3d8e]/50 rounded-2xl space-y-3 shadow-xs">
+              {/* TO Input Field */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  To:
                 </label>
-                <span className="text-[10px] text-slate-400">
-                  Auto-resizes as you type
-                </span>
+                <input
+                  type="text"
+                  value={draftTo}
+                  onChange={(e) => setDraftTo(e.target.value)}
+                  placeholder="recipient@carrier.com"
+                  className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-mono font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
+                />
               </div>
-              <textarea
-                ref={bodyTextareaRef}
-                value={draftBody}
-                onChange={(e) => setDraftBody(e.target.value)}
-                rows={6}
-                placeholder="Draft message content..."
-                className="w-full p-3 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-sans leading-relaxed text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all resize-none overflow-y-auto"
-                style={{ minHeight: "160px", maxHeight: "280px" }}
-              />
-            </div>
 
-            {/* ATTACHMENTS Section */}
-            <div className="pt-2 border-t border-slate-200/80 dark:border-[#1a3d8e]/50 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
-                  <Paperclip className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2]" />
-                  <span>Attachments ({draftAttachments.length})</span>
-                </span>
+              {/* SUBJECT Input Field */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                  Subject:
+                </label>
+                <input
+                  type="text"
+                  value={draftSubject}
+                  onChange={(e) => setDraftSubject(e.target.value)}
+                  placeholder="Discrepancy Clarification Required..."
+                  className="w-full px-3 py-2 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all"
+                />
+              </div>
 
-                <div className="flex items-center space-x-1.5">
-                  {currentCase.attachments && currentCase.attachments.length > 0 && (
+              {/* BODY Dynamic Textarea */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Message Body:
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Auto-resizes as you type
+                  </span>
+                </div>
+                <textarea
+                  ref={bodyTextareaRef}
+                  value={draftBody}
+                  onChange={(e) => setDraftBody(e.target.value)}
+                  rows={6}
+                  placeholder="Draft message content..."
+                  className="w-full p-3 bg-white dark:bg-[#05163a] border border-slate-200 dark:border-[#1a3d8e]/60 rounded-xl text-xs font-sans leading-relaxed text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#345ec4]/30 focus:border-[#345ec4] transition-all resize-none overflow-y-auto"
+                  style={{ minHeight: "160px", maxHeight: "280px" }}
+                />
+              </div>
+
+              {/* ATTACHMENTS Section */}
+              <div className="pt-2 border-t border-slate-200/80 dark:border-[#1a3d8e]/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center space-x-1.5">
+                    <Paperclip className="w-3 h-3 text-[#345ec4] dark:text-[#5a82e2]" />
+                    <span>Attachments ({draftAttachments.length})</span>
+                  </span>
+
+                  <div className="flex items-center space-x-1.5">
+                    {currentCase.attachments &&
+                      currentCase.attachments.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleAttachCaseDocuments}
+                          className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1a3d8e] dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60 hover:bg-blue-100 transition-colors cursor-pointer"
+                          title="Attach original case shipping documents"
+                        >
+                          <FileText className="w-3 h-3" />
+                          <span>Attach Case Docs</span>
+                        </button>
+                      )}
                     <button
                       type="button"
-                      onClick={handleAttachCaseDocuments}
-                      className="inline-flex items-center space-x-1 px-2 py-1 rounded-lg text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-[#1a3d8e] dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60 hover:bg-blue-100 transition-colors cursor-pointer"
-                      title="Attach original case shipping documents"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 hover:bg-slate-300 dark:bg-[#0c2966] dark:hover:bg-[#133e99] text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                     >
-                      <FileText className="w-3 h-3" />
-                      <span>Attach Case Docs</span>
+                      <Plus className="w-3 h-3" />
+                      <span>Attach Files</span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-slate-200/70 hover:bg-slate-300 dark:bg-[#0c2966] dark:hover:bg-[#133e99] text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>Attach Files</span>
-                  </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Render Attached Chips */}
-              {draftAttachments.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  {draftAttachments.map((att, idx) => (
-                    <div
-                      key={`${att.filename}-${idx}`}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#06163a] border border-slate-200 dark:border-[#1a3d8e]/60 shadow-2xs group text-[11px]"
-                    >
-                      <div className="flex items-center space-x-2 min-w-0">
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black uppercase bg-slate-100 text-slate-700 dark:bg-[#091f52] dark:text-slate-300">
-                          {att.ext}
-                        </span>
-                        <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
-                          {att.filename}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          ({att.size < 1024 ? `${att.size}B` : `${Math.round(att.size / 1024)}KB`})
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAttachment(idx)}
-                        className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                        title="Remove attachment"
+                {/* Render Attached Chips */}
+                {draftAttachments.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    {draftAttachments.map((att, idx) => (
+                      <div
+                        key={`${att.filename}-${idx}`}
+                        className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#06163a] border border-slate-200 dark:border-[#1a3d8e]/60 shadow-2xs group text-[11px]"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black uppercase bg-slate-100 text-slate-700 dark:bg-[#091f52] dark:text-slate-300">
+                            {att.ext}
+                          </span>
+                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
+                            {att.filename}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            (
+                            {att.size < 1024
+                              ? `${att.size}B`
+                              : `${Math.round(att.size / 1024)}KB`}
+                            )
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAttachment(idx)}
+                          className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Remove attachment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <button
-            onClick={handleDispatchEmail}
-            disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim()}
-            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-2 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
-          >
-            {dispatchStatus === "sending" ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Sending Email...</span>
-              </>
-            ) : dispatchStatus === "sent" ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Email Sent & Logged!</span>
-              </>
-            ) : dispatchStatus === "failed" ? (
-              <>
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
-                <span>Failed to Send Email</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-3.5 h-3.5" />
-                <span>Send Email</span>
-              </>
-            )}
-          </button>
-
-          {dispatchFeedback && (
-            <div
-              className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-medium animate-in fade-in ${
-                dispatchStatus === "failed"
-                  ? "bg-rose-50 border-rose-200/80 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800/80 dark:text-rose-200"
-                  : "bg-emerald-50 border-emerald-200/80 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-200"
-              }`}
+            <button
+              onClick={handleDispatchEmail}
+              disabled={
+                dispatchStatus === "sending" ||
+                !draftTo.trim() ||
+                !draftSubject.trim()
+              }
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-2 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
             >
-              {dispatchStatus === "failed" ? (
-                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+              {dispatchStatus === "sending" ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Sending Email...</span>
+                </>
+              ) : dispatchStatus === "sent" ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Email Sent & Logged!</span>
+                </>
+              ) : dispatchStatus === "failed" ? (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Failed to Send Email</span>
+                </>
               ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send Email</span>
+                </>
               )}
-              <span>{dispatchFeedback}</span>
-            </div>
-          )}
-        </div>
-      )}
+            </button>
 
-      {/* Tab 3: Interactive Assistant Chat (Live API chat) */}
-      {activeTab === "chat" && (
-        <div className="flex-1 flex flex-col h-full overflow-hidden select-text">
-          {/* Messages list */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
-            {messages.map((m, idx) => (
+            {dispatchFeedback && (
               <div
-                key={idx}
-                className={`flex flex-col ${
-                  m.role === "user" ? "items-end" : "items-start"
+                className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-medium animate-in fade-in ${
+                  dispatchStatus === "failed"
+                    ? "bg-rose-50 border-rose-200/80 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800/80 dark:text-rose-200"
+                    : "bg-emerald-50 border-emerald-200/80 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-200"
                 }`}
               >
-                <div
-                  className={`max-w-[85%] p-3 rounded-2xl shadow-2xs ${
-                    m.role === "user"
-                      ? "bg-[#345ec4] text-white rounded-br-xs"
-                      : "bg-slate-100 dark:bg-[#091f52]/60 text-slate-800 dark:text-slate-200 rounded-bl-xs border border-slate-200/80 dark:border-[#1a3d8e]/50"
-                  }`}
-                >
-                  <p className="leading-relaxed whitespace-pre-wrap">
-                    {m.text}
-                  </p>
-                </div>
-                <span className="text-[10px] text-slate-400 mt-1 px-1">
-                  {m.time}
-                </span>
-              </div>
-            ))}
-            {isChatLoading && (
-              <div className="flex items-center space-x-2 text-slate-400 p-2 text-xs">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#345ec4] dark:text-[#5a82e2]" />
-                <span>AI Assistant is analyzing case context...</span>
+                {dispatchStatus === "failed" ? (
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                )}
+                <span>{dispatchFeedback}</span>
               </div>
             )}
           </div>
+        )}
 
-          {/* Quick Prompts */}
-          <div className="p-2 border-t border-slate-100 dark:border-[#1a3d8e]/60 bg-slate-50/80 dark:bg-[#091f52]/30 flex items-center space-x-1.5 overflow-x-auto text-[11px] select-none">
-            <button
-              onClick={() => handleSendMessage("Explain the weight difference")}
-              disabled={isChatLoading}
-              className="px-2.5 py-1 rounded-full bg-white dark:bg-[#091f52] border border-slate-200 dark:border-[#1a3d8e] hover:border-[#345ec4] whitespace-nowrap text-slate-700 dark:text-slate-300 cursor-pointer disabled:opacity-50"
-            >
-              Explain weight delta
-            </button>
-            <button
-              onClick={() =>
-                handleSendMessage(
-                  "Is there legal alias precedent for this shipper?",
-                )
-              }
-              disabled={isChatLoading}
-              className="px-2.5 py-1 rounded-full bg-white dark:bg-[#091f52] border border-slate-200 dark:border-[#1a3d8e] hover:border-[#345ec4] whitespace-nowrap text-slate-700 dark:text-slate-300 cursor-pointer disabled:opacity-50"
-            >
-              Check alias precedent
-            </button>
-          </div>
+        {/* Tab 3: Interactive Assistant Chat (Live API chat) */}
+        {activeTab === "chat" && (
+          <div className="flex-1 flex flex-col h-full overflow-hidden select-text">
+            {/* Messages list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs">
+              {messages.map((m, idx) => (
+                <div
+                  key={idx}
+                  className={`flex flex-col ${
+                    m.role === "user" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[85%] p-3 rounded-2xl shadow-2xs ${
+                      m.role === "user"
+                        ? "bg-[#345ec4] text-white rounded-br-xs"
+                        : "bg-slate-100 dark:bg-[#091f52]/60 text-slate-800 dark:text-slate-200 rounded-bl-xs border border-slate-200/80 dark:border-[#1a3d8e]/50"
+                    }`}
+                  >
+                    <p className="leading-relaxed whitespace-pre-wrap">
+                      {m.text}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1 px-1">
+                    {m.time}
+                  </span>
+                </div>
+              ))}
+              {isChatLoading && (
+                <div className="flex items-center space-x-2 text-slate-400 p-2 text-xs">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#345ec4] dark:text-[#5a82e2]" />
+                  <span>AI Assistant is analyzing case context...</span>
+                </div>
+              )}
+            </div>
 
-          {/* Chat input */}
-          <div className="p-3 border-t border-slate-200 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] select-none">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                placeholder="Ask AI Assistant about this case..."
-                disabled={isChatLoading}
-                className="flex-1 text-xs py-2 px-3 rounded-xl bg-slate-100 dark:bg-[#091f52]/40 border border-slate-200/60 dark:border-[#1a3d8e]/40 focus:outline-hidden focus:bg-white focus:border-[#345ec4] dark:text-slate-200 dark:focus:bg-[#05163a]"
-              />
+            {/* Quick Prompts */}
+            <div className="p-2 border-t border-slate-100 dark:border-[#1a3d8e]/60 bg-slate-50/80 dark:bg-[#091f52]/30 flex items-center space-x-1.5 overflow-x-auto text-[11px] select-none">
               <button
-                onClick={() => handleSendMessage()}
-                disabled={isChatLoading || !inputMessage.trim()}
-                className="p-2 rounded-xl bg-[#345ec4] hover:bg-[#1a3d8e] text-white shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                onClick={() =>
+                  handleSendMessage("Explain the weight difference")
+                }
+                disabled={isChatLoading}
+                className="px-2.5 py-1 rounded-full bg-white dark:bg-[#091f52] border border-slate-200 dark:border-[#1a3d8e] hover:border-[#345ec4] whitespace-nowrap text-slate-700 dark:text-slate-300 cursor-pointer disabled:opacity-50"
               >
-                <Send className="w-3.5 h-3.5" />
+                Explain weight delta
+              </button>
+              <button
+                onClick={() =>
+                  handleSendMessage(
+                    "Is there legal alias precedent for this shipper?",
+                  )
+                }
+                disabled={isChatLoading}
+                className="px-2.5 py-1 rounded-full bg-white dark:bg-[#091f52] border border-slate-200 dark:border-[#1a3d8e] hover:border-[#345ec4] whitespace-nowrap text-slate-700 dark:text-slate-300 cursor-pointer disabled:opacity-50"
+              >
+                Check alias precedent
               </button>
             </div>
+
+            {/* Chat input */}
+            <div className="p-3 border-t border-slate-200 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] select-none">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                  placeholder="Ask AI Assistant about this case..."
+                  disabled={isChatLoading}
+                  className="flex-1 text-xs py-2 px-3 rounded-xl bg-slate-100 dark:bg-[#091f52]/40 border border-slate-200/60 dark:border-[#1a3d8e]/40 focus:outline-hidden focus:bg-white focus:border-[#345ec4] dark:text-slate-200 dark:focus:bg-[#05163a]"
+                />
+                <button
+                  onClick={() => handleSendMessage()}
+                  disabled={isChatLoading || !inputMessage.trim()}
+                  className="p-2 rounded-xl bg-[#345ec4] hover:bg-[#1a3d8e] text-white shadow-xs cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </aside>
+        )}
+      </aside>
     </>
   );
 };

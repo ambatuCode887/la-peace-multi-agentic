@@ -78,6 +78,37 @@ Example local test message:
 python -c "import smtplib; from email.message import EmailMessage; m=EmailMessage(); m['From']='demo@example.com'; m['To']='inbox@example.com'; m['Subject']='Live inbox test'; m.set_content('This message was captured by Mailpit.'); s=smtplib.SMTP('127.0.0.1',1025); s.send_message(m); s.quit()"
 ```
 
+To send from the application while keeping delivery local, add these settings to the ignored root `.env` file and restart the backend:
+
+```dotenv
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+SMTP_FROM_EMAIL=demo@la-peace.test
+SMTP_FROM_NAME=La Peace Email
+SMTP_STARTTLS=false
+SMTP_USE_SSL=false
+```
+
+The **Send Email** action will then be captured in Mailpit at `http://localhost:8025`; it will not reach an external recipient.
+
+### Real outbound email
+
+For a Gmail sender, enable 2-Step Verification and create a Google App Password. Put the app password in the ignored root `.env` file; do not commit it or place it in frontend configuration. The sender address should be the Gmail account used for SMTP authentication. Restart the backend after changing these values:
+
+```dotenv
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-sender@gmail.com
+SMTP_PASSWORD=your-google-app-password
+SMTP_FROM_EMAIL=your-sender@gmail.com
+SMTP_FROM_NAME=La Peace Email
+SMTP_STARTTLS=true
+SMTP_USE_SSL=false
+SMTP_ALLOWED_RECIPIENTS=your-approved-recipient@gmail.com
+```
+
+Only exact recipient addresses listed in `SMTP_ALLOWED_RECIPIENTS` are accepted for non-local SMTP. Start with an address you control. Clicking **Send Email** asks for confirmation; success means the SMTP server accepted the message for delivery.
+
 ### Production deployment
 
 1. **Prepare the dataset:** place the supplied challenge data in the repository as `data_v2/inbox/*.json` and `data_v2/attachments/*` before building the image. The Dockerfile copies this directory to `/app/data_v2`; the current repository includes only the expected empty directories because the challenge dataset is not committed.
