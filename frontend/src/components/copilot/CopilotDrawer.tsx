@@ -934,31 +934,37 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                 type="datetime-local"
                 value={scheduleAt}
                 min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000 + 60000).toISOString().slice(0, 16)}
+                disabled={dispatchStatus === "sending"}
                 onChange={(event) => setScheduleAt(event.target.value)}
                 className="mt-1 block w-full min-w-0 rounded-lg border border-slate-200 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#05163a] px-2 py-2 text-xs font-medium normal-case text-slate-800 dark:text-slate-200"
               />
             </label>
             <button
               type="button"
-              onClick={() => void handleScheduleEmail()}
-              disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim() || !scheduleAt}
-              title="Schedule email"
+              onClick={() => scheduleAt ? setScheduleAt("") : void handleScheduleEmail()}
+              disabled={dispatchStatus === "sending" || (!scheduleAt && (!draftTo.trim() || !draftSubject.trim()))}
+              title={scheduleAt ? "Clear scheduled date" : "Schedule email"}
               className="h-9 px-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-100 cursor-pointer disabled:opacity-50 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
             >
-              <CalendarClock className="w-3.5 h-3.5" />
-              <span>Schedule</span>
+              {scheduleAt ? <X className="w-3.5 h-3.5" /> : <CalendarClock className="w-3.5 h-3.5" />}
+              <span>{scheduleAt ? "Clear date" : "Schedule"}</span>
             </button>
           </div>
 
           <button
-            onClick={handleDispatchEmail}
+            onClick={() => scheduleAt ? void handleScheduleEmail() : void handleDispatchEmail()}
             disabled={dispatchStatus === "sending" || !draftTo.trim() || !draftSubject.trim() || hasMissingUpload}
             className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#052464] via-[#1a3d8e] to-[#345ec4] hover:from-[#1a3d8e] hover:to-[#5a82e2] text-white font-semibold flex items-center justify-center space-x-2 shadow-md shadow-[#345ec4]/25 cursor-pointer disabled:opacity-50 transition-all"
           >
             {dispatchStatus === "sending" ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Sending Email...</span>
+                <span>{scheduleAt ? "Scheduling Email..." : "Sending Email..."}</span>
+              </>
+            ) : scheduleAt ? (
+              <>
+                <CalendarClock className="w-3.5 h-3.5" />
+                <span>Schedule Email</span>
               </>
             ) : dispatchStatus === "sent" ? (
               <>
