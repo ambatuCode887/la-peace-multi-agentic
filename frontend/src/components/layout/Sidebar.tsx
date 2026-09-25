@@ -33,9 +33,12 @@ import {
   Award,
   ListChecks,
   ArrowUpDown,
+  FilePenLine,
+  CalendarClock,
 } from "lucide-react";
 import { formatMalaysiaTime } from "../../utils/formatTime";
-import { outboxService, type DispatchedEmail } from "../../services/outboxService";
+import { outboxService, type DispatchedEmail, type DraftEmail } from "../../services/outboxService";
+import type { ScheduledEmailSummary } from "../../services/api";
 import { ExtractionTierBadge } from "../common/ExtractionTierBadge";
 
 interface SidebarProps {
@@ -57,10 +60,11 @@ interface SidebarProps {
   onToggleRail?: () => void;
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
-  activeMailboxFolder?: "INBOX" | "SENT";
-  onMailboxFolderChange?: (folder: "INBOX" | "SENT") => void;
+  activeMailboxFolder?: "INBOX" | "SENT" | "DRAFTS" | "SCHEDULED";
+  onMailboxFolderChange?: (folder: "INBOX" | "SENT" | "DRAFTS" | "SCHEDULED") => void;
   selectedSentId?: string | null;
   onSelectSent?: (sentEmail: DispatchedEmail) => void;
+  onSelectDraft?: (draft: DraftEmail) => void;
   activeView?: "dashboard" | "inbox" | "benchmark";
   onGoToDashboard?: () => void;
   onGoToBenchmark?: () => void;
@@ -91,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onMailboxFolderChange,
   selectedSentId,
   onSelectSent,
+  onSelectDraft,
   activeView = "dashboard",
   onGoToDashboard,
   onGoToBenchmark,
@@ -124,12 +129,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [sentEmails, setSentEmails] = useState<DispatchedEmail[]>(() =>
     outboxService.getSentEmails(),
   );
+  const [drafts, setDrafts] = useState<DraftEmail[]>(() => outboxService.getDrafts());
+  const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmailSummary[]>([]);
+  const [scheduleNotice, setScheduleNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    return outboxService.subscribe(() => {
+    const refreshScheduled = () => {
+      api.getScheduledEmails().then((emails) => {
+        setScheduledEmails(emails);
+        const existingIds = new Set(outboxService.getSentEmails().map((email) => email.id));
+        emails.forEach((email) => {
+          if (email.status !== "sent" || !email.sent_at || existingIds.has(email.id)) return;
+          outboxService.saveSentEmail({
+            id: email.id,
+            sentAt: email.sent_at,
+            caseId: email.case_id,
+            to: email.to.join(", "),
+            subject: email.subject,
+            body: email.body,
+            attachments: email.attachment_names.map((filename) => ({
+              filename,
+              size: 0,
+              ext: filename.split(".").pop()?.toLowerCase() || "bin",
+            })),
+          });
+        });
+      }).catch(() => undefined);
+    };
+    const unsubscribe = outboxService.subscribe(() => {
       setSentEmails(outboxService.getSentEmails());
+      setDrafts(outboxService.getDrafts());
     });
+    refreshScheduled();
+    const refreshTimer = window.setInterval(refreshScheduled, 15000);
+    return () => {
+      unsubscribe();
+      window.clearInterval(refreshTimer);
+    };
   }, []);
+
+  const handleCancelScheduledEmail = async (id: string) => {
+    setScheduleNotice(null);
+    try {
+      await api.cancelScheduledEmail(id);
+      setScheduledEmails((current) => current.map((email) =>
+        email.id === id ? { ...email, status: "cancelled" } : email,
+      ));
+    } catch (error) {
+      setScheduleNotice(error instanceof Error ? error.message : "Could not cancel scheduled email.");
+    }
+  };
 
   const scheduleScanNoticeClear = () => {
     if (scanNoticeTimeoutRef.current !== null) {
@@ -857,6 +906,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </button>
             )}
+
+            {railCollapsed && !mobileOpen ? (
+              <button
+                type="button"
+                data-testid="category-label-DRAFTS"
+                onClick={() => onMailboxFolderChange?.("DRAFTS")}
+                title={`Drafts (${drafts.length})`}
+                aria-label={`Drafts (${drafts.length})`}
+                className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${activeMailboxFolder === "DRAFTS" ? "bg-sky-50 text-sky-700 ring-2 ring-sky-500/40 dark:bg-sky-950/50 dark:text-sky-300" : "text-slate-500 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"}`}
+              >
+                <FilePenLine className="w-4 h-4" />
+                {drafts.length > 0 && <span className="absolute top-0.5 right-0.5 h-3.5 min-w-3.5 px-1 rounded-full bg-sky-600 text-white text-[8px] font-bold flex items-center justify-center leading-none">{drafts.length > 99 ? "99+" : drafts.length}</span>}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="category-label-DRAFTS"
+                onClick={() => onMailboxFolderChange?.("DRAFTS")}
+                className={`w-full h-9 flex items-center justify-between px-2.5 text-xs rounded-xl transition-all cursor-pointer shrink-0 ${activeMailboxFolder === "DRAFTS" ? "bg-sky-50 text-sky-900 font-bold dark:bg-sky-950/50 dark:text-sky-200" : "text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-[#091f52]/40"}`}
+              >
+                <span className="flex items-center gap-2"><FilePenLine className="w-3.5 h-3.5" />Drafts</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/80 dark:bg-[#06183e]">{drafts.length}</span>
+              </button>
+            )}
+
+            {railCollapsed && !mobileOpen ? (
+              <button
+                type="button"
+                data-testid="category-label-SCHEDULED"
+                onClick={() => onMailboxFolderChange?.("SCHEDULED")}
+                title={`Scheduled (${scheduledEmails.filter((email) => email.status === "scheduled" || email.status === "sending").length})`}
+                aria-label="Scheduled emails"
+                className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${activeMailboxFolder === "SCHEDULED" ? "bg-amber-50 text-amber-700 ring-2 ring-amber-500/40 dark:bg-amber-950/50 dark:text-amber-300" : "text-slate-500 hover:bg-slate-200/50 dark:hover:bg-[#091f52]/40"}`}
+              >
+                <CalendarClock className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="category-label-SCHEDULED"
+                onClick={() => onMailboxFolderChange?.("SCHEDULED")}
+                className={`w-full h-9 flex items-center justify-between px-2.5 text-xs rounded-xl transition-all cursor-pointer shrink-0 ${activeMailboxFolder === "SCHEDULED" ? "bg-amber-50 text-amber-900 font-bold dark:bg-amber-950/50 dark:text-amber-200" : "text-slate-600 hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-[#091f52]/40"}`}
+              >
+                <span className="flex items-center gap-2"><CalendarClock className="w-3.5 h-3.5" />Scheduled</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-200/80 dark:bg-[#06183e]">{scheduledEmails.filter((email) => email.status === "scheduled" || email.status === "sending").length}</span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -950,6 +1046,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     );
                   })
                 )}
+              </div>
+            </>
+          ) : activeMailboxFolder === "DRAFTS" ? (
+            <>
+              <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between shrink-0">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Drafts</h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 dark:bg-sky-950/70 dark:text-sky-300">{drafts.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+                {drafts.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500">No saved drafts.</div>
+                ) : drafts.map((draft) => (
+                  <button
+                    type="button"
+                    key={draft.id}
+                    data-draft-id={draft.id}
+                    onClick={() => onSelectDraft?.(draft)}
+                    className="w-full p-3 text-left flex flex-col gap-1.5 border-l-4 border-transparent hover:bg-sky-50/60 dark:hover:bg-sky-950/20 cursor-pointer"
+                  >
+                    <div className="flex justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">To: {draft.to || "No recipient"}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">{formatMalaysiaTime(draft.savedAt, "compact")}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-600 dark:text-slate-300 truncate">{draft.subject || "(no subject)"}</span>
+                    <span className="text-[10px] text-slate-400 truncate">{draft.body || "Draft not sent"}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : activeMailboxFolder === "SCHEDULED" ? (
+            <>
+              <div className="p-3 border-b border-slate-100 dark:border-[#1a3d8e]/60 flex items-center justify-between shrink-0">
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">Scheduled</h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300">{scheduledEmails.filter((email) => email.status === "scheduled" || email.status === "sending").length} pending</span>
+              </div>
+              {scheduleNotice && <p role="status" className="px-3 py-2 text-xs text-rose-600">{scheduleNotice}</p>}
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-[#1a3d8e]/40">
+                {scheduledEmails.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500">No scheduled messages.</div>
+                ) : scheduledEmails.map((email) => (
+                  <div key={email.id} className="p-3 flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate">To: {email.to.join(", ")}</div>
+                      <div className="mt-1 text-[11px] text-slate-600 dark:text-slate-300 truncate">{email.subject}</div>
+                      <div className="mt-1 text-[10px] text-slate-400">{formatMalaysiaTime(email.scheduled_at, "compact")} · {email.status}</div>
+                    </div>
+                    {email.status === "scheduled" && (
+                      <button type="button" onClick={() => void handleCancelScheduledEmail(email.id)} title="Cancel scheduled email" aria-label="Cancel scheduled email" className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </>
           ) : (

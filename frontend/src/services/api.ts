@@ -50,6 +50,29 @@ export interface CasesPage {
   has_more: boolean;
 }
 
+export interface RelatedCaseSummary {
+  email_id: string;
+  subject: string;
+  category: string;
+  status: string;
+  shared_references: string[];
+  updated_at?: string;
+}
+
+export interface ScheduledEmailSummary {
+  id: string;
+  case_id: string;
+  to: string[];
+  subject: string;
+  body: string;
+  message_id: string;
+  scheduled_at: string;
+  sent_at?: string;
+  status: 'scheduled' | 'sending' | 'sent' | 'failed' | 'cancelled';
+  attachment_names: string[];
+  error?: string;
+}
+
 export interface VerificationUpload {
   emailId: string;
   sender: string;
@@ -322,6 +345,96 @@ export const api = {
     }
     const data = await res.json();
     return data.report;
+  },
+
+  async getRelatedCases(emailId: string): Promise<RelatedCaseSummary[]> {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/cases/${encodeURIComponent(emailId)}/related`,
+    );
+    if (!res.ok) throw new Error(`Failed to fetch related cases: ${res.statusText}`);
+    const data = await res.json();
+    return Array.isArray(data.cases) ? data.cases : [];
+  },
+
+  async sendEmail(input: {
+    caseId: string;
+    to: string;
+    subject: string;
+    body: string;
+    attachments: Array<{ filename: string; file?: File; caseAttachment?: string }>;
+  }): Promise<{ sent: boolean; message_id: string; sent_at: string; audit_logged: boolean }> {
+    const form = new FormData();
+    form.append('case_id', input.caseId);
+    form.append('to', input.to);
+    form.append('subject', input.subject);
+    form.append('body', input.body);
+    form.append(
+      'case_attachment_names',
+      JSON.stringify(
+        input.attachments
+          .map((attachment) => attachment.caseAttachment?.split('/').pop())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+    input.attachments.forEach((attachment) => {
+      if (attachment.file) {
+        form.append('attachments', attachment.file, attachment.filename);
+      }
+    });
+    const res = await fetch(`${API_BASE}/email/send`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || 'Email delivery failed');
+    }
+    return res.json();
+  },
+
+  async scheduleEmail(input: {
+    caseId: string;
+    to: string;
+    subject: string;
+    body: string;
+    scheduledAt: string;
+    attachments: Array<{ filename: string; file?: File; caseAttachment?: string }>;
+  }): Promise<ScheduledEmailSummary> {
+    const form = new FormData();
+    form.append('case_id', input.caseId);
+    form.append('to', input.to);
+    form.append('subject', input.subject);
+    form.append('body', input.body);
+    form.append('scheduled_at', input.scheduledAt);
+    form.append(
+      'case_attachment_names',
+      JSON.stringify(
+        input.attachments
+          .map((attachment) => attachment.caseAttachment?.replace(/\\/g, '/').split('/').pop())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    );
+    input.attachments.forEach((attachment) => {
+      if (attachment.file) form.append('attachments', attachment.file, attachment.filename);
+    });
+    const res = await fetch(`${API_BASE}/email/schedule`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || 'Could not schedule email');
+    }
+    return res.json();
+  },
+
+  async getScheduledEmails(): Promise<ScheduledEmailSummary[]> {
+    const res = await fetch(`${API_BASE}/email/scheduled`);
+    if (!res.ok) throw new Error(`Failed to load scheduled email: ${res.statusText}`);
+    const data = await res.json();
+    return Array.isArray(data.emails) ? data.emails : [];
+  },
+
+  async cancelScheduledEmail(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/email/scheduled/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(error.detail || 'Could not cancel scheduled email');
+    }
   },
 
   async verifyUpload(upload: VerificationUpload): Promise<BackendReport> {

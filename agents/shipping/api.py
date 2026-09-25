@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import base64
 import json
 import hashlib
+import logging
 import mimetypes
 import os
 import re
 import shutil
+import smtplib
 import stat
 import sys
+import threading
 import time
+import uuid
+from email.message import EmailMessage
+from email.utils import getaddresses, make_msgid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,12 +57,14 @@ from agents.eval.shipping import (
     read_snapshots,
 )
 from .verification import COMPARE_FIELDS, values_match
-from agents.config import env
+from agents.config import env, env_int, truthy
 from agents.storage import CaseStore, FilesystemCaseStore, MongoCaseStore, get_case_store
+from .schedule import ScheduledEmailQueue
 from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 PERSISTENCE_BATCH_SIZE = 50
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -73,6 +82,7 @@ def create_app(
         root,
         prefer_mongo=production_root,
     )
+    scheduled_email_queue = ScheduledEmailQueue(root, store)
     app = FastAPI(title="Shipping Document Verification API")
     app.add_middleware(
         CORSMiddleware,
@@ -81,6 +91,85 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    scheduler_stop = threading.Event()
+    scheduler_thread: threading.Thread | None = None
+
+    def deliver_due_emails() -> None:
+        while (job := scheduled_email_queue.claim_due()) is not None:
+            try:
+                message = EmailMessage()
+                message["From"] = job["from"]
+                message["To"] = ", ".join(job["to"])
+                message["Subject"] = job["subject"]
+                message["Message-ID"] = job["message_id"]
+                message.set_content(job["body"])
+                for attachment in job.get("attachments", []):
+                    content_type = attachment.get("content_type") or "application/octet-stream"
+                    maintype, subtype = content_type.split("/", 1)
+                    message.add_attachment(
+                        base64.b64decode(attachment["content_base64"]),
+                        maintype=maintype,
+                        subtype=subtype,
+                        filename=attachment["filename"],
+                    )
+                smtp_host = env("SMTP_HOST", env("MAILPIT_SMTP_HOST", "127.0.0.1")) or "127.0.0.1"
+                smtp_port = env_int("SMTP_PORT", env_int("MAILPIT_SMTP_PORT", 1025))
+                local_smtp_hosts = {"127.0.0.1", "localhost", "::1"}
+                if not truthy(env("EMAIL_SEND_ENABLED", "false")) and smtp_host.lower() not in local_smtp_hosts:
+                    raise RuntimeError("External email sending is disabled")
+                username = env("SMTP_USERNAME", "") or ""
+                password = env("SMTP_PASSWORD", "") or ""
+                if bool(username) != bool(password):
+                    raise RuntimeError("Configure both SMTP_USERNAME and SMTP_PASSWORD")
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                    if truthy(env("SMTP_STARTTLS", "false")):
+                        smtp.starttls()
+                    if username:
+                        smtp.login(username, password)
+                    smtp.send_message(message)
+
+                sent_at = datetime.now(timezone.utc).isoformat()
+                report = store.get_case(job["case_id"])
+                if report is not None:
+                    report.setdefault("audit_events", []).append({
+                        "action": "email_sent",
+                        "recipient": ", ".join(job["to"]),
+                        "subject": job["subject"],
+                        "message_id": job["message_id"],
+                        "scheduled_email_id": job["id"],
+                        "timestamp": sent_at,
+                    })
+                    try:
+                        store.save_report(report)
+                    except Exception:
+                        logger.exception("Scheduled email %s sent but its audit event could not be persisted", job["id"])
+                scheduled_email_queue.update(job["id"], {"status": "sent", "sent_at": sent_at})
+            except Exception as error:
+                logger.exception("Scheduled email %s failed", job.get("id"))
+                scheduled_email_queue.update(job["id"], {"status": "failed", "error": str(error)[:500]})
+
+    def run_email_scheduler() -> None:
+        while not scheduler_stop.is_set():
+            try:
+                deliver_due_emails()
+            except Exception:
+                logger.exception("Scheduled email worker failed")
+            scheduler_stop.wait(15)
+
+    def start_email_scheduler() -> None:
+        nonlocal scheduler_thread
+        scheduler_stop.clear()
+        scheduler_thread = threading.Thread(target=run_email_scheduler, daemon=True)
+        scheduler_thread.start()
+
+    def stop_email_scheduler() -> None:
+        scheduler_stop.set()
+        if scheduler_thread is not None:
+            scheduler_thread.join(timeout=2)
+
+    app.router.on_startup.append(start_email_scheduler)
+    app.router.on_shutdown.append(stop_email_scheduler)
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard() -> HTMLResponse:
@@ -213,6 +302,281 @@ def create_app(
         if needs_verifier or needs_ambiguity_analysis:
             background_tasks.add_task(_enrich_case_report, store, report)
         return {"ok": True, "report": report}
+
+    @app.get("/cases/{email_id}/related")
+    def related_cases(email_id: str) -> dict[str, Any]:
+        report = store.get_case(email_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Case report not found")
+
+        reference_keys = _case_reference_keys(report)
+        matches = []
+        if reference_keys:
+            for candidate in store.list_reports():
+                candidate_id = str(candidate.get("email_id") or "")
+                if not candidate_id or candidate_id == email_id:
+                    continue
+                shared_references = reference_keys & _case_reference_keys(candidate)
+                if not shared_references:
+                    continue
+                matches.append({
+                    "email_id": candidate_id,
+                    "subject": str(candidate.get("subject") or f"Shipping case {candidate_id}"),
+                    "category": candidate.get("category", "UNKNOWN"),
+                    "status": candidate.get("status", "UNPROCESSED"),
+                    "shared_references": sorted(shared_references),
+                    "updated_at": candidate.get("updated_at"),
+                })
+        matches.sort(
+            key=lambda item: (len(item["shared_references"]), item["updated_at"] or ""),
+            reverse=True,
+        )
+        return {"email_id": email_id, "cases": matches[:10]}
+
+    @app.post("/email/send")
+    def send_email(
+        case_id: str = Form(...),
+        to: str = Form(...),
+        subject: str = Form(...),
+        body: str = Form(""),
+        case_attachment_names: str = Form("[]"),
+        attachments: list[UploadFile] = File(default=[]),
+    ) -> dict[str, Any]:
+        report = store.get_case(case_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Case report not found")
+
+        recipients = [address for _, address in getaddresses([to]) if address]
+        if not recipients or any(
+            not re.fullmatch(r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+", address)
+            for address in recipients
+        ):
+            raise HTTPException(status_code=422, detail="Enter one or more valid recipient email addresses")
+        if not subject.strip() or any(character in subject for character in "\r\n"):
+            raise HTTPException(status_code=422, detail="Email subject is required and must be a single line")
+        try:
+            requested_case_attachments = json.loads(case_attachment_names)
+        except json.JSONDecodeError as error:
+            raise HTTPException(status_code=422, detail="Invalid case attachment selection") from error
+        if not isinstance(requested_case_attachments, list) or not all(
+            isinstance(name, str) for name in requested_case_attachments
+        ):
+            raise HTTPException(status_code=422, detail="Invalid case attachment selection")
+
+        message = EmailMessage()
+        message["From"] = env("SMTP_FROM", "la-peace@localhost") or "la-peace@localhost"
+        message["To"] = ", ".join(recipients)
+        message["Subject"] = subject.strip()
+        message["Message-ID"] = make_msgid(domain="la-peace.local")
+        message.set_content(body)
+
+        total_attachment_bytes = 0
+        available_case_attachments = {
+            Path(str(reference)).name: str(reference)
+            for reference in report.get("attachments") or []
+        }
+        for requested_name in requested_case_attachments:
+            filename = Path(requested_name).name
+            if filename not in available_case_attachments:
+                raise HTTPException(status_code=422, detail=f"Attachment is not part of case {case_id}")
+            attachment_path = (root / _safe_id(case_id) / "attachments" / filename).resolve()
+            content = attachment_path.read_bytes() if attachment_path.is_file() else None
+            if content is None and isinstance(store, MongoCaseStore):
+                stored = store.get_attachment(case_id, filename)
+                if stored is not None:
+                    content = stored[0]
+            if content is None:
+                raise HTTPException(status_code=404, detail=f"Case attachment not found: {filename}")
+            total_attachment_bytes += len(content)
+            content_type, _ = mimetypes.guess_type(filename)
+            maintype, subtype = content_type.split("/", 1) if content_type else ("application", "octet-stream")
+            message.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
+
+        for attachment in attachments:
+            filename = _safe_filename(attachment.filename or "attachment")
+            content = attachment.file.read(MAX_UPLOAD_BYTES + 1)
+            total_attachment_bytes += len(content)
+            if len(content) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="An email attachment exceeds the 20 MB limit")
+            content_type = attachment.content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            maintype, subtype = content_type.split("/", 1) if "/" in content_type else ("application", "octet-stream")
+            message.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
+        if total_attachment_bytes > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Combined email attachments exceed the 20 MB limit")
+
+        smtp_host = env("SMTP_HOST", env("MAILPIT_SMTP_HOST", "127.0.0.1")) or "127.0.0.1"
+        smtp_port = env_int("SMTP_PORT", env_int("MAILPIT_SMTP_PORT", 1025))
+        local_smtp_hosts = {"127.0.0.1", "localhost", "::1"}
+        if not truthy(env("EMAIL_SEND_ENABLED", "false")) and smtp_host.lower() not in local_smtp_hosts:
+            raise HTTPException(status_code=503, detail="External email sending is disabled; set EMAIL_SEND_ENABLED=true to enable it")
+        username = env("SMTP_USERNAME", "") or ""
+        password = env("SMTP_PASSWORD", "") or ""
+        if bool(username) != bool(password):
+            raise HTTPException(status_code=503, detail="Configure both SMTP_USERNAME and SMTP_PASSWORD")
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                if truthy(env("SMTP_STARTTLS", "false")):
+                    smtp.starttls()
+                if username:
+                    smtp.login(username, password)
+                smtp.send_message(message)
+        except Exception as error:
+            logger.exception("SMTP delivery failed for case %s", case_id)
+            raise HTTPException(status_code=502, detail="Email delivery failed; check backend SMTP configuration") from error
+
+        sent_at = datetime.now(timezone.utc).isoformat()
+        report.setdefault("audit_events", []).append({
+            "action": "email_sent",
+            "recipient": ", ".join(recipients),
+            "subject": subject.strip(),
+            "message_id": message["Message-ID"],
+            "timestamp": sent_at,
+        })
+        audit_logged = True
+        try:
+            store.save_report(report)
+        except Exception:
+            audit_logged = False
+            logger.exception("Email sent but audit event could not be persisted for case %s", case_id)
+        return {
+            "sent": True,
+            "email_id": case_id,
+            "to": recipients,
+            "message_id": message["Message-ID"],
+            "sent_at": sent_at,
+            "audit_logged": audit_logged,
+        }
+
+    @app.post("/email/schedule")
+    def schedule_email(
+        case_id: str = Form(...),
+        to: str = Form(...),
+        subject: str = Form(...),
+        body: str = Form(""),
+        scheduled_at: str = Form(...),
+        case_attachment_names: str = Form("[]"),
+        attachments: list[UploadFile] = File(default=[]),
+    ) -> dict[str, Any]:
+        report = store.get_case(case_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="Case report not found")
+        recipients = [address for _, address in getaddresses([to]) if address]
+        if not recipients or any(
+            not re.fullmatch(r"[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+", address)
+            for address in recipients
+        ):
+            raise HTTPException(status_code=422, detail="Enter one or more valid recipient email addresses")
+        if not subject.strip() or any(character in subject for character in "\r\n"):
+            raise HTTPException(status_code=422, detail="Email subject is required and must be a single line")
+        try:
+            delivery_time = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+            if delivery_time.tzinfo is None:
+                raise ValueError("Timezone is required")
+            delivery_time = delivery_time.astimezone(timezone.utc)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail="Enter a valid scheduled date and time") from error
+        if delivery_time <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=422, detail="Scheduled time must be in the future")
+        smtp_host = env("SMTP_HOST", env("MAILPIT_SMTP_HOST", "127.0.0.1")) or "127.0.0.1"
+        if not truthy(env("EMAIL_SEND_ENABLED", "false")) and smtp_host.lower() not in {
+            "127.0.0.1", "localhost", "::1"
+        }:
+            raise HTTPException(status_code=503, detail="External email sending is disabled; set EMAIL_SEND_ENABLED=true to enable it")
+        if bool(env("SMTP_USERNAME", "") or "") != bool(env("SMTP_PASSWORD", "") or ""):
+            raise HTTPException(status_code=503, detail="Configure both SMTP_USERNAME and SMTP_PASSWORD")
+        try:
+            requested_case_attachments = json.loads(case_attachment_names)
+        except json.JSONDecodeError as error:
+            raise HTTPException(status_code=422, detail="Invalid case attachment selection") from error
+        if not isinstance(requested_case_attachments, list) or not all(
+            isinstance(name, str) for name in requested_case_attachments
+        ):
+            raise HTTPException(status_code=422, detail="Invalid case attachment selection")
+
+        queued_attachments: list[dict[str, str]] = []
+        attachment_bytes = 0
+        available_case_attachments = {
+            Path(str(reference)).name: str(reference)
+            for reference in report.get("attachments") or []
+        }
+        for requested_name in requested_case_attachments:
+            filename = Path(requested_name).name
+            if filename not in available_case_attachments:
+                raise HTTPException(status_code=422, detail=f"Attachment is not part of case {case_id}")
+            attachment_path = (root / _safe_id(case_id) / "attachments" / filename).resolve()
+            content = attachment_path.read_bytes() if attachment_path.is_file() else None
+            if content is None and isinstance(store, MongoCaseStore):
+                stored = store.get_attachment(case_id, filename)
+                if stored is not None:
+                    content = stored[0]
+            if content is None:
+                raise HTTPException(status_code=404, detail=f"Case attachment not found: {filename}")
+            attachment_bytes += len(content)
+            content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            queued_attachments.append({
+                "filename": filename,
+                "content_type": content_type,
+                "content_base64": base64.b64encode(content).decode("ascii"),
+            })
+
+        for attachment in attachments:
+            filename = _safe_filename(attachment.filename or "attachment")
+            content = attachment.file.read(MAX_UPLOAD_BYTES + 1)
+            if len(content) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="An email attachment exceeds the 20 MB limit")
+            attachment_bytes += len(content)
+            content_type = attachment.content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            queued_attachments.append({
+                "filename": filename,
+                "content_type": content_type,
+                "content_base64": base64.b64encode(content).decode("ascii"),
+            })
+        if attachment_bytes > 8 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Scheduled email attachments are limited to 8 MB combined")
+
+        job_id = uuid.uuid4().hex
+        message_id = make_msgid(domain="la-peace.local")
+        job = {
+            "id": job_id,
+            "case_id": case_id,
+            "to": recipients,
+            "from": env("SMTP_FROM", "la-peace@localhost") or "la-peace@localhost",
+            "subject": subject.strip(),
+            "body": body,
+            "message_id": message_id,
+            "scheduled_at": delivery_time.isoformat(),
+            "attachment_names": [item["filename"] for item in queued_attachments],
+            "attachments": queued_attachments,
+            "status": "scheduled",
+        }
+        try:
+            scheduled_email_queue.save(job)
+        except Exception as error:
+            logger.exception("Could not persist scheduled email for case %s", case_id)
+            raise HTTPException(status_code=503, detail="Could not save scheduled email") from error
+        report.setdefault("audit_events", []).append({
+            "action": "email_scheduled",
+            "scheduled_email_id": job_id,
+            "recipient": ", ".join(recipients),
+            "subject": subject.strip(),
+            "scheduled_at": delivery_time.isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        try:
+            store.save_report(report)
+        except Exception:
+            logger.exception("Scheduled email %s saved but its audit event could not be persisted", job_id)
+        return {key: value for key, value in job.items() if key != "attachments"}
+
+    @app.get("/email/scheduled")
+    def list_scheduled_emails() -> dict[str, Any]:
+        return {"emails": scheduled_email_queue.list()}
+
+    @app.delete("/email/scheduled/{scheduled_email_id}")
+    def cancel_scheduled_email(scheduled_email_id: str) -> dict[str, bool]:
+        if not scheduled_email_queue.cancel(scheduled_email_id):
+            raise HTTPException(status_code=409, detail="Scheduled email is no longer cancellable")
+        return {"cancelled": True}
 
     @app.get("/cases/{email_id}/attachments/{attachment_path:path}")
     async def case_attachment(email_id: str, attachment_path: str) -> Response:
@@ -1375,6 +1739,33 @@ def _safe_id(value: str) -> str:
     if not safe or safe != value:
         raise HTTPException(status_code=422, detail="email_id contains invalid characters")
     return safe
+
+
+_SUBJECT_SHIPMENT_REFERENCE = re.compile(
+    r"(?i)\b(?:[a-z]{2,8}\d{5,}|\d[a-z]{2,8}-\d{4,}|[a-z]{2,8}-\d{4,}|\d{7,})\b"
+)
+_LABELED_SHIPMENT_REFERENCE = re.compile(
+    r"(?i)\b(?:booking|invoice|purchase order|po|oc|container|shipment(?: reference)?|reference|ref)"
+    r"(?:\s+(?:number|no\.?))?\s*(?:[:#]\s*|\s+)([a-z0-9][a-z0-9/-]{3,})(?![a-z0-9/-])"
+)
+_LABELED_BL_REFERENCE = re.compile(
+    r"(?i)\b(?:bill of lading|b/?l)\s*(?:number|no\.?|#)\s*[:#]?\s*"
+    r"([a-z0-9][a-z0-9/-]{3,})(?![a-z0-9/-])"
+)
+
+
+def _case_reference_keys(report: dict[str, Any]) -> set[str]:
+    subject = str(report.get("subject") or "")
+    body = str(report.get("body") or "")
+    attachments = report.get("attachments") or []
+    if isinstance(attachments, str):
+        attachments = [attachments]
+    attachment_names = " ".join(str(item) for item in attachments)
+    keys = set(_SUBJECT_SHIPMENT_REFERENCE.findall(subject))
+    references = f"{subject}\n{body}\n{attachment_names}"
+    keys.update(_LABELED_SHIPMENT_REFERENCE.findall(references))
+    keys.update(_LABELED_BL_REFERENCE.findall(references))
+    return {re.sub(r"[^A-Z0-9]", "", key.upper()) for key in keys if key}
 
 
 def _safe_filename(value: str) -> str:

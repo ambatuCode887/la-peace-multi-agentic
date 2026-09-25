@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -182,6 +183,217 @@ def test_delete_case_removes_database_record(tmp_path) -> None:
     assert response.json() == {"ok": True, "email_id": "email_db_only"}
     assert store.get_case("email_db_only") is None
     assert client.delete("/cases/email_db_only").status_code == 404
+
+
+def test_related_cases_only_match_exact_shipment_references(tmp_path) -> None:
+    current = {
+        "email_id": "email_current",
+        "subject": "Draft BL follow-up for booking ABCT-123456",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+    }
+    related = {
+        "email_id": "email_related",
+        "subject": "RE: Booking ABCT123456",
+        "category": "INVOICE_QUERY",
+        "status": "OK",
+    }
+    unrelated = {
+        "email_id": "email_unrelated",
+        "subject": "Draft BL follow-up for booking ABCT-123457",
+        "category": "BL_COMPARISON",
+        "status": "OK",
+    }
+    store = InMemoryCaseStore(current, related, unrelated)
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.get("/cases/email_current/related")
+
+    assert response.status_code == 200
+    assert [case["email_id"] for case in response.json()["cases"]] == ["email_related"]
+    assert response.json()["cases"][0]["shared_references"] == ["ABCT123456"]
+
+
+def test_send_email_uses_smtp_and_records_success(tmp_path, monkeypatch) -> None:
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            assert host == "127.0.0.1"
+            assert port == 1025
+            assert timeout == 20
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def send_message(self, message):
+            sent_messages.append(message)
+
+    monkeypatch.setenv("EMAIL_SEND_ENABLED", "false")
+    monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
+    monkeypatch.setenv("SMTP_PORT", "1025")
+    monkeypatch.setenv("SMTP_FROM", "ops@example.test")
+    monkeypatch.setattr("agents.shipping.api.smtplib.SMTP", FakeSMTP)
+    attachment_dir = tmp_path / "email_send_test" / "attachments"
+    attachment_dir.mkdir(parents=True)
+    (attachment_dir / "case-si.txt").write_text("stored case document", encoding="utf-8")
+    store = InMemoryCaseStore({
+        "email_id": "email_send_test",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "attachments": ["attachments/case-si.txt"],
+    })
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.post("/email/send", data={
+        "case_id": "email_send_test",
+        "to": "carrier@example.test",
+        "subject": "Please review the draft BL",
+        "body": "Please confirm the correct gross weight.",
+        "case_attachment_names": '["case-si.txt"]',
+    }, files=[("attachments", ("evidence.txt", b"source evidence", "text/plain"))])
+
+    assert response.status_code == 200
+    assert response.json()["sent"] is True
+    assert response.json()["audit_logged"] is True
+    assert len(sent_messages) == 1
+    assert sent_messages[0]["To"] == "carrier@example.test"
+    assert sent_messages[0].get_body(preferencelist=("plain",)).get_content().strip() == (
+        "Please confirm the correct gross weight."
+    )
+    assert [(part.get_filename(), part.get_payload(decode=True)) for part in sent_messages[0].iter_attachments()] == [
+        ("case-si.txt", b"stored case document"),
+        ("evidence.txt", b"source evidence"),
+    ]
+    assert store.get_case("email_send_test")["audit_events"][0]["action"] == "email_sent"
+
+
+def test_external_email_sending_requires_explicit_enablement(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("EMAIL_SEND_ENABLED", "false")
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    store = InMemoryCaseStore({
+        "email_id": "email_send_test",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "attachments": [],
+    })
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.post("/email/send", data={
+        "case_id": "email_send_test",
+        "to": "carrier@example.test",
+        "subject": "Please review the draft BL",
+        "body": "Please confirm the correct gross weight.",
+    })
+
+    assert response.status_code == 503
+    assert "EMAIL_SEND_ENABLED=true" in response.json()["detail"]
+
+
+def test_scheduled_email_persists_and_can_be_cancelled(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("EMAIL_SEND_ENABLED", "false")
+    store = InMemoryCaseStore({
+        "email_id": "email_schedule_test",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "attachments": [],
+    })
+    scheduled_at = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.post("/email/schedule", data={
+        "case_id": "email_schedule_test",
+        "to": "carrier@example.test",
+        "subject": "Please review the draft BL",
+        "body": "Please confirm the correct gross weight.",
+        "scheduled_at": scheduled_at,
+    })
+
+    assert response.status_code == 200
+    scheduled_id = response.json()["id"]
+    assert response.json()["status"] == "scheduled"
+    listed = client.get("/email/scheduled").json()["emails"]
+    assert len(listed) == 1
+    assert listed[0]["id"] == scheduled_id
+    assert "attachments" not in listed[0]
+    assert client.delete(f"/email/scheduled/{scheduled_id}").json() == {"cancelled": True}
+    assert client.get("/email/scheduled").json()["emails"][0]["status"] == "cancelled"
+    assert store.get_case("email_schedule_test")["audit_events"][-1]["action"] == "email_scheduled"
+
+
+def test_scheduled_email_rejects_past_time(tmp_path) -> None:
+    store = InMemoryCaseStore({
+        "email_id": "email_schedule_test",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "attachments": [],
+    })
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    response = client.post("/email/schedule", data={
+        "case_id": "email_schedule_test",
+        "to": "carrier@example.test",
+        "subject": "Please review the draft BL",
+        "scheduled_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+    })
+
+    assert response.status_code == 422
+    assert "future" in response.json()["detail"]
+
+
+def test_scheduler_delivers_due_persisted_email(tmp_path, monkeypatch) -> None:
+    delivered = threading.Event()
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def send_message(self, message):
+            sent_messages.append(message)
+            delivered.set()
+
+    monkeypatch.setenv("EMAIL_SEND_ENABLED", "false")
+    monkeypatch.setenv("SMTP_HOST", "127.0.0.1")
+    monkeypatch.setenv("SMTP_PORT", "1025")
+    monkeypatch.setattr("agents.shipping.api.smtplib.SMTP", FakeSMTP)
+    store = InMemoryCaseStore({
+        "email_id": "email_due_test",
+        "category": "BL_COMPARISON",
+        "status": "MISMATCH",
+        "attachments": [],
+    })
+    queue = shipping_api.ScheduledEmailQueue(tmp_path, store)
+    queue.save({
+        "id": "scheduled_due_test",
+        "case_id": "email_due_test",
+        "to": ["carrier@example.test"],
+        "from": "ops@example.test",
+        "subject": "Scheduled review",
+        "body": "Please review.",
+        "message_id": "<scheduled-due-test@example.test>",
+        "scheduled_at": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+        "attachment_names": [],
+        "attachments": [],
+        "status": "scheduled",
+    })
+    client = TestClient(create_app(tmp_path, case_store=store))
+
+    with client:
+        assert delivered.wait(timeout=2)
+        scheduled = client.get("/email/scheduled").json()["emails"]
+
+    assert sent_messages[0]["Subject"] == "Scheduled review"
+    assert next(job for job in scheduled if job["id"] == "scheduled_due_test")["status"] == "sent"
 
 
 def test_manager_review_returns_advisory_result_without_changing_report(tmp_path, monkeypatch) -> None:

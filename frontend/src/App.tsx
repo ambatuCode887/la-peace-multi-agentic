@@ -21,7 +21,7 @@ import {
   mapSummaryToShippingCase,
 } from "./services/api";
 import type { BackendReport } from "./services/api";
-import { outboxService, type DispatchedEmail } from "./services/outboxService";
+import { outboxService, type DispatchedEmail, type DraftEmail } from "./services/outboxService";
 
 export function App() {
   const [cases, setCases] = useState<ShippingCase[]>(ALL_CASES);
@@ -33,11 +33,12 @@ export function App() {
     } catch {}
     return ALL_CASES[0]?.id || "email_001";
   });
-  const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT">("INBOX");
+  const [activeMailboxFolder, setActiveMailboxFolder] = useState<"INBOX" | "SENT" | "DRAFTS" | "SCHEDULED">("INBOX");
   const [selectedSentEmail, setSelectedSentEmail] = useState<DispatchedEmail | null>(() => {
     const list = outboxService.getSentEmails();
     return list.length > 0 ? list[0] : null;
   });
+  const [draftToRestore, setDraftToRestore] = useState<DraftEmail | null>(null);
 
   useEffect(() => {
     return outboxService.subscribe(() => {
@@ -274,6 +275,18 @@ export function App() {
     setMobileInboxOpen(false);
   };
 
+  const handleSelectDraft = async (draftSummary: DraftEmail) => {
+    const draft = await outboxService.getDraft(draftSummary.id);
+    if (!draft) return;
+    setDraftToRestore(draft);
+    setActiveMailboxFolder("DRAFTS");
+    setActiveView("inbox");
+    setSelectedCaseId(draft.caseId);
+    setInboxCollapsed(false);
+    setDrawerOpen(true);
+    setActiveDrawerTab("email");
+  };
+
   const handleGoToDashboard = () => {
     setActiveView("dashboard");
     setInboxCollapsed(true);
@@ -360,6 +373,7 @@ export function App() {
             setActiveView("inbox");
             setInboxCollapsed(false);
           }}
+          onSelectDraft={(draft) => void handleSelectDraft(draft)}
           activeView={activeView}
           onGoToDashboard={handleGoToDashboard}
           onGoToBenchmark={handleGoToBenchmark}
@@ -402,6 +416,14 @@ export function App() {
                   No sent messages recorded yet.
                 </div>
               )
+            ) : activeMailboxFolder === "DRAFTS" ? (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
+                Select a draft from the Drafts folder to continue editing.
+              </div>
+            ) : activeMailboxFolder === "SCHEDULED" ? (
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-[#1a3d8e]/60 bg-white dark:bg-[#06163a] p-8 text-center text-sm text-slate-500">
+                Scheduled messages are listed here. Use the cancel control before delivery time to stop a message.
+              </div>
             ) : (
               <>
                 {/* Conditional Discrepancy & Status Alert Banner */}
@@ -415,7 +437,7 @@ export function App() {
 
                 {/* For BL_COMPARISON cases, keep the collapsible source email visible above the diff table. For non-BL inquiries, OperationalEmailHub displays the full Gmail-style email viewer. */}
                 {currentCase && currentCase.category === "BL_COMPARISON" && (
-                  <EmailMessage currentCase={currentCase} />
+                  <EmailMessage currentCase={currentCase} onSelectCase={handleSelectCase} />
                 )}
 
                 {/* Side-by-Side Blueprint Diff Comparator */}
@@ -449,6 +471,8 @@ export function App() {
             activeTab={activeDrawerTab}
             onTabChange={setActiveDrawerTab}
             onReviewSaved={handleReviewSaved}
+            draftToRestore={draftToRestore}
+            onDraftRestored={() => setDraftToRestore(null)}
           />
         )}
       </div>
