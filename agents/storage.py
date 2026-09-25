@@ -4,7 +4,7 @@ import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from agents.config import env
 
@@ -24,11 +24,22 @@ class CaseStore:
     def save_report(self, report: dict[str, Any]) -> None:
         raise NotImplementedError
 
+    def save_reports(self, reports: Iterable[dict[str, Any]]) -> None:
+        for report in reports:
+            self.save_report(report)
+
     def delete_case(self, email_id: str) -> bool:
         raise NotImplementedError
 
     def save_attachment(self, email_id: str, name: str, content: bytes, content_type: str | None = None) -> None:
         return None
+
+    def save_attachments(
+        self,
+        attachments: Iterable[tuple[str, str, bytes, str | None]],
+    ) -> None:
+        for email_id, name, content, content_type in attachments:
+            self.save_attachment(email_id, name, content, content_type)
 
     def get_attachment(self, email_id: str, name: str) -> tuple[bytes, str | None] | None:
         return None
@@ -152,17 +163,26 @@ class MongoCaseStore(CaseStore):
         return reports
 
     def save_report(self, report: dict[str, Any]) -> None:
-        email_id = report.get("email_id")
-        if not email_id:
-            raise ValueError("report.email_id is required")
-        _ensure_report_metadata(report)
-        payload = dict(report)
-        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
-        self.collection.update_one(
-            {"email_id": email_id},
-            {"$set": payload},
-            upsert=True,
-        )
+        self.save_reports([report])
+
+    def save_reports(self, reports: Iterable[dict[str, Any]]) -> None:
+        from pymongo import UpdateOne
+
+        operations = []
+        for report in reports:
+            email_id = report.get("email_id")
+            if not email_id:
+                raise ValueError("report.email_id is required")
+            _ensure_report_metadata(report)
+            payload = dict(report)
+            payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+            operations.append(UpdateOne(
+                {"email_id": email_id},
+                {"$set": payload},
+                upsert=True,
+            ))
+        if operations:
+            self.collection.bulk_write(operations, ordered=False)
 
     def delete_case(self, email_id: str) -> bool:
         result = self.collection.delete_one({"email_id": email_id})
@@ -176,17 +196,42 @@ class MongoCaseStore(CaseStore):
         content: bytes,
         content_type: str | None = None,
     ) -> None:
-        self.attachment_collection.replace_one(
-            {"email_id": email_id, "name": name},
-            {
-                "email_id": email_id,
-                "name": name,
-                "content": content,
-                "content_type": content_type,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
-            upsert=True,
-        )
+        self.save_attachments([(email_id, name, content, content_type)])
+
+    def save_attachments(
+        self,
+        attachments: Iterable[tuple[str, str, bytes, str | None]],
+    ) -> None:
+        from pymongo import ReplaceOne
+
+        operations = []
+        batch_bytes = 0
+
+        def flush() -> None:
+            nonlocal batch_bytes
+            if operations:
+                self.attachment_collection.bulk_write(operations, ordered=False)
+                operations.clear()
+                batch_bytes = 0
+
+        for email_id, name, content, content_type in attachments:
+            if operations and (
+                len(operations) >= 100 or batch_bytes + len(content) > 8 * 1024 * 1024
+            ):
+                flush()
+            operations.append(ReplaceOne(
+                {"email_id": email_id, "name": name},
+                {
+                    "email_id": email_id,
+                    "name": name,
+                    "content": content,
+                    "content_type": content_type,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                upsert=True,
+            ))
+            batch_bytes += len(content)
+        flush()
 
     def get_attachment(self, email_id: str, name: str) -> tuple[bytes, str | None] | None:
         document = self.attachment_collection.find_one({"email_id": email_id, "name": name})

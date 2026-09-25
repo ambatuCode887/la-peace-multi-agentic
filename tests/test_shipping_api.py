@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from agents.shipping import api as shipping_api
 
 from agents.shipping.api import _run_manager_review, _save_upload, create_app
-from agents.storage import CaseStore
+from agents.storage import CaseStore, MongoCaseStore
 
 
 class FakeUpload:
@@ -51,6 +51,41 @@ class InMemoryCaseStore(CaseStore):
 
     def delete_case(self, email_id: str) -> bool:
         return self.reports.pop(email_id, None) is not None
+
+
+def test_mongo_case_store_bulk_upserts_reports_and_attachments() -> None:
+    class FakeCollection:
+        def __init__(self) -> None:
+            self.calls: list[tuple[list[object], bool]] = []
+
+        def bulk_write(self, operations, ordered: bool) -> None:
+            self.calls.append((list(operations), ordered))
+
+    store = object.__new__(MongoCaseStore)
+    store.collection = FakeCollection()
+    store.attachment_collection = FakeCollection()
+
+    store.save_reports([
+        {"email_id": "bulk_1", "status": "OK"},
+        {"email_id": "bulk_2", "status": "MISMATCH"},
+    ])
+    store.save_attachments([
+        ("bulk_1", "si.pdf", b"pdf", "application/pdf"),
+    ])
+
+    report_operations, reports_ordered = store.collection.calls[0]
+    assert len(report_operations) == 2
+    assert reports_ordered is False
+    assert report_operations[0]._filter == {"email_id": "bulk_1"}
+    assert report_operations[0]._upsert is True
+    assert report_operations[0]._doc["$set"]["review_decisions"] == []
+
+    attachment_operations, attachments_ordered = store.attachment_collection.calls[0]
+    assert len(attachment_operations) == 1
+    assert attachments_ordered is False
+    assert attachment_operations[0]._filter == {"email_id": "bulk_1", "name": "si.pdf"}
+    assert attachment_operations[0]._doc["content"] == b"pdf"
+    assert attachment_operations[0]._upsert is True
 
 
 def test_case_list_does_not_block_other_api_routes(tmp_path) -> None:
@@ -634,7 +669,7 @@ def test_delete_copes_with_read_only_files_and_repeat_requests(tmp_path, monkeyp
     assert client.delete("/cases/locked_case").status_code == 404
 
 
-def test_bulk_processing_skips_the_slow_ai_verifier_and_runs_it_once_on_open(tmp_path, monkeypatch) -> None:
+def test_case_detail_returns_before_slow_verifier_and_saves_it_in_background(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     calls: list[str] = []
 
@@ -669,10 +704,11 @@ def test_bulk_processing_skips_the_slow_ai_verifier_and_runs_it_once_on_open(tmp
 
     first = client.get("/cases/email_100").json()["report"]
     assert first["status"] == "MISMATCH"
-    assert first["verifier"] == {"available": True, "rulings": []}
+    assert "verifier" not in first
     assert calls == ["email_100"]
 
-    client.get("/cases/email_100")
+    second = client.get("/cases/email_100").json()["report"]
+    assert second["verifier"] == {"available": True, "rulings": []}
     assert calls == ["email_100"]  # already saved, not asked again
 
 

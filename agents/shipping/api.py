@@ -44,6 +44,7 @@ from agents.storage import CaseStore, FilesystemCaseStore, MongoCaseStore, get_c
 from agents.tools.functions.retrieve.credential_stuffing import retrieve_knowledge
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+PERSISTENCE_BATCH_SIZE = 50
 
 
 def create_app(
@@ -185,16 +186,21 @@ def create_app(
         return {"ok": True, "imported": imported}
 
     @app.get("/cases/{email_id}")
-    def case_detail(email_id: str) -> dict[str, Any]:
+    def case_detail(email_id: str, background_tasks: BackgroundTasks) -> dict[str, Any]:
         report = store.get_case(email_id)
         if report is None:
             raise HTTPException(status_code=404, detail="Case report not found")
-        if report.get("status") == "MISMATCH" and "verifier" not in report:
-            # Bulk processing skips the slow AI verifier; run it once, the first time a mismatch is opened.
-            _add_verifier_result(report)
-            store.save_report(report)
-        if _add_ambiguity_analysis(report):
-            store.save_report(report)
+        needs_verifier = (
+            report.get("status") == "MISMATCH"
+            and bool(report.get("defect_fields"))
+            and "verifier" not in report
+        )
+        telemetry = report.get("routing_telemetry") or {}
+        needs_ambiguity_analysis = bool(telemetry.get("ambiguous_fields")) and not report.get(
+            "ocr_distortion_analysis"
+        )
+        if needs_verifier or needs_ambiguity_analysis:
+            background_tasks.add_task(_enrich_case_report, store, report)
         return {"ok": True, "report": report}
 
     @app.get("/cases/{email_id}/attachments/{attachment_path:path}")
@@ -381,21 +387,36 @@ def create_app(
             raise HTTPException(status_code=502, detail=f"Could not load inbox: {error}") from error
 
         results: list[dict[str, Any]] = []
+        pending_reports: list[dict[str, Any]] = []
+        pending_attachments: list[tuple[str, str, bytes, str | None]] = []
+
+        def persist_batch() -> None:
+            if pending_attachments:
+                store.save_attachments(pending_attachments)
+                pending_attachments.clear()
+            if pending_reports:
+                store.save_reports(pending_reports)
+                pending_reports.clear()
+
         for email in emails:
             try:
                 report = _process_inbox_case(root, adapter, email, include_ai=include_ai)
                 if isinstance(store, MongoCaseStore):
                     case_root = root / _safe_id(email.email_id)
+                    email_attachments: list[tuple[str, str, bytes, str | None]] = []
                     for reference in report.get("attachments", []):
                         attachment_path = case_root / reference
                         if attachment_path.is_file():
-                            store.save_attachment(
+                            email_attachments.append((
                                 email.email_id,
                                 Path(reference).name,
                                 attachment_path.read_bytes(),
                                 mimetypes.guess_type(attachment_path.name)[0],
-                            )
-                store.save_report(report)
+                            ))
+                    pending_attachments.extend(email_attachments)
+                    pending_reports.append(report)
+                else:
+                    store.save_report(report)
                 results.append({
                     "email_id": email.email_id,
                     "status": report.get("status", "UNPROCESSED"),
@@ -413,16 +434,24 @@ def create_app(
                     "error": str(error),
                     "source": "inbox",
                 }
-                store.save_report(failure)
                 (case_root / "report.json").write_text(
                     json.dumps(failure, indent=2) + "\n", encoding="utf-8"
                 )
+                if isinstance(store, MongoCaseStore):
+                    pending_reports.append(failure)
+                else:
+                    store.save_report(failure)
                 results.append({
                     "email_id": email.email_id,
                     "status": "UNPROCESSED",
                     "category": "UNPROCESSED",
                     "error": str(error),
                 })
+            if isinstance(store, MongoCaseStore) and len(pending_reports) >= PERSISTENCE_BATCH_SIZE:
+                persist_batch()
+
+        if isinstance(store, MongoCaseStore):
+            persist_batch()
 
         return {
             "ok": True,
@@ -622,6 +651,13 @@ def _add_verifier_result(report: dict[str, Any]) -> None:
         report["verifier"] = verify_shipping_discrepancies(report)
     except AIUnavailable as error:
         report["verifier"] = {"available": False, "reason": str(error)}
+
+
+def _enrich_case_report(store: CaseStore, report: dict[str, Any]) -> None:
+    _add_verifier_result(report)
+    changed = _add_ambiguity_analysis(report)
+    if report.get("verifier") is not None or changed:
+        store.save_report(report)
 
 
 def _add_ambiguity_analysis(report: dict[str, Any]) -> bool:

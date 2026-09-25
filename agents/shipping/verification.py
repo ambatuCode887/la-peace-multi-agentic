@@ -124,6 +124,7 @@ def extract_shipment_fields(
     raw_values: dict[str, str | None] = {}
     source_labels: dict[str, str | None] = {}
     for field, pattern in _FIELD_PATTERNS.items():
+        default_weight_unit = "kg" if Path(filename).suffix.lower() == ".xlsx" else None
         # A table header such as "CONTAINER NO." can match before the real value
         # line, so take the first match that actually parses to a value.
         match = next(
@@ -132,6 +133,7 @@ def extract_shipment_fields(
                 if _parse_field(
                     field,
                     f"{candidate.group(0)} {candidate.group(1)}" if field == "gross_weight_kg" else candidate.group(1),
+                    default_weight_unit=default_weight_unit,
                 ) is not None
             ),
             None,
@@ -149,7 +151,11 @@ def extract_shipment_fields(
         parse_value = value
         if field == "gross_weight_kg" and value and source_labels[field]:
             parse_value = f"{source_labels[field]} {value}"
-        values[field] = _parse_field(field, parse_value)
+        values[field] = _parse_field(
+            field,
+            parse_value,
+            default_weight_unit=default_weight_unit,
+        )
         if field in PARTY_FIELDS and isinstance(values[field], str):
             values[field] = _party_block(text, field, values[field])
         if values[field] is None:
@@ -528,7 +534,12 @@ def _document_type(text: str, filename: str = "") -> str:
     return "OTHER"
 
 
-def _parse_field(field: str, value: str | None) -> str | int | None:
+def _parse_field(
+    field: str,
+    value: str | None,
+    *,
+    default_weight_unit: str | None = None,
+) -> str | int | None:
     if value is None:
         return None
     cleaned = value.strip()
@@ -551,6 +562,12 @@ def _parse_field(field: str, value: str | None) -> str | int | None:
             return None
         amount = float(amount_text.replace(",", "").replace(" ", ""))
         unit = _weight_unit(cleaned)
+        if (
+            unit is None
+            and default_weight_unit is not None
+            and not re.search(r"[A-Za-z]", cleaned[match.end():])
+        ):
+            unit = default_weight_unit
         if unit is None:
             return None
         return int(round(amount * {"kg": 1, "tonne": 1000, "lb": 0.45359237}[unit]))
