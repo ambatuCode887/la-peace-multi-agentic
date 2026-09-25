@@ -25,6 +25,11 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from starlette.concurrency import run_in_threadpool
+from .email_delivery import (
+    EmailDeliveryConfigurationError,
+    EmailDeliveryError,
+    deliver_email,
+)
 from .exports import render_export
 from .tool import inspect_shipping_email
 from .actions import (
@@ -697,6 +702,41 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         return {"ok": True, "email_id": email_id, "preview": preview}
+
+    @app.post("/email/send")
+    async def send_email(
+        to: str = Form(...),
+        subject: str = Form(...),
+        body: str = Form(""),
+        attachments: list[UploadFile] = File(default=[]),
+    ) -> dict[str, Any]:
+        attachment_payload: list[tuple[str, bytes, str | None]] = []
+        total_size = 0
+        for attachment in attachments:
+            content = await attachment.read(MAX_UPLOAD_BYTES - total_size + 1)
+            total_size += len(content)
+            if total_size > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Email attachments exceed 20 MB")
+            attachment_payload.append((
+                Path(attachment.filename or "attachment").name,
+                content,
+                attachment.content_type,
+            ))
+        try:
+            message_id = await run_in_threadpool(
+                deliver_email,
+                to,
+                subject,
+                body,
+                attachment_payload,
+            )
+        except EmailDeliveryConfigurationError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        except EmailDeliveryError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+        return {"ok": True, "to": to.strip(), "message_id": message_id}
 
     @app.post("/reviews/batch-rule-corrections/preview")
     def batch_rule_correction_preview() -> dict[str, Any]:
