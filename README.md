@@ -218,7 +218,7 @@ Invoke-RestMethod -Uri http://localhost:8080/submit -Method Post `
 Start the upload API:
 
 ```powershell
-.\\.venv\\Scripts\\python.exe -m uvicorn agents.shipping.api:app --reload --port 8090
+.\.venv\Scripts\python.exe -m uvicorn agents.shipping.api:create_app --factory --reload --host 127.0.0.1 --port 8090
 ```
 
 Open `http://localhost:8090` for the upload dashboard. It displays verification status, side-by-side SI/BL fields, differences, review reasons, and a correction action.
